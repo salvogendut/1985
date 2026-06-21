@@ -41,7 +41,8 @@ typedef struct Asic {
     bool display_enabled;   /* port 0xF8 cmd 7/8 — system-level gate */
     bool screen_enabled;    /* port 0xF7 bit 6 — video-control gate */
     bool inverse_video;     /* port 0xF7 bit 7 */
-    bool flyback;           /* port 0xF8 read bit 6 */
+    bool flyback;           /* port 0xF8 read bit 6 — pulses high near end of frame */
+    int  flyback_tick;      /* 0..5 within current 50 Hz frame */
     u8  interrupt_counter;  /* port 0xF8 read bits 0-3; cleared by F4-read */
     int fdc_irq_mode;       /* 0=ignore, 1=NMI, 2=IRQ */
     bool prev_fdc_irq;      /* edge-detect for FDC IRQ line */
