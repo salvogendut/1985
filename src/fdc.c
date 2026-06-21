@@ -1,5 +1,6 @@
 #include "fdc.h"
 #include "leds.h"
+#include <stdio.h>
 #include <string.h>
 
 /* Main status register bits. */
@@ -63,10 +64,13 @@ static void enter_exec_write(Fdc *f) {
     f->msr   = MSR_RQM | MSR_NDM | MSR_BUSY;
 }
 
+static void trace_result(Fdc *f);
+
 static void enter_result(Fdc *f) {
     f->phase = FDC_PHASE_RESULT;
     f->msr   = MSR_RQM | MSR_DIO | MSR_BUSY;
     f->result_pos = 0;
+    trace_result(f);
 }
 
 /* Push a single result byte (used by trivial command handlers). */
@@ -327,8 +331,44 @@ static void cmd_invalid(Fdc *f) {
     enter_result(f);
 }
 
+static const char *opcode_name(u8 op) {
+    switch (op & 0x1F) {
+        case 0x02: return "READ TRACK";
+        case 0x03: return "SPECIFY";
+        case 0x04: return "SENSE DRIVE";
+        case 0x05: return "WRITE DATA";
+        case 0x06: return "READ DATA";
+        case 0x07: return "RECALIBRATE";
+        case 0x08: return "SENSE INT";
+        case 0x09: return "WRITE DEL";
+        case 0x0A: return "READ ID";
+        case 0x0C: return "READ DEL";
+        case 0x0D: return "FORMAT";
+        case 0x0F: return "SEEK";
+        case 0x11: return "SCAN EQ";
+        case 0x19: return "SCAN LEQ";
+        case 0x1D: return "SCAN HEQ";
+        default:   return "?";
+    }
+}
+
+static void trace_cmd(Fdc *f) {
+    if (!f->trace) return;
+    fprintf(stderr, "fdc cmd %02X (%s)", f->cmd_buf[0], opcode_name(f->cmd_buf[0]));
+    for (int i = 1; i < f->cmd_len; i++) fprintf(stderr, " %02X", f->cmd_buf[i]);
+    fputc('\n', stderr);
+}
+
+static void trace_result(Fdc *f) {
+    if (!f->trace || f->result_len == 0) return;
+    fprintf(stderr, "fdc res");
+    for (int i = 0; i < f->result_len; i++) fprintf(stderr, " %02X", f->result_buf[i]);
+    fputc('\n', stderr);
+}
+
 static void dispatch_command(Fdc *f) {
     u8 op = f->cmd_buf[0] & 0x1F;
+    trace_cmd(f);
     switch (op) {
         case 0x03: cmd_specify           (f); break;
         case 0x04: cmd_sense_drive_status(f); break;
@@ -434,6 +474,10 @@ void fdc_write(Fdc *f, u8 port, u8 val) {
             break;
     }
 
+}
+
+void fdc_set_motor(Fdc *f, bool on) {
+    f->motor_on = on;
 }
 
 void fdc_set_terminal_count(Fdc *f, bool on) {

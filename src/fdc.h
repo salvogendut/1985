@@ -44,6 +44,8 @@ typedef enum {
 typedef struct Fdc {
     Disk drive[2];          /* A and B */
     bool tc;                /* terminal-count line (driven by ASIC port 0xF8) */
+    bool motor_on;          /* spindle motor (ASIC port 0xF8 cmds 9/10) */
+    bool trace;             /* stderr command-and-result trace */
 
     FdcPhase phase;
     u8       msr;           /* main status register, recomputed per phase */
@@ -78,3 +80,4 @@ u8   fdc_read (Fdc *f, u8 port);
 void fdc_write(Fdc *f, u8 port, u8 val);
 
 void fdc_set_terminal_count(Fdc *f, bool on);
+void fdc_set_motor          (Fdc *f, bool on);

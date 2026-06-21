@@ -63,6 +63,8 @@ void asic_write(Asic *a, u8 port, u8 val) {
                 case 0x06: fdc_set_terminal_count(a->fdc, false); break;
                 case 0x07: a->display_enabled = true;  break;
                 case 0x08: a->display_enabled = false; break;
+                case 0x09: fdc_set_motor(a->fdc, true);  break;
+                case 0x0A: fdc_set_motor(a->fdc, false); break;
                 default:   break;  /* beeper / unused */
             }
             break;

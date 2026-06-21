@@ -136,7 +136,8 @@ int main(int argc, char **argv) {
 
     PCW pcw;
     pcw_init(&pcw, cfg.model);
-    pcw.trace_io = cfg.trace_io;
+    pcw.trace_io  = cfg.trace_io;
+    pcw.fdc.trace = cfg.trace_fdc;
 
     if (cfg.drive_a[0]) disk_load(&pcw.fdc.drive[0], cfg.drive_a);
     if (cfg.drive_b[0]) disk_load(&pcw.fdc.drive[1], cfg.drive_b);
