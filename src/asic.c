@@ -20,21 +20,29 @@ void asic_reset(Asic *a) {
     a->inverse_video   = false;
     a->flyback         = false;
     a->interrupt_counter = 0;
-    a->bank_force      = 0;
     a->fdc_irq_mode    = 0;   /* power-on default: FDC IRQ ignored; boot code enables it */
 }
 
 void asic_frame(Asic *a) {
-    /* Simplistic: pulse flyback high for one frame in three so the
-     * firmware's busy-wait loops break out. Real cadence is set by
-     * the 6845 VSYNC pulse. */
-    a->flyback = !a->flyback;
+    /* Frame boundary: nothing to do here now that flyback is driven
+     * per timer tick. Kept for callers that still expect to be called
+     * once per frame. */
+    (void)a;
 }
 
 bool asic_timer_tick(Asic *a) {
     /* MAME pcw.cpp:141-149 + :184-191 — 300 Hz periodic tick increments
-     * the interrupt counter, saturating at 0x0F, and asserts /INT. */
+     * the interrupt counter, saturating at 0x0F, and asserts /INT.
+     *
+     * Use the tick to drive a coarse flyback signal too: 6 ticks per
+     * 50 Hz frame, flyback HIGH only on the LAST tick (≈17 % duty —
+     * still too long for a real CRT retrace but much closer to the
+     * "briefly high during vertical retrace" model than the previous
+     * 50 % toggle, and enough for firmware timing loops that watch
+     * for the rising edge of F8 bit 6). */
     if (a->interrupt_counter < 0x0F) a->interrupt_counter++;
+    a->flyback_tick = (a->flyback_tick + 1) % 6;
+    a->flyback = (a->flyback_tick == 5);
     return true;
 }
 
@@ -73,12 +81,6 @@ u8 asic_read(Asic *a, u8 port) {
 
 void asic_write(Asic *a, u8 port, u8 val) {
     switch (port) {
-        case 0xF4:
-            /* Bank-force register (MAME pcw.cpp:385-393). Latch only —
-             * mem.c doesn't honour it yet; the CP/M+ boot trace shows
-             * no writes here so this is a forward-compatibility stub. */
-            a->bank_force = val;
-            break;
         case 0xF5: a->roller_base = val; break;
         case 0xF6: a->scroll_y    = val; break;
         case 0xF7:

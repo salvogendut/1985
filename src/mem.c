@@ -12,19 +12,33 @@ void mem_reset(Mem *m) {
     /* Power-on default per MAME pcw.cpp:994-998 — identity map:
      * slot i -> physical block i. CP/M+'s loader relies on this
      * default (it doesn't reprogram every bank before writing). */
-    for (int i = 0; i < 4; i++) m->bank[i] = (u8)i;
+    for (int i = 0; i < 4; i++) m->read_bank[i] = m->write_bank[i] = (u8)i;
+    m->lock = 0;
 }
 
 void mem_bank_write(Mem *m, u8 port, u8 val) {
     if (port < 0xF0 || port > 0xF3) return;
-    /* Bit 7 must be set on a real bank-select write; ignore otherwise. */
-    if (!(val & 0x80)) return;
-    m->bank[port - 0xF0] = val & 0x0F;   /* 16 blocks; ignore CPC-compat bits */
+    int slot = port - 0xF0;
+    if (val & 0x80) {
+        /* PCW extended mode — one block, used for read and write. */
+        u8 blk = val & 0x0F;
+        m->read_bank [slot] = blk;
+        m->write_bank[slot] = blk;
+    } else {
+        /* CPC standard mode — separate read- and write-banks.
+         * bits 6-4 = block to read, bits 3-0 = block to write
+         * (limited to blocks 0-15 / first 128 KB). */
+        m->read_bank [slot] = (val >> 4) & 0x07;
+        m->write_bank[slot] =  val       & 0x0F;
+    }
+}
+
+void mem_set_lock(Mem *m, u8 val) {
+    /* bit (slot+4) high → reads from that slot go to write_bank instead of read_bank. */
+    m->lock = val;
 }
 
 u8 mem_read(Mem *m, u16 addr) {
-    /* Bootstrap window — every instruction fetch up to bootstrap end
-     * comes from the canned stream rather than RAM. */
     /* Boot overlay lives in low memory; reads above the stream length
      * (notably stack pops at ~0x7E00) must fall through to RAM, or
      * RET would return 0x0000 and restart the loader. */
@@ -33,7 +47,8 @@ u8 mem_read(Mem *m, u16 addr) {
         return bootstrap_read(m->bootstrap, addr);
 
     int slot = addr >> 14;
-    u8 block = m->bank[slot];
+    bool locked = (m->lock >> (slot + 4)) & 1;
+    u8 block = locked ? m->write_bank[slot] : m->read_bank[slot];
 
     /* Memory-mapped keyboard: whichever slot maps block 3 sees the
      * live matrix at offset 0x3FF0..0x3FFF instead of stored RAM. */
@@ -48,6 +63,6 @@ u8 mem_read(Mem *m, u16 addr) {
 
 void mem_write(Mem *m, u16 addr, u8 val) {
     int slot = addr >> 14;
-    u8 block = m->bank[slot];
+    u8 block = m->write_bank[slot];
     m->ram[block * MEM_BLOCK_SIZE + (addr & (MEM_BLOCK_SIZE - 1))] = val;
 }
