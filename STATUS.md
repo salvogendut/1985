@@ -2,7 +2,7 @@
 
 ## Summary
 
-The original sticky-FDC-IRQ-latch bug is fixed and the boot has visibly advanced — CP/M+ now reaches the "Drive is A:" status line and a cursor block. The BIOS scheduler is now decoded too, but the final CCP handoff still does not happen.
+The original sticky-FDC-IRQ-latch bug is fixed and the boot has visibly advanced — CP/M+ now reaches the "Drive is A:" status line and a cursor block. **The investigation has now reframed: CCP IS RUNNING.** Trace shows code executing in slot 1 with bank 8 mapped (CCP bank, per systemed.net hardware map) at `pc=5D9D`, in a tight busy-wait that decrements byte `0x6D1D` from `0xFF` to `0x00`, then `pc=5DA0` reloads it to `0x1E`, and the cycle repeats hundreds of times. The earlier conclusion that "CCP never gets invoked" was wrong; the actual bug is that CCP is **stuck in a retry/timeout loop waiting on a device or flag we are not satisfying**.
 
 ## What changed in this round
 
@@ -35,6 +35,13 @@ The original sticky-FDC-IRQ-latch bug is fixed and the boot has visibly advanced
   - Dumps Z80 registers, bank state, ASIC/FDC state, disassembly around PC, disassembly of the BIOS scheduler blocks (0x0770, 0x077B, 0x078B, 0x07A4, 0x07C3, 0x07E6, 0x0853, 0x0880, 0x08A0, 0x08AB, 0x08E9, 0x0AD0, 0x0A98, 0x07D4, 0x0030, 0x0B6A, 0x4734, 0x4E84), and key memory regions including raw block-3 keyboard data.
 
 - **`src/fdc.c` — trace lines include phase name** (small diag improvement)
+
+## Reframed findings (this round)
+
+- The 088B/085F dispatcher loop that constantly toggles `0x1014` between `0x80` and `0x00` is **steady-state BIOS scheduler idle behavior**, NOT a "queue collapse" bug. With ALL-writes-with-bank-context tracing turned on, both bytes show stable `slot=0 rb=00 wb=00 bf=F0` — no banking mismatch.
+- `pc=F179` (boot ROM in slot 3 = bank 7) is writing real Z80 **opcode bytes** (e.g. `D3 F2 7D E1 C9` = `OUT (F2),A; LD A,L; POP HL; RET`) into low RAM at `0x0D00`, `0x1010`, `0x10A0`. This is the BIOS jumpblock relocator. Subsequent writes by `pc=C816` and `pc=C874` reinitialize those addresses as DATA after the code phase is done — expected.
+- `pc=5D9D` writes byte `0x6D1D` with **`slot=1 rb=08 wb=08`** — bank 8 is mapped in. Per systemed bank map, bank 8 = "CCP, hash tables, data buffers". This code is executing as part of CCP/BDOS. The trace shows it counting down `0x6D1D` from `0xFF → 0x00`, then `pc=5DA0` reloads it to `0x1E`, repeating ~269+ times over the run.
+- F4 lock bit ordering was wrong (slot mapping bug) — confirmed via MAME `pcw.cpp:295-318` AND ZEsarUX `pcw.c:251-272`. Both use slot 0→b6, slot 1→b4, slot 2→b5, slot 3→b7. Fixed.
 
 ## What is still broken (current stall)
 
@@ -87,22 +94,39 @@ State dumps at frames 4000/6000/8000 (`tools` directory of a fresh checkout: run
 - Bank-force reset semantics as the primary blocker (now aligned with MAME; no change in boot outcome).
 - FDC command/result handling as the remaining blocker (the FDC goes idle cleanly after the load sequence).
 
-## Working hypotheses for the remaining stall
+## REFRAMED AGAIN — pc=5D9D is NOT CCP, it's the printer ISR
 
-1. **The OS is waiting for a printer MCU side-effect we don't produce.** The 8041AH printer MCU is a real co-processor; on a real PCW it may write status bytes back into shared RAM that the BIOS polls. Our printer is a port-stub only. Worth investigating: trace printer command writes from BIOS, then see whether ZEsarUX / Joyce / MAME do any RAM-level callbacks from their printer model.
-2. **A specific bit on a kbd window byte (LK1/LK2/LK3 / shift-lock LED on 0xBFFD / 0xBFFE) is wrong.** Seasip §10.2 documents three option links that the BIOS may read. Our defaults (all zero) match Joyce's defaults, but it's worth setting LK2-present explicitly and seeing if anything changes.
-3. **The scheduler queue at `(0x1010)` is being seeded from the boot code path at `pc=F179`, but it is not surviving the scheduler loop at `pc=085F`.** The comparison at `0x0880` against `0x1015`/`0x0D07` is the next concrete mismatch to chase.
-4. **The remaining question is whether `pc=F179` is supposed to write one additional byte or flag that our model is missing.** The trace says the seed exists; the problem is that the BIOS does not retain it long enough to transition into CCP.
+Disassembly of bank 8 offset 0x1D80 (= `pc=5D9D` in slot 1) reveals:
 
-## Concrete next probe
+```
+5D82: IN A,(FDh)         ; read printer status
+5D84: AND 85h            ; mask BAIL / READY bits
+5D87: LD HL,6D1Bh
+5D8A: BIT 7,D            ; test BAIL
+5D9C: DEC (HL)           ; decrement printer-state counter at (6D1D)
+5D9D: RET NZ             ; <-- expected normal-idle return
+5D9E: LD (HL),1Eh        ; reload counter to 30 every full cycle
+5DA3: JP 0A1Ah           ; tail-call into BIOS bank 0
+```
 
-Instrument every memory write to:
-- `(0x1010..0x1017)` — runnable queue head and its adjacent control bytes
-- `(0x0D00..0x0D0F)` — secondary queue / return record
-- `(0x10A0..0x10AF)` — timer chain table
-- `(0x6D1B..0x6D1F)` — printer countdown / boot-delay bytes
+This is the **300Hz printer-poll timer ISR** — normal idle background activity. The "tight loop" we see is the BIOS scheduler ticking the printer counter on every timer interrupt, which is **expected** when the system is alive but idle.
 
-Log `PC` and the new value on each write. The immediate goal is to identify the first code path that should leave a nonzero `0x1010` record in place long enough for the BIOS scheduler to transition into CCP.
+IO trace confirms: F8=09 (motor on) happened twice during boot, F8=0A (motor off) once. Current motor state = ON. After the initial track-load sequence (~88 sector reads + RECALIBRATE + SENSE INT), the FDC stays idle for the rest of the run. CCP never issues another disk command.
+
+## Working hypotheses for the remaining stall (re-reframed)
+
+The system is alive, idle, and running its background ISRs. CCP printed the banner ("Drive is A:"). After that, CCP should issue a directory read on drive A: to show `A>`. It does not. So CCP either:
+
+1. **Reached its command loop and is waiting for a keypress**, but our keyboard input is not being seen. The kbd matrix bytes in block 3 at 0x3FF0..0x3FFE are observed at `00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 40` — heartbeat bit on, no keys pressed. If CCP polls BDOS function 6 (direct console) and BDOS reads the kbd window but the "key pressed" semantic differs subtly, no key would ever register.
+2. **Is autoexec'ing PROFILE.SUB** and stuck waiting for the SUBMIT mechanism (which uses `$$$.SUB` files on the disk).
+3. **Has reached `A>` internally but is still inside BDOS warm-boot finalization** — never gets a chance to actually print and prompt because some final init step deadlocks against an interrupt we mis-deliver.
+
+## Concrete next probes
+
+1. **Take a screenshot at frame 5000+** and visually confirm what's on the screen after "Drive is A:". Has `A>` appeared and we just can't see it because of a display bug? Or is the cursor still where it was at end-of-banner?
+2. **Try injecting a keypress (Enter)**. If `A>` appears after Enter, the issue is "CCP is waiting for the user but our automatic post-banner key isn't being delivered." If nothing happens, CCP is genuinely stuck.
+3. **Look for PROFILE.SUB on the disk image** and the SUBMIT runtime in BDOS. Trace the SUBMIT cold-start path.
+4. **Trace BDOS calls** (RST 5 / CALL 5) post-banner. The last BDOS function CCP makes will name what it's waiting on.
 
 ## Reference
 

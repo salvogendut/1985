@@ -34,7 +34,11 @@ void mem_bank_write(Mem *m, u8 port, u8 val) {
          * The PCW firmware only relies on the 0-7 bank range here. */
         u8 read_bank = (val >> 4) & 0x07;
         m->write_bank[slot] =  val       & 0x07;
-        if ((m->bank_force >> (slot + 4)) & 1)
+        /* F4 lock bit per slot, matching MAME pcw.cpp:295-318:
+         * slot 0 -> b6, slot 1 -> b4, slot 2 -> b5, slot 3 -> b7
+         * (systemed.net hardware.html: b7-b4 = &C000/&0000/&8000/&4000). */
+        static const u8 force_bit[4] = { 6, 4, 5, 7 };
+        if ((m->bank_force >> force_bit[slot]) & 1)
             read_bank = m->write_bank[slot];
         m->read_bank[slot] = read_bank;
     }

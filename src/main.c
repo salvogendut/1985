@@ -118,6 +118,28 @@ static void dump_state(PCW *pcw, int frame) {
         dpp = (u16)(dpp + n);
     }
 
+    /* Disassemble bank 8 (CCP) directly: the BIOS inter-bank trampoline
+     * maps bank 8 to slot 1 starting at 0x4000, so bank-8 offset 0x1D80
+     * corresponds to CPU PC 0x5D80 when bank 8 is mapped. We've seen
+     * pc=5D9D loop hot in the trace — dump the surrounding code. */
+    {
+        static u8 b8snap[65536];
+        memset(b8snap, 0, sizeof(b8snap));
+        memcpy(b8snap + 0x4000, &pcw->mem.ram[8 * MEM_BLOCK_SIZE], MEM_BLOCK_SIZE);
+        fprintf(stderr, "--- disasm bank8@4000+1D80 (i.e. pc=5D80) ---\n");
+        u16 bp = 0x5D80;
+        for (int i = 0; i < 32; i++) {
+            char buf[64];
+            int n = z80dis(b8snap, bp, buf, sizeof(buf));
+            fprintf(stderr, "  %04X: %s\n", bp, buf);
+            bp = (u16)(bp + n);
+        }
+        fprintf(stderr, "raw blk8@1D80:");
+        for (int i = 0; i < 64; i++)
+            fprintf(stderr, " %02X", pcw->mem.ram[8 * MEM_BLOCK_SIZE + 0x1D80 + i]);
+        fprintf(stderr, "\n");
+    }
+
     /* Memory dump of likely work-queue heads. */
     static const u16 mem_pts[] = { 0x0000, 0x0021, 0x0040, 0x0060, 0x0100, 0x0D00, 0x1010, 0x10A0, 0x0E80, 0x4720, 0xBFF0, 0xFFF0 };
     /* Also dump raw block 3 at offset 0x3FF0 (where keyboard window
