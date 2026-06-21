@@ -95,20 +95,32 @@ void pcw_reset(PCW *pcw) {
      * PC; nothing else to do here. */
 }
 
+/* 4 MHz / 300 Hz ≈ 13_333 cycles per timer tick. The PCW asserts /INT
+ * 300 times per second from a periodic timer (MAME pcw.cpp:1297); the
+ * BIOS polls the F8 interrupt counter to schedule its per-frame work. */
+#define CYCLES_PER_TICK   (CYCLES_PER_FRAME / 6)
+
 void pcw_frame(PCW *pcw) {
     int cycles = 0;
+    int next_tick = CYCLES_PER_TICK;
+
     while (cycles < CYCLES_PER_FRAME) {
-        cycles += z80_step(&pcw->cpu, &pcw->bus);
+        if (pcw->cpu.halted) {
+            /* Skip straight to the next tick — IRQ will wake the CPU. */
+            cycles = next_tick;
+        } else {
+            cycles += z80_step(&pcw->cpu, &pcw->bus);
+        }
+
         int req = asic_poll_fdc_irq(&pcw->asic);
         if (req == 1)      z80_nmi      (&pcw->cpu);
         else if (req == 2) z80_interrupt(&pcw->cpu);
-        if (pcw->cpu.halted) {
-            /* Burn the rest of the frame; IRQ will wake it. */
-            cycles = CYCLES_PER_FRAME;
+
+        while (cycles >= next_tick) {
+            if (asic_timer_tick(&pcw->asic)) z80_interrupt(&pcw->cpu);
+            next_tick += CYCLES_PER_TICK;
         }
     }
-    if (crtc_frame(&pcw->crtc)) {
-        asic_frame(&pcw->asic);
-        z80_interrupt(&pcw->cpu);
-    }
+
+    if (crtc_frame(&pcw->crtc)) asic_frame(&pcw->asic);
 }
