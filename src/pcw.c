@@ -33,7 +33,18 @@ static void dump_pc_bytes(PCW *pcw, u16 pc, const char *tag) {
 }
 
 static void bus_mem_write(void *ctx, u16 addr, u8 val) {
-    mem_write(&((PCW *)ctx)->mem, addr, val);
+    PCW *pcw = (PCW *)ctx;
+    if ((addr >= 0x1010 && addr < 0x1018 && val != 0)
+        || (addr >= 0x0D00 && addr < 0x0D10 && val != 0)
+        || (addr >= 0x10A0 && addr < 0x10B0 && val != 0)
+        || (addr >= 0x6D1B && addr < 0x6D20 && val != 0)) {
+        u8 old = mem_read(&pcw->mem, addr);
+        if (old != val) {
+            fprintf(stderr, "seed_write pc=%04X %04X %02X->%02X\n",
+                    pcw->cpu.pc, addr, old, val);
+        }
+    }
+    mem_write(&pcw->mem, addr, val);
 }
 
 static u8 bus_io_read(void *ctx, u16 port) {

@@ -92,7 +92,11 @@ static void dump_state(PCW *pcw, int frame) {
     }
 
     /* Also disassemble at known dispatcher entry/timer-handler points. */
-    const u16 dump_dis[] = { 0x0D43, 0x0AD0, 0x0A98, 0x07D4, 0x0030, 0x0B6A, 0x4734, 0x4E84 };
+    const u16 dump_dis[] = {
+        0x0770, 0x077B, 0x078B, 0x07A4, 0x07C3, 0x07E6, 0x0853, 0x0880, 0x08A0, 0x08AB, 0x08E9,
+        0x0D43, 0x0AD0, 0x0A98, 0x07D4, 0x0030,
+        0x0B6A, 0x4734, 0x4E84
+    };
     for (size_t k = 0; k < sizeof(dump_dis)/sizeof(dump_dis[0]); k++) {
         u16 dpp = dump_dis[k];
         fprintf(stderr, "--- disasm @ %04X ---\n", dpp);

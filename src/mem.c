@@ -1,6 +1,7 @@
 #include "mem.h"
 #include "bootstrap.h"
 #include "kbd.h"
+#include <stdio.h>
 #include <string.h>
 
 void mem_init(Mem *m) {
@@ -13,7 +14,10 @@ void mem_reset(Mem *m) {
      * slot i -> physical block i. CP/M+'s loader relies on this
      * default (it doesn't reprogram every bank before writing). */
     for (int i = 0; i < 4; i++) m->read_bank[i] = m->write_bank[i] = (u8)i;
-    m->bank_force = 0;
+    /* MAME starts the PCW with all CPC-style paging locks asserted.
+     * That matters when firmware programs a bank in standard mode:
+     * the read bank should follow the write bank for locked slots. */
+    m->bank_force = 0xF0;
 }
 
 void mem_bank_write(Mem *m, u8 port, u8 val) {
@@ -21,15 +25,15 @@ void mem_bank_write(Mem *m, u8 port, u8 val) {
     int slot = port - 0xF0;
     if (val & 0x80) {
         /* PCW extended mode — one block, used for read and write. */
-        u8 blk = val & 0x0F;
+        u8 blk = val & (MEM_BLOCK_COUNT - 1);
         m->read_bank [slot] = blk;
         m->write_bank[slot] = blk;
     } else {
         /* CPC standard mode — separate read- and write-banks.
-         * bits 6-4 = block to read, bits 3-0 = block to write
-         * (limited to blocks 0-15 / first 128 KB). */
+         * bits 6-4 = block to read, bits 2-0 = block to write.
+         * The PCW firmware only relies on the 0-7 bank range here. */
         u8 read_bank = (val >> 4) & 0x07;
-        m->write_bank[slot] =  val       & 0x0F;
+        m->write_bank[slot] =  val       & 0x07;
         if ((m->bank_force >> (slot + 4)) & 1)
             read_bank = m->write_bank[slot];
         m->read_bank[slot] = read_bank;
