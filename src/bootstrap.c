@@ -6,7 +6,9 @@
  *
  * Overlays low memory at reset so the CPU executes this instead of
  * empty RAM. Reads sector R=1 of track 0 from drive A into 0xF000,
- * disables the bootstrap, and jumps to 0xF000.
+ * disables the bootstrap, and jumps to 0xF010 (the first 16 bytes
+ * of the loaded sector are a CP/M+ boot header, not code — see
+ * https://www.chiark.greenend.org.uk/~jacobn/cpm/pcwboot.html).
  *
  * Pseudocode:
  *
@@ -92,7 +94,10 @@ static void build_stream(void) {
     /* Disable bootstrap and jump to loaded sector. */
     EMIT(0xAF);                         /* XOR A */
     EMIT(0xD3, 0xF8);                   /* OUT (0xF8), A */
-    EMIT(0xC3, 0x00, 0xF0);             /* JP 0xF000 */
+    /* Per the PCW boot spec (https://www.chiark.greenend.org.uk/~jacobn/cpm/pcwboot.html):
+     * boot sector loads to 0xF000..0xF1FF but execution starts at 0xF010 —
+     * the first 16 bytes are a CP/M+ boot-sector header, not code. */
+    EMIT(0xC3, 0x10, 0xF0);             /* JP 0xF010 */
 
     /* --- send_cmd: HL=cmd bytes, B=count. --- */
     int send_cmd = g_stream_len;
