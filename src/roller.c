@@ -32,10 +32,22 @@ static int roller_base_addr(u8 v) {
 }
 
 void roller_render(struct Mem *m, struct Asic *a, struct Display *d) {
-    int base = roller_base_addr(a->roller_base) & 0x3FFFF;
+    /* Display-enable gate: F8 cmds 7/8 only. F7 bit 6 turns out to be
+     * something else on this firmware (Loco/CP/M+ writes F7=0 early
+     * and never re-asserts bit 6, but expects the display to stay on),
+     * so we don't gate on it. */
+    if (!a->display_enabled) {
+        display_clear(d);
+        return;
+    }
+
+    int base    = roller_base_addr(a->roller_base) & 0x3FFFF;
+    int scroll  = a->scroll_y;
+    int invert  = a->inverse_video ? 1 : 0;
 
     for (int y = 0; y < SCREEN_ROWS; y++) {
-        int tbl_off = (base + y * 2) & 0x3FFFF;
+        int idx = (y + scroll) & 0xFF;
+        int tbl_off = (base + idx * 2) & 0x3FFFF;
         unsigned word = (unsigned)m->ram[tbl_off]
                       | ((unsigned)m->ram[(tbl_off + 1) & 0x3FFFF] << 8);
         int row_addr = (int)(((word & 0xE000u) << 1)
@@ -46,7 +58,8 @@ void roller_render(struct Mem *m, struct Asic *a, struct Display *d) {
             u8 byte = m->ram[(row_addr + col * 8) & 0x3FFFF];
             int xbase = col * 8;
             for (int b = 0; b < 8; b++)
-                display_put_pixel(d, xbase + b, y, (byte >> (7 - b)) & 1);
+                display_put_pixel(d, xbase + b, y,
+                                  (((byte >> (7 - b)) & 1) ^ invert) != 0);
         }
     }
 }
