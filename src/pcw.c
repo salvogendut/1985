@@ -19,11 +19,10 @@ static u8 bus_io_read(void *ctx, u16 port) {
     if (pcw->trace_io)
         fprintf(stderr, "io_read  %04X (lo=%02X)\n", port, lo);
 
-    /* FDC: 0x00 status, 0x01 data. (Address decode is on A0 only;
-     * bits 1..7 are don't-care on the PCW. The 8256 routes both
-     * 0x00 and 0x01 to the FDC; everything else is decoded by the
-     * ASIC.) */
-    if (lo <= 0x01) return fdc_read(&pcw->fdc, lo);
+    /* FDC: A0 selects MSR vs Data, mirrored across 0x00..0x7F
+     * (A1..A6 are don't-care, A7=0 selects the FDC window).
+     * MAME pcw.cpp: map(0x000, 0x001).mirror(0x7e). */
+    if (lo < 0x80) return fdc_read(&pcw->fdc, lo & 0x01);
 
     /* ASIC system control and video registers. */
     if (lo == 0xF4 || lo == 0xF8) return asic_read(&pcw->asic, lo);
@@ -40,7 +39,7 @@ static void bus_io_write(void *ctx, u16 port, u8 val) {
     if (pcw->trace_io)
         fprintf(stderr, "io_write %04X=%02X\n", port, val);
 
-    if (lo <= 0x01) { fdc_write(&pcw->fdc, lo, val); return; }
+    if (lo < 0x80) { fdc_write(&pcw->fdc, lo & 0x01, val); return; }
 
     if (lo >= 0xF0 && lo <= 0xF3) {
         mem_bank_write(&pcw->mem, lo, val);
