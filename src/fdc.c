@@ -260,6 +260,15 @@ static void cmd_read_data(Fdc *f) {
     f->exec_len = size;
     f->exec_pos = 0;
 
+    /* DIAG: dump first 16 bytes of sector data we're about to deliver. */
+    if (f->trace) {
+        fprintf(stderr, "fdc read C%02X H%X R%X size=%d data:",
+                C, H, R, size);
+        for (int i = 0; i < 16 && i < size; i++)
+            fprintf(stderr, " %02X", f->exec_buf[i]);
+        fputc('\n', stderr);
+    }
+
     /* Stash the CHRN we'll echo in the result so the result phase has it. */
     f->cmd_buf[2] = s->C; f->cmd_buf[3] = s->H;
     f->cmd_buf[4] = s->R; f->cmd_buf[5] = s->N;

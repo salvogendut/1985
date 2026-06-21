@@ -218,10 +218,45 @@ BDOS's banked-task model.
 - `FD84` (which calls FDA8) is a "wait for interrupt" idiom: it installs a custom ISR pointer at memory `(0x0039)` (the JP target after the IM 1 vector at `0x0038`), yields via FDA8, and on return restores `(0x0039) = 0xFDC7` (default ISR). The custom ISR is loaded from `(0xFE77)`.
 - This is sophisticated coroutine + dynamic-IRQ-vector machinery. The bug is somewhere in this dance.
 
+### Fix #5 applied: expansion-port range 0x80-0xEF returns MAME values
+Per MAME pcw.cpp:580-625, ports E1/E3 must return 0x7F (bit 7 clear =
+no expansion present). Was returning 0xFF (= expansion DETECTED).
+Empirically: didn't visibly change OPEN-FILE hang either.
+
+### FDC sector-data sanity check
+With per-read trace added (`fdc read C R H size data:`), the sectors
+delivered during the post-banner directory search look like:
+
+```
+fdc read C09 H0 R1: 0F 0F 47 7E E6 FC E1 2E 06 7C C2 B0 A9 21 20 00
+fdc read C09 H0 R5: CC 80 9A AF 32 BE B4 CD 6B B8 C2 BA A1 0E 00 CD
+fdc read C09 H0 R9: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+fdc read C0A H0 R5: 46 75 6E 63 74 69 6F 6E 20 3D 20 20 20 20 20 46   "Function =     F"
+fdc read C27 H0 R5: 11 B0 17 B0 23 B0 2D B0 41 B0 4A B0 53 B0 40 AA   (hash table?)
+```
+
+So tracks 9-10 contain Z80 code + text strings (system extension /
+RPM area, not directory). Track 39 sec 5-6 looks like a hash/index
+table (pairs of byte+B0 marker). The directory must be elsewhere or
+this disk has a non-standard layout. **Worth verifying: does MAME or
+ZEsarUX actually boot CPM3 1-07.dsk to A>? If they hang too, the
+disk image itself is suspect.**
+
 ### Open questions for tomorrow
 1. **Why isn't an FDC command being issued?** BIOS goes through the SELDSK chain but no `OUT (1),cmd` happens. The custom ISR at `(0xFE77)` might be supposed to issue the command on the first timer tick after yielding.
 2. **Is the alt-register state being preserved across our interrupt acceptance?** Joyce uses alt-set exclusively in its ISRs; if our Z80 mishandles EXX/EX AF,AF' across IRQ entry, BDOS's swapped state could be corrupted.
-3. **Could the level-IRQ fix have unmasked a different bug?** Now that FDC IRQ stays asserted, maybe BIOS sees an extra IRQ at the wrong time and takes a wrong branch. Worth checking what the dynamically-installed ISR at FE77 reads from F8 to distinguish FDC vs timer.
+3. **Could the level-IRQ fix have unmasked a different bug?** Now that FDC IRQ stays asserted, maybe BIOS sees an extra IRQ at the wrong time and takes a wrong branch. Worth checking what the dynamically-installed ISR at FE77 reads from F8 to distinguish FDC vs timer. A/B test result: level-IRQ vs edge-IRQ produces IDENTICAL FDC command counts (129) — the spurious-SENSE-INT fix alone unlocked the FDC activity, level-IRQ is redundant here. We kept edge-IRQ as final.
+4. **Cross-validate with MAME/ZEsarUX on the SAME disk.** If they also fail to boot CPM3 1-07 to A>, the disk image itself may be corrupted or non-standard. If they succeed, our hang is a true emulator bug — likely in: (a) BDOS-bank trampoline timing, (b) directory hashing — there may be a CRC/checksum we're misdelivering, (c) the 0x6C68 / 0x6C55 / 0x6C49/0x6C4B coroutine variables expected to be initialised to specific values.
+5. **The hot loop at bank-8 0x5180** processes data byte-by-byte with bit-rotation, fed by a stack-swap coroutine via 4D3C → 4D44. To make progress here, single-step the loop once and see what HL value enters it (~ how many bytes does it expect to process?). If HL is some absurdly huge value (e.g., from reading bad memory at slot boundary), that explains the spin. Add a one-shot trace at PC=0x517E (assumed routine entry) logging HL on entry.
+6. **Try a different/cleaner disk image.** The "Boot files" dir in `/var/home/salvogendut/Downloads/CPM Boot/` may contain a known-good vanilla CPM3 disk.
+
+## Concrete next probes ranked
+
+1. **Boot CPM3 1-07.dsk in MAME** (or ZEsarUX) and confirm whether it reaches A>. If not, the disk image is the suspect, not us.
+2. **Trace HL on entry to hot loop** (PC=0x517E or wherever it's called from). Will reveal the byte-count expected.
+3. **Add per-call instruction trace gated on PC range 0x4D3C..0x4D60** to follow the coroutine handoff and see what comes back the other way.
+4. **Hash-table integrity check**: dump bank 8 contents at 0x4000+0x2C00 (CCP hash table region) and check whether the constructed hash looks valid.
+5. **Try a "minimum disk"** — boot disk with NO PROFILE.SUB and see if A> appears. If yes, the bug is in the autoexec path.
 
 
 
