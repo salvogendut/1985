@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
+u32 g_after_open_count = 0;
+
 /* 4 MHz Z80, 50 Hz frame → 80,000 T-states per frame. */
 #define CYCLES_PER_FRAME  80000
 
@@ -179,6 +181,33 @@ void pcw_frame(PCW *pcw) {
             /* Skip straight to the next tick — IRQ will wake the CPU. */
             cycles = next_tick;
         } else {
+            /* Foreground-PC histogram: after BDOS f=0F call, sample
+             * the foreground PC (= where the CPU would be if no IRQ
+             * were active). Detect "foreground" as iff1=1 AND the
+             * current PC NOT in the ISR range 0x0770..0x08FF. */
+            {
+                static u32 hist[64] = {0};
+                static u16 hist_pcs[64] = {0};
+                static int hist_n = 0;
+                static u32 sample_count = 0;
+                extern u32 g_after_open_count;
+                if (g_after_open_count > 0 && pcw->cpu.iff1
+                    && (pcw->cpu.pc < 0x0770 || pcw->cpu.pc >= 0x0900)) {
+                    sample_count++;
+                    if ((sample_count & 0xFF) == 0) {
+                        u16 p = pcw->cpu.pc;
+                        int found = -1;
+                        for (int i = 0; i < hist_n; i++) if (hist_pcs[i] == p) { found = i; break; }
+                        if (found < 0 && hist_n < 64) { found = hist_n++; hist_pcs[found] = p; hist[found] = 0; }
+                        if (found >= 0) hist[found]++;
+                        if ((sample_count & 0xFFFF) == 0) {
+                            fprintf(stderr, "fg_hist (samples=%u):", sample_count);
+                            for (int i = 0; i < hist_n; i++) fprintf(stderr, " %04X:%u", hist_pcs[i], hist[i]);
+                            fputc('\n', stderr);
+                        }
+                    }
+                }
+            }
             /* BIOS jumpblock trace: CP/M+ BIOS jumpblock lives in the
              * high common area. Catch CALL/JP instructions whose
              * immediate destination is in the FCxx..FFxx range. */
@@ -225,6 +254,7 @@ void pcw_frame(PCW *pcw) {
                 g_bdos_pending_fn  = c;
                 g_bdos_call_count++;
                 /* De-dupe immediate repeats so polled functions don't drown the log. */
+                if (c == 0x0F) g_after_open_count++;
                 if (++last == 1 || c != last_c || de != last_de) {
                     fprintf(stderr, "bdos call#%u f=%02X (C=%02X) DE=%04X ret=%04X bank0=%02X bank1=%02X bank2=%02X bank3=%02X\n",
                             g_bdos_call_count, c, c, de, ret,

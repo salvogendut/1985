@@ -170,6 +170,46 @@ No bug. All four emulators agree on F0–F4 semantics. Minor LK1/LK3/shift-lock 
 2. **fdc.c — invalid SENSE INT no longer raises spurious IRQ.** Returns ST0=0x80 via data register without going through enter_result().
 3. **mem.c — F4 lock bit ordering fixed** (slot 0→b6, slot 1→b4, slot 2→b5, slot 3→b7) per MAME/ZEsarUX.
 
+### Fix #3 applied: FDC READ/WRITE DATA R-increment in result phase
+Per uPD765A datasheet AND MAME upd765.cpp:2039-2076, after reading one
+sector the FDC result phase returns CHRN pointing to the NEXT sector
+(R+1, or wrap with C++ if R==EOT). We were echoing the original R.
+With the fix, the trace now correctly shows results like
+`fdc res phase=RESULT 00 00 00 0A 00 01 02` after the last R=9 read of
+track 9 — C wrapped to 10 and R reset to 1, matching MAME.
+
+Empirically: did NOT change the hang — same 6 BDOS calls, same hot
+loop at 5180-5193. But the fix is spec-correct and may matter for
+other software.
+
+### Fix #4 applied: BDOS-return trace + foreground PC histogram
+- pcw.c remembers the pushed return PC per BDOS call and logs when
+  control reaches it (`bdos return fn=X`). Confirms calls 1-5 return
+  cleanly; call #6 (OPEN FILE) never returns.
+- pcw.c samples foreground PC (when iff1=1 and PC not in 0x0770-0x08FF
+  ISR range) once per 256 instructions and emits a histogram every
+  64K samples. Identifies the hot foreground PCs.
+
+### Foreground PC histogram (post-fixes, after OPEN FILE call)
+```
+5188:385  518F:380  5193:357  5191:348  518B:345  518A:345
+5186:335  5185:327  518E:320  5189:299  5190:296  5187:285
+5156:52   51A3:50   517B:49   ...
+```
+Hot zone is bank-8 offset 0x1180 — disassembly shows a coroutine-style
+byte-processor with bit-reversal/hashing:
+```
+5180: CALL 4D3Ch    ; "get next byte" -- yields via 4D44's SP swap
+5183-5189: 8x RL E; RRA; DEC D    ; rotate/reverse byte
+518B: CALL 48DCh    ; emit byte
+518E-5191: DEC HL; JR NZ, 5180  ; HL = remaining byte count
+5193: CALL 519Fh    ; outer continuation
+```
+4D3C/4D44 implements a stack-swap coroutine via `LD (6C4Bh),SP` /
+`LD SP,(6C49h)` -- the "get byte" yields to a producer coroutine
+(probably the directory-buffer/FDC reader). This pattern is CP/M+
+BDOS's banked-task model.
+
 ### After fixes — current behavior
 - BDOS still hangs on f=0F OPEN FILE for `A:PROFILE.SUB`.
 - **NEW: user reports drive B LED blinks now too** — FDC commands ARE reaching drive B with the level-IRQ fix. Progress is happening.

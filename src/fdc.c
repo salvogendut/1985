@@ -267,11 +267,29 @@ static void cmd_read_data(Fdc *f) {
     enter_exec_read(f);
 }
 
-/* When EXEC_READ drains (or TC fires), assemble the standard read result. */
+/* When EXEC_READ drains (or TC fires), assemble the standard read result.
+ *
+ * Per uPD765A datasheet AND MAME upd765.cpp:2039-2076, the result phase
+ * returns CHRN pointing to the NEXT sector after the one just read --
+ * NOT the sector that was read. After delivering one sector with TC:
+ *   - If R < EOT: R becomes R+1
+ *   - If R == EOT: end-of-track: R = 1, C++
+ * CP/M+ BIOS relies on this to track its multi-sector read progress;
+ * if we echo the original R, BIOS thinks no progress was made and
+ * loops forever processing the same sector. */
 static void finish_read_data(Fdc *f) {
-    push_rw_result(f, build_st0(f, ST0_IC_NORMAL), 0, 0,
-                   f->cmd_buf[2], f->cmd_buf[3],
-                   f->cmd_buf[4], f->cmd_buf[5]);
+    u8 C   = f->cmd_buf[2];
+    u8 H   = f->cmd_buf[3];
+    u8 R   = f->cmd_buf[4];
+    u8 N   = f->cmd_buf[5];
+    u8 EOT = f->cmd_buf[6];
+    if (R == EOT) {
+        R = 1;
+        C++;
+    } else {
+        R++;
+    }
+    push_rw_result(f, build_st0(f, ST0_IC_NORMAL), 0, 0, C, H, R, N);
 }
 
 /* WRITE DATA: same parameter layout as READ DATA. Host streams one
@@ -337,9 +355,11 @@ static void finish_write_data(Fdc *f) {
         memcpy(&tr->data[s->offset], f->exec_buf, (size_t)n);
         d->dirty = true;
     }
-    push_rw_result(f, build_st0(f, ST0_IC_NORMAL), 0, 0,
-                   f->cmd_buf[2], f->cmd_buf[3],
-                   f->cmd_buf[4], f->cmd_buf[5]);
+    /* Same R-increment semantics as finish_read_data — see comment there. */
+    u8 C = f->cmd_buf[2], H = f->cmd_buf[3];
+    u8 R = f->cmd_buf[4], N = f->cmd_buf[5], EOT = f->cmd_buf[6];
+    if (R == EOT) { R = 1; C++; } else { R++; }
+    push_rw_result(f, build_st0(f, ST0_IC_NORMAL), 0, 0, C, H, R, N);
 }
 
 static void cmd_invalid(Fdc *f) {

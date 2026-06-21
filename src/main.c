@@ -130,6 +130,30 @@ static void dump_state(PCW *pcw, int frame) {
         static u8 b8snap[65536];
         memset(b8snap, 0, sizeof(b8snap));
         memcpy(b8snap + 0x4000, &pcw->mem.ram[8 * MEM_BLOCK_SIZE], MEM_BLOCK_SIZE);
+        /* Also dump helpers at 4D3C/48DC and a few other histogram-hit
+         * addresses that called from the hot loop at 5180. */
+        const u16 b8_help[] = { 0x4D3C, 0x48DC, 0x4A00, 0x4992, 0x499F, 0x49A0, 0x49A4, 0x47C0 };
+        for (size_t i = 0; i < sizeof(b8_help)/sizeof(b8_help[0]); i++) {
+            u16 a = b8_help[i];
+            fprintf(stderr, "--- disasm bank8 helper @ %04X ---\n", a);
+            for (int j = 0; j < 12; j++) {
+                char buf[64];
+                int n = z80dis(b8snap, a, buf, sizeof(buf));
+                fprintf(stderr, "  %04X: %s\n", a, buf);
+                a = (u16)(a + n);
+            }
+        }
+        /* Also disassemble the foreground hot-loop region 0x5180-0x51A8
+         * identified by the fg_hist PC sampler. That's bank-8 offset
+         * 0x1180. */
+        fprintf(stderr, "--- disasm bank8@4000+1180 (i.e. pc=5180) ---\n");
+        u16 b8h = 0x5180;
+        for (int i = 0; i < 50; i++) {
+            char buf[64];
+            int n = z80dis(b8snap, b8h, buf, sizeof(buf));
+            fprintf(stderr, "  %04X: %s\n", b8h, buf);
+            b8h = (u16)(b8h + n);
+        }
         fprintf(stderr, "--- disasm bank8@4000+1D80 (i.e. pc=5D80) ---\n");
         u16 bp = 0x5D80;
         for (int i = 0; i < 32; i++) {

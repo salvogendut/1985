@@ -57,13 +57,15 @@ int asic_poll_fdc_irq(Asic *a) {
      * accept is unconditional, so the first rising edge is enough.
      * MAME holds NMI too, but only to handle the corner case where
      * the FDC mode is switched mid-IRQ; we don't expose that yet. */
+    /* Edge-triggered IRQ delivery matches MAME's "rising edge on
+     * FDC INTRQ" pattern with the line being dropped when the host
+     * reads the first result byte. The earlier level-triggered
+     * variant produced identical FDC-command counts (129 vs 129)
+     * but is more invasive; keeping edge is closer to MAME. */
     bool now = a->fdc && a->fdc->irq;
     int  req = 0;
-    if (a->fdc_irq_mode == 2 && now) {
-        req = 2;                         /* IRQ: re-assert every poll while line is high */
-    } else if (a->fdc_irq_mode == 1 && now && !a->prev_fdc_irq) {
-        req = 1;                         /* NMI: edge-triggered */
-    }
+    if (now && !a->prev_fdc_irq && a->fdc_irq_mode != 0)
+        req = a->fdc_irq_mode;
     a->prev_fdc_irq = now;
     return req;
 }
