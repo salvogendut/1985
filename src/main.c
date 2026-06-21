@@ -33,6 +33,7 @@ static const char *USAGE =
 "  --disk-a PATH               mount .dsk in drive A\n"
 "  --disk-b PATH               mount .dsk in drive B\n"
 "  --boot-ems PATH             load raw EMS/EMT image at 0000h\n"
+"  --auto-space                send SPACE once after boot image appears\n"
 "  --paste TEXT                type TEXT after boot (\\n = Enter)\n"
 "  --load-sna PATH             load .sna at init (stub)\n"
 "  --save-sna-at N:PATH        save .sna at frame N (stub)\n"
@@ -51,6 +52,7 @@ typedef struct {
     const char *save_sna_arg;     /* "N:PATH" */
     const char *screenshot_arg;   /* "N:PATH" */
     const char *gif_out;
+    bool        auto_space;
     int         memory_kb;        /* 0 = leave config alone */
     int         exit_after;       /* -1 = run forever */
 } Cli;
@@ -100,6 +102,7 @@ static int parse_cli(int argc, char **argv, Cli *cli) {
         if ((v = eq_value(a, "--screenshot-at")) && *v) { cli->screenshot_arg = v; continue; }
         if ((v = eq_value(a, "--gif-out"))     && *v) { cli->gif_out     = v; continue; }
         if ((v = eq_value(a, "--exit-after"))  && *v) { cli->exit_after  = atoi(v); continue; }
+        if (strcmp(a, "--auto-space") == 0) { cli->auto_space = true; continue; }
 
         /* Two-token form: --flag VALUE */
         if (strcmp(a, "--config")        == 0 && i+1 < argc) { cli->config_path = argv[++i]; continue; }
@@ -113,6 +116,7 @@ static int parse_cli(int argc, char **argv, Cli *cli) {
         if (strcmp(a, "--screenshot-at") == 0 && i+1 < argc) { cli->screenshot_arg = argv[++i]; continue; }
         if (strcmp(a, "--gif-out")       == 0 && i+1 < argc) { cli->gif_out     = argv[++i]; continue; }
         if (strcmp(a, "--exit-after")    == 0 && i+1 < argc) { cli->exit_after  = atoi(argv[++i]); continue; }
+        if (strcmp(a, "--auto-space")    == 0) { cli->auto_space = true; continue; }
 
         if (starts_with(a, "--")) {
             fprintf(stderr, "unknown option: %s\n%s", a, USAGE);
@@ -189,6 +193,9 @@ int main(int argc, char **argv) {
     Paste paste;
     paste_init(&paste);
     if (cli.paste_text) paste_text(&paste, cli.paste_text);
+    bool auto_space_pending = cli.auto_space && cli.boot_ems;
+    int  auto_space_frame = 120;
+    bool auto_space_down = false;
 
     GifCap *gc = NULL;
     if (cli.gif_out) {
@@ -247,6 +254,16 @@ int main(int argc, char **argv) {
         }
 
         paste_tick(&paste, &pcw.kbd);
+
+        if (auto_space_pending && frame == auto_space_frame) {
+            kbd_press(&pcw.kbd, 5, 7);
+            auto_space_down = true;
+        }
+        if (auto_space_down && frame == auto_space_frame + 4) {
+            kbd_release(&pcw.kbd, 5, 7);
+            auto_space_down = false;
+            auto_space_pending = false;
+        }
         overlay_tick(&ov);
         pcw_frame(&pcw);
         roller_render(&pcw.mem, &pcw.asic, &disp);
