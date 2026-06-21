@@ -570,8 +570,7 @@ void z80_interrupt(Z80 *cpu) {
 }
 
 void z80_nmi(Z80 *cpu) {
-    cpu->halted = false;
-    cpu->iff1 = false;
+    cpu->pending_nmi = true;
 }
 
 /* Forward decl of the original implementation, defined immediately below. */
@@ -714,6 +713,19 @@ int z80_step(Z80 *cpu, Z80Bus *bus) {
 }
 
 static int z80_step_impl(Z80 *cpu, Z80Bus *bus) {
+    /* Service NMI first — non-maskable, takes priority over INT. */
+    if (cpu->pending_nmi) {
+        cpu->pending_nmi = false;
+        cpu->halted = false;
+        cpu->iff2 = cpu->iff1;
+        cpu->iff1 = false;
+        cpu->r = ((cpu->r + 1) & 0x7F) | (cpu->r & 0x80);
+        push16(cpu, bus, cpu->pc);
+        cpu->pc = 0x0066;
+        if (bus->tick) bus->tick(bus->ctx, 11);
+        return 11;
+    }
+
     /* Service maskable interrupt (blocked for one instruction after EI) */
     if (cpu->pending_irq && cpu->iff1 && !cpu->ei_delay) {
         cpu->pending_irq = false;

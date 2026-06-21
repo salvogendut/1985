@@ -99,6 +99,9 @@ void pcw_frame(PCW *pcw) {
     int cycles = 0;
     while (cycles < CYCLES_PER_FRAME) {
         cycles += z80_step(&pcw->cpu, &pcw->bus);
+        int req = asic_poll_fdc_irq(&pcw->asic);
+        if (req == 1)      z80_nmi      (&pcw->cpu);
+        else if (req == 2) z80_interrupt(&pcw->cpu);
         if (pcw->cpu.halted) {
             /* Burn the rest of the frame; IRQ will wake it. */
             cycles = CYCLES_PER_FRAME;

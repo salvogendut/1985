@@ -70,6 +70,7 @@ static void enter_result(Fdc *f) {
     f->phase = FDC_PHASE_RESULT;
     f->msr   = MSR_RQM | MSR_DIO | MSR_BUSY;
     f->result_pos = 0;
+    f->irq = true;
     trace_result(f);
 }
 
@@ -121,6 +122,7 @@ static void cmd_recalibrate(Fdc *f) {
     f->st0 = (u8)(ST0_IC_NORMAL | ST0_SE | (f->cur_unit & ST0_US_MASK));
     if (!f->drive[f->cur_unit].inserted) f->st0 |= ST0_NR;
     f->int_pending = true;
+    f->irq = true;
     enter_idle(f);
 }
 
@@ -138,6 +140,7 @@ static void cmd_seek(Fdc *f) {
                | (f->cur_unit & ST0_US_MASK));
     if (!f->drive[f->cur_unit].inserted) f->st0 |= ST0_NR;
     f->int_pending = true;
+    f->irq = true;
     enter_idle(f);
 }
 
@@ -368,6 +371,7 @@ static void trace_result(Fdc *f) {
 
 static void dispatch_command(Fdc *f) {
     u8 op = f->cmd_buf[0] & 0x1F;
+    f->irq = false;
     trace_cmd(f);
     switch (op) {
         case 0x03: cmd_specify           (f); break;
@@ -420,6 +424,7 @@ u8 fdc_read(Fdc *f, u8 port) {
     switch (f->phase) {
         case FDC_PHASE_RESULT: {
             u8 b = (f->result_pos < f->result_len) ? f->result_buf[f->result_pos++] : 0xFF;
+            f->irq = false;   /* first result byte read drops the IRQ line */
             if (f->result_pos >= f->result_len) enter_idle(f);
             return b;
         }

@@ -1,4 +1,5 @@
 #include "asic.h"
+#include "fdc.h"
 #include "bootstrap.h"
 #include "fdc.h"
 #include <string.h>
@@ -18,7 +19,7 @@ void asic_reset(Asic *a) {
     a->inverse_video   = false;
     a->flyback         = false;
     a->timer           = 0;
-    a->fdc_irq_mode    = 1;   /* power-on default: NMI on FDC IRQ */
+    a->fdc_irq_mode    = 0;   /* power-on default: FDC IRQ ignored; boot code enables it */
 }
 
 void asic_frame(Asic *a) {
@@ -28,12 +29,26 @@ void asic_frame(Asic *a) {
     a->flyback = !a->flyback;
 }
 
+int asic_poll_fdc_irq(Asic *a) {
+    bool now = a->fdc && a->fdc->irq;
+    int  req = 0;
+    if (now && !a->prev_fdc_irq && a->fdc_irq_mode != 0)
+        req = a->fdc_irq_mode;          /* 1 = NMI, 2 = IRQ */
+    a->prev_fdc_irq = now;
+    return req;
+}
+
 u8 asic_read(Asic *a, u8 port) {
     switch (port) {
         case 0xF4: return a->timer;
-        case 0xF8:
-            /* bit 6 = flyback. Other bits read as 0 for now. */
-            return a->flyback ? 0x40 : 0x00;
+        case 0xF8: {
+            /* bit 6 = vblank/flyback, bit 5 = FDC IRQ status.
+             * Matches MAME pcw.cpp:pcw_get_sys_status(). */
+            u8 v = 0;
+            if (a->flyback)               v |= 0x40;
+            if (a->fdc && a->fdc->irq)    v |= 0x20;
+            return v;
+        }
         default:
             return 0xFF;
     }

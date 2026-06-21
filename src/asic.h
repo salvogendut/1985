@@ -40,6 +40,7 @@ typedef struct Asic {
     bool flyback;           /* port 0xF8 read bit 6 */
     u8  timer;              /* port 0xF4 */
     int fdc_irq_mode;       /* 0=ignore, 1=NMI, 2=IRQ */
+    bool prev_fdc_irq;      /* edge-detect for FDC IRQ line */
 
     struct Bootstrap *bootstrap;
     struct Fdc       *fdc;
@@ -50,6 +51,12 @@ void asic_reset(Asic *a);
 
 /* Called once per emulated frame (50 Hz) — toggles flyback bit. */
 void asic_frame(Asic *a);
+
+/* Poll the FDC IRQ line. If it has just risen and the routing mode is
+ * NMI or IRQ, returns 1 (NMI requested) or 2 (IRQ requested); the caller
+ * (pcw.c) is expected to call z80_nmi / z80_interrupt accordingly. */
+struct Z80;
+int  asic_poll_fdc_irq(Asic *a);
 
 u8   asic_read (Asic *a, u8 port);
 void asic_write(Asic *a, u8 port, u8 val);

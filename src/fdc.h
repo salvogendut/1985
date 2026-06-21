@@ -46,6 +46,7 @@ typedef struct Fdc {
     bool tc;                /* terminal-count line (driven by ASIC port 0xF8) */
     bool motor_on;          /* spindle motor (ASIC port 0xF8 cmds 9/10) */
     bool trace;             /* stderr command-and-result trace */
+    bool irq;               /* uPD765A IRQ output line — observed by ASIC */
 
     FdcPhase phase;
     u8       msr;           /* main status register, recomputed per phase */
