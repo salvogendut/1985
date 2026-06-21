@@ -30,6 +30,13 @@ void asic_frame(Asic *a) {
     a->flyback = !a->flyback;
 }
 
+bool asic_timer_tick(Asic *a) {
+    /* MAME pcw.cpp:141-149 + :184-191 — 300 Hz periodic tick increments
+     * the interrupt counter, saturating at 0x0F, and asserts /INT. */
+    if (a->interrupt_counter < 0x0F) a->interrupt_counter++;
+    return true;
+}
+
 int asic_poll_fdc_irq(Asic *a) {
     bool now = a->fdc && a->fdc->irq;
     int  req = 0;
@@ -43,9 +50,9 @@ u8 asic_read(Asic *a, u8 port) {
     switch (port) {
         case 0xF4: return a->timer;
         case 0xF8: {
-            /* bit 6 = vblank/flyback, bit 5 = FDC IRQ status.
-             * Matches MAME pcw.cpp:pcw_get_sys_status(). */
-            u8 v = 0;
+            /* bits 0-3 = interrupt counter, bit 5 = FDC IRQ status,
+             * bit 6 = vblank/flyback. MAME pcw.cpp:pcw_get_sys_status(). */
+            u8 v = a->interrupt_counter & 0x0F;
             if (a->flyback)               v |= 0x40;
             if (a->fdc && a->fdc->irq)    v |= 0x20;
             return v;
