@@ -24,8 +24,12 @@ void mem_bank_write(Mem *m, u8 port, u8 val) {
 u8 mem_read(Mem *m, u16 addr) {
     /* Bootstrap window — every instruction fetch up to bootstrap end
      * comes from the canned stream rather than RAM. */
-    if (m->bootstrap && bootstrap_active(m->bootstrap))
-        return bootstrap_read_byte(m->bootstrap);
+    /* Boot overlay lives in low memory; reads above the stream length
+     * (notably stack pops at ~0x7E00) must fall through to RAM, or
+     * RET would return 0x0000 and restart the loader. */
+    if (m->bootstrap && bootstrap_active(m->bootstrap)
+        && addr < (u16)m->bootstrap->len)
+        return bootstrap_read(m->bootstrap, addr);
 
     int slot = addr >> 14;
     u8 block = m->bank[slot];

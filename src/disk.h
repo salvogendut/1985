@@ -23,6 +23,7 @@ typedef struct {
 typedef struct {
     bool      inserted;
     bool      write_protected;
+    bool      dirty;        /* set when in-memory data diverges from the file on disk */
     int       track_count;
     int       sides;
     DiskTrack track[DISK_MAX_TRACKS][DISK_MAX_SIDES];
