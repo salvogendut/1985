@@ -11,10 +11,11 @@
  * the main key matrix; rows 10..11 carry the optional keyboard-side
  * joystick (J1/J2).
  *
- * Bits are ACTIVE-LOW from the firmware's perspective: a '0' bit
- * means the key is currently pressed (MAME pcw.cpp:1071+, IP_ACTIVE_LOW
- * port definitions). Internally Keyboard.row[] stores the intuitive
- * "1 = pressed" form and kbd_matrix_byte inverts on read.
+ * Bits in the memory-mapped window are ACTIVE-HIGH: a '1' bit means
+ * the key is currently pressed. (MAME's IP_ACTIVE_LOW applies at the
+ * port-input level before the keyboard MCU shifts bytes into the
+ * memory window; joyce stores the "1 = pressed" form directly into
+ * PCWRAM[0xFFF0+k] — JoycePcwKeyboard.cxx:489 — and CP/M+ accepts it.)
  *
  * The full SDL-scancode → (row, bit) mapping is in kbd.c, transcribed
  * from joyce-2.4.2's JoycePcwKeyboard.cxx:43-167.

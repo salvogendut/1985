@@ -115,11 +115,13 @@ void kbd_init(Keyboard *k) {
 }
 
 u8 kbd_matrix_byte(Keyboard *k, u8 row) {
-    /* Matrix is ACTIVE-LOW from the firmware's perspective (MAME
-     * pcw.cpp:1071 onward — IP_ACTIVE_LOW port bits). Internally we
-     * store the intuitive "1 = pressed" form; invert on read. */
-    if (row >= KBD_ROWS) return 0xFF;
-    return (u8)~k->row[row];
+    /* The memory-mapped keyboard bytes use ACTIVE-HIGH (1 = pressed):
+     * joyce-2.4.2's JoycePcwKeyboard.cxx:489 directly writes its
+     * "1 = pressed" m_pcwKeyMap[] into PCWRAM[0xFFF0+k]. MAME's
+     * IP_ACTIVE_LOW operates at the port-input level before the
+     * keyboard MCU buffers bytes into the memory window. */
+    if (row >= KBD_ROWS) return 0;
+    return k->row[row];
 }
 
 void kbd_press(Keyboard *k, int row, int bit) {
