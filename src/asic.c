@@ -47,10 +47,23 @@ bool asic_timer_tick(Asic *a) {
 }
 
 int asic_poll_fdc_irq(Asic *a) {
+    /* Level-triggered IRQ delivery, matching MAME pcw.cpp:153-176 and
+     * Joyce JoyceAsic.cxx:135-140. While the FDC INTRQ line is high
+     * AND routing is IRQ, re-assert /INT every step so the Z80 will
+     * accept it as soon as iff1 becomes 1. This fixes the "BIOS arms
+     * its wait loop AFTER the edge has already been consumed" bug.
+     *
+     * NMI stays edge-triggered (matches what we currently do) — NMI
+     * accept is unconditional, so the first rising edge is enough.
+     * MAME holds NMI too, but only to handle the corner case where
+     * the FDC mode is switched mid-IRQ; we don't expose that yet. */
     bool now = a->fdc && a->fdc->irq;
     int  req = 0;
-    if (now && !a->prev_fdc_irq && a->fdc_irq_mode != 0)
-        req = a->fdc_irq_mode;          /* 1 = NMI, 2 = IRQ */
+    if (a->fdc_irq_mode == 2 && now) {
+        req = 2;                         /* IRQ: re-assert every poll while line is high */
+    } else if (a->fdc_irq_mode == 1 && now && !a->prev_fdc_irq) {
+        req = 1;                         /* NMI: edge-triggered */
+    }
     a->prev_fdc_irq = now;
     return req;
 }

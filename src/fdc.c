@@ -154,12 +154,19 @@ static void cmd_seek(Fdc *f) {
 
 /* SENSE INTERRUPT STATUS: consumes a pending seek-end interrupt and
  * returns ST0 + PCN. If no interrupt is pending, returns ST0 = 0x80
- * (invalid command) per the datasheet. */
+ * (invalid command) per the datasheet — and does NOT raise INTRQ. */
 static void cmd_sense_interrupt(Fdc *f) {
     f->result_len = 0;
     if (!f->int_pending) {
+        /* Invalid SENSE INT (no pending IRQ): per uPD765A datasheet,
+         * return ST0=0x80 via the data register but do NOT assert
+         * INTRQ. We must not go through enter_result() because that
+         * raises f->irq, which would spuriously re-trigger the BIOS
+         * IRQ handler when there's nothing to handle. */
         result_push(f, ST0_IC_INVALID);
-        enter_result(f);
+        f->phase = FDC_PHASE_RESULT;
+        f->msr   = MSR_RQM | MSR_DIO | MSR_BUSY;
+        f->result_pos = 0;
         return;
     }
     f->int_pending = false;

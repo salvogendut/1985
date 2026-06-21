@@ -180,6 +180,27 @@ void pcw_frame(PCW *pcw) {
             /* Skip straight to the next tick — IRQ will wake the CPU. */
             cycles = next_tick;
         } else {
+            /* BIOS jumpblock trace: CP/M+ BIOS jumpblock lives in the
+             * high common area. Catch CALL/JP instructions whose
+             * immediate destination is in the FCxx..FFxx range. */
+            {
+                u8 op = mem_read(&pcw->mem, pcw->cpu.pc);
+                if (op == 0xCD || op == 0xC3 || op == 0xC4 || op == 0xCC
+                    || op == 0xD4 || op == 0xDC || op == 0xE4 || op == 0xEC
+                    || op == 0xF4 || op == 0xFC) {
+                    u16 tgt = mem_read(&pcw->mem, (u16)(pcw->cpu.pc+1))
+                            | (mem_read(&pcw->mem, (u16)(pcw->cpu.pc+2)) << 8);
+                    if (tgt >= 0xFC00) {
+                        static u16 last_pc = 0; static u16 last_tgt = 0;
+                        if (pcw->cpu.pc != last_pc || tgt != last_tgt) {
+                            fprintf(stderr, "bios call op=%02X pc=%04X -> %04X (C=%02X HL=%04X DE=%04X BC=%04X)\n",
+                                    op, pcw->cpu.pc, tgt,
+                                    pcw->cpu.c, pcw->cpu.hl, pcw->cpu.de, pcw->cpu.bc);
+                            last_pc = pcw->cpu.pc; last_tgt = tgt;
+                        }
+                    }
+                }
+            }
             /* BDOS-call trace: CP/M+ apps enter BDOS via CALL 5.
              * At PC=5, C = function, DE = parameter. Return address
              * is on the stack (top word). */
@@ -197,6 +218,17 @@ void pcw_frame(PCW *pcw) {
                             c, c, de, ret,
                             pcw->mem.read_bank[0], pcw->mem.read_bank[1],
                             pcw->mem.read_bank[2], pcw->mem.read_bank[3]);
+                    /* For OPEN/MAKE/SEARCH FILE calls, dump the FCB (12 bytes
+                     * starting at DE: drive + 8-char name + 3-char ext). */
+                    if (c == 0x0F || c == 0x16 || c == 0x11 || c == 0x12 || c == 0x13) {
+                        fprintf(stderr, "  fcb@%04X drv=%02X name='", de, mem_read(&pcw->mem, de));
+                        for (int i = 1; i <= 11; i++) {
+                            u8 b = mem_read(&pcw->mem, (u16)(de+i)) & 0x7F;
+                            fputc(b < 0x20 || b > 0x7E ? '.' : b, stderr);
+                            if (i == 8) fputc('.', stderr);
+                        }
+                        fputc('\'', stderr); fputc('\n', stderr);
+                    }
                     last_c = c; last_de = de;
                 }
             }

@@ -149,6 +149,42 @@ Plan: read MAME (pcw.cpp + upd765.cpp + i8275.cpp + z80.cpp), ZEsarUX (machines/
 
 ## Cross-emulator divergence findings (running log)
 
+### Z80 core (fork B1 done, /tmp/z80-compare.md)
+No smoking gun. ALU flags, INT/NMI/RETI/RETN, EI delay, block-op interruptibility match MAME/Joyce. WZ/MEMPTR not implemented (low risk). Joyce comment flags "FDC first then timer" for INT source ordering — worth checking ASIC.
+
+### ASIC (fork B2 done, /tmp/asic-compare.md)
+**SMOKING GUN: IRQ delivery is edge-pulsed instead of level-triggered.** MAME (pcw.cpp:153-176) and Joyce (JoyceAsic.cxx:135-140) hold /INT asserted continuously while `fdc->irq` is high AND mode==IRQ. We edge-pulse. If BDOS arms its wait loop AFTER our edge has fired and been consumed, we lose the re-assertion.
+
+Also: NMI hold semantic missing, F4 read doesn't re-evaluate IRQ, flyback phase inverted (same duty, opposite phase).
+
+### Memory/Paging (fork B3 done, /tmp/mem-compare.md)
+No bug. All four emulators agree on F0–F4 semantics. Minor LK1/LK3/shift-lock bits not populated in our kbd window (others set some of these); likely benign for OPEN FILE.
+
+### FDC + Printer (forks B5/B6 done, /tmp/fdc-printer-compare.md)
+- **Printer is NOT the cause** — ZEsarUX boots fine with port FD always returning 0x40; our 0xCC is a strict superset.
+- **FDC IRQ assertion is synchronous** — MAME/Joyce schedule via countdown. Combined with edge-pulsed IRQ delivery in ASIC, BIOS misses SEEK-completion IRQs.
+- **Spurious IRQ on invalid SENSE INT** — our code raised f->irq=true even with int_pending=false; real chip does not.
+
+### Fixes applied this round
+1. **asic.c — IRQ delivery now level-triggered** (NMI kept edge-triggered). Matches MAME/Joyce.
+2. **fdc.c — invalid SENSE INT no longer raises spurious IRQ.** Returns ST0=0x80 via data register without going through enter_result().
+3. **mem.c — F4 lock bit ordering fixed** (slot 0→b6, slot 1→b4, slot 2→b5, slot 3→b7) per MAME/ZEsarUX.
+
+### After fixes — current behavior
+- BDOS still hangs on f=0F OPEN FILE for `A:PROFILE.SUB`.
+- **NEW: user reports drive B LED blinks now too** — FDC commands ARE reaching drive B with the level-IRQ fix. Progress is happening.
+- BIOS trace shows the OPEN FILE chain reaching SELDSK → FE3E → FD70 → FD84 → CALL FDA8 → hang.
+- `FDA8` is a "yield" routine: PUSH DE / EX AF,AF' / EXX / EI / RET — momentarily swaps to alt-register set and EI's so an ISR fires, then control returns and code DI's to restore.
+- `FD84` (which calls FDA8) is a "wait for interrupt" idiom: it installs a custom ISR pointer at memory `(0x0039)` (the JP target after the IM 1 vector at `0x0038`), yields via FDA8, and on return restores `(0x0039) = 0xFDC7` (default ISR). The custom ISR is loaded from `(0xFE77)`.
+- This is sophisticated coroutine + dynamic-IRQ-vector machinery. The bug is somewhere in this dance.
+
+### Open questions for tomorrow
+1. **Why isn't an FDC command being issued?** BIOS goes through the SELDSK chain but no `OUT (1),cmd` happens. The custom ISR at `(0xFE77)` might be supposed to issue the command on the first timer tick after yielding.
+2. **Is the alt-register state being preserved across our interrupt acceptance?** Joyce uses alt-set exclusively in its ISRs; if our Z80 mishandles EXX/EX AF,AF' across IRQ entry, BDOS's swapped state could be corrupted.
+3. **Could the level-IRQ fix have unmasked a different bug?** Now that FDC IRQ stays asserted, maybe BIOS sees an extra IRQ at the wrong time and takes a wrong branch. Worth checking what the dynamically-installed ISR at FE77 reads from F8 to distinguish FDC vs timer.
+
+
+
 
 ## Reference
 
