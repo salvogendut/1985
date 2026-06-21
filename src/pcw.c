@@ -92,6 +92,27 @@ static u8 bus_io_read(void *ctx, u16 port) {
         return v;
     }
 
+    /* Expansion port range 0x080-0x0EF. MAME pcw.cpp:580-625 returns
+     * specific values for a few ports the firmware probes:
+     *   0x85 -> 0xFE   0x87 -> 0xFF
+     *   0xE1, 0xE3 -> 0x7F   (bit 7 clear => no expansion present)
+     * Other ports in this range default to 0xFF (floating bus / no
+     * peripheral). PCW BIOS reads E1/E3 during expansion-device probe;
+     * returning 0xFF (bit 7 set) was making the firmware think an
+     * expansion device WAS present and triggering its init path. */
+    if (lo >= 0x80 && lo <= 0xEF) {
+        u8 v;
+        switch (lo) {
+            case 0x85: v = 0xFE; break;
+            case 0x87: v = 0xFF; break;
+            case 0xE1: case 0xE3: v = 0x7F; break;
+            default:   v = 0xFF; break;
+        }
+        if (pcw->trace_io)
+            fprintf(stderr, "        -> %02X (expansion)\n", v);
+        return v;
+    }
+
     if (pcw->trace_io)
         fprintf(stderr, "        -> FF\n");
     return 0xFF;
