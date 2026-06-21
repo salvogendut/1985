@@ -1,0 +1,27 @@
+# 1985 — Amstrad PCW 8256 emulator configuration
+#
+# This file is auto-created at ~/.config/1985/1985.conf on first run.
+# The F9 overlay edits it in place.
+
+[machine]
+model = 8256
+memory_kb = 256
+
+[storage]
+drive_a =
+drive_b =
+
+[display]
+scale = 2
+fullscreen = false
+fullscreen_smoothing = true
+# off / green / amber / white. PCW shipped with a green-phosphor monitor.
+monochrome = green
+
+[advanced]
+# Set tinker=true to unlock the Advanced tab in the F9 overlay.
+tinker = false
+debug = false
+trace_io = false
+trace_fdc = false
+trace_input = false

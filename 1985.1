@@ -1,0 +1,117 @@
+.TH 1985 1 "June 2026" "1985 0.1.0" "User Commands"
+.SH NAME
+1985 \- Amstrad PCW 8256 emulator
+.SH SYNOPSIS
+.B 1985
+.RI [ OPTIONS ]
+.SH DESCRIPTION
+.B 1985
+is an Amstrad PCW 8256 emulator written in C with SDL3. Sibling project
+to 1984 (the Amstrad CPC emulator) sharing build system, F9 overlay,
+and Z80 core. The PCW family ran CP/M Plus on a Z80 with a Motorola
+6845 CRTC, a 720x256 monochrome green-phosphor display, an NEC uPD765A
+floppy controller, and 256 KB of banked RAM.
+.PP
+On first run
+.B 1985
+creates
+.IR ~/.config/1985/1985.conf
+with sensible defaults; edit it directly or use the F9 overlay.
+.SH OPTIONS
+.TP
+.BI --config= PATH
+Read configuration from
+.I PATH
+instead of
+.IR ~/.config/1985/1985.conf .
+.TP
+.BI --memory= KB
+RAM size in kilobytes: 256, 512 or 2048 (overrides config).
+.TP
+.BI --disk-a= PATH
+Mount a .dsk image in drive A.
+.TP
+.BI --disk-b= PATH
+Mount a .dsk image in drive B.
+.TP
+.BI --paste= TEXT
+Type TEXT verbatim after boot.
+.TP
+.BI --load-sna= PATH
+Load a .sna snapshot at init (stubbed).
+.TP
+.BI --save-sna-at= N:PATH
+Save .sna at frame N (stubbed).
+.TP
+.BI --screenshot-at= N:PATH
+Save a PPM screenshot at frame N and exit.
+.TP
+.BI --gif-out= PATH
+Record GIF from boot to PATH (pair with --exit-after).
+.TP
+.BI --exit-after= N
+Quit after frame N.
+.TP
+.B --monitor-pty
+Open a PTY for the F8 memory monitor.
+.TP
+.B --kbd-pty
+Open a PTY that injects writes as keystrokes.
+.TP
+.BI --symbols= PATH
+Load an SDCC .map for the F8 disassembler.
+.TP
+.BR -h ", " --help
+Show help and exit.
+.SH KEYBOARD SHORTCUTS
+.TP
+.B F4
+Save .ppm screenshot.
+.TP
+.B F5
+Warm reset.
+.TP
+.B F8
+Open / close memory monitor.
+.TP
+.B F9
+Open options overlay.
+.TP
+.B F11
+Toggle fullscreen.
+.TP
+.B F12
+Quit.
+.TP
+.B Ctrl+V
+Paste clipboard.
+.SH OVERLAY
+Four tabs:
+.B General
+(model, RAM, debug toggle),
+.B Media
+(drive A / B file pickers),
+.B Extensions
+(placeholder),
+.B Advanced
+(smoothing, monochrome tint, FPS, trace toggles, snapshot load/save).
+The Advanced tab is hidden unless
+.B tinker=true
+is set in the config.
+.SH FILES
+.TP
+.I ~/.config/1985/1985.conf
+Configuration file.
+.SH BUGS
+Report issues at
+.UR https://github.com/salvogendut/1985/issues
+.UE .
+.SH AUTHOR
+Salvatore Bognanni
+.MT salvogendut@gmail.com
+.ME .
+.SH COPYRIGHT
+Copyright (C) 2026 Salvatore Bognanni. License GPL-2.0-only.
+.SH SEE ALSO
+.BR 1984 (1),
+.BR caprice32 (1)

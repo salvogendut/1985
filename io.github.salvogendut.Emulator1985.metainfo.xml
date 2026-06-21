@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.salvogendut.Emulator1985</id>
+  <name>1985</name>
+  <summary>Amstrad PCW 8256 emulator</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-2.0-only</project_license>
+  <developer id="io.github.salvogendut">
+    <name>Salvatore Bognanni</name>
+  </developer>
+  <description>
+    <p>
+      1985 is an Amstrad PCW 8256 emulator written in C with SDL3, a
+      sibling project to 1984 (CPC). The PCW family ran CP/M Plus on
+      a Z80 with a Motorola 6845 CRTC driving a 720x256 monochrome
+      green-phosphor display, an NEC uPD765A floppy controller, and
+      256 KB of banked RAM addressed in 16 KB pages.
+    </p>
+    <p>
+      The PCW has no boot ROM — a 778-byte bootstrap stream is
+      injected at reset, builds a 256-byte loader in RAM, and that
+      loader pulls the system from drive A. 1985 reproduces this
+      behaviour and ships no firmware ROMs.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.salvogendut.Emulator1985.desktop</launchable>
+  <url type="homepage">https://github.com/salvogendut/1985</url>
+  <url type="bugtracker">https://github.com/salvogendut/1985/issues</url>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.1.0" date="2026-06-21">
+      <description>
+        <p>Initial scaffolding: SDL3 window, F9 overlay framework copied from 1984, Z80 core wired against PCW memory and I/O ports (0x00/0x01 FDC, 0xF0-0xF3 banking, 0xF4-0xF8 ASIC, 0xFC/0xFD printer stub), 778-byte boot stream + boot loader at 0x0002. Roller-RAM rendering, real FDC drive backend, and printer output are stubbed for follow-up sessions.</p>
+      </description>
+    </release>
+  </releases>
+</component>

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=1985
+GenericName=Amstrad PCW Emulator
+Comment=Amstrad PCW 8256 emulator
+Exec=1985 %F
+Icon=io.github.salvogendut.Emulator1985
+Terminal=false
+Categories=Emulator;Utility;
+Keywords=amstrad;pcw;joyce;emulator;retro;z80;cpm;

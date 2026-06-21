@@ -1,0 +1,181 @@
+#include "config.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+#ifdef _WIN32
+#include <direct.h>
+#define MKDIR(p) _mkdir(p)
+#else
+#define MKDIR(p) mkdir((p), 0755)
+#endif
+
+static const char *mono_to_str(MonoMode m) {
+    switch (m) {
+        case MONO_GREEN: return "green";
+        case MONO_AMBER: return "amber";
+        case MONO_WHITE: return "white";
+        case MONO_OFF:
+        default:         return "off";
+    }
+}
+
+static MonoMode parse_mono(const char *s, MonoMode fallback) {
+    if (!s) return fallback;
+    if (strcasecmp(s, "off")   == 0) return MONO_OFF;
+    if (strcasecmp(s, "green") == 0) return MONO_GREEN;
+    if (strcasecmp(s, "amber") == 0) return MONO_AMBER;
+    if (strcasecmp(s, "white") == 0) return MONO_WHITE;
+    fprintf(stderr, "config: unknown monochrome '%s' — using default\n", s);
+    return fallback;
+}
+
+static const char *model_to_str(PcwModel m) {
+    switch (m) {
+        case PCW_MODEL_8512: return "8512";
+        case PCW_MODEL_9512: return "9512";
+        case PCW_MODEL_8256:
+        default:             return "8256";
+    }
+}
+
+static PcwModel parse_model(const char *s, PcwModel fallback) {
+    if (!s) return fallback;
+    if (strcmp(s, "8256") == 0) return PCW_MODEL_8256;
+    if (strcmp(s, "8512") == 0) return PCW_MODEL_8512;
+    if (strcmp(s, "9512") == 0) return PCW_MODEL_9512;
+    fprintf(stderr, "config: unknown model '%s' — using default\n", s);
+    return fallback;
+}
+
+static bool parse_bool(const char *s, bool fallback) {
+    if (!s) return fallback;
+    if (strcasecmp(s, "true")  == 0 || strcmp(s, "1") == 0) return true;
+    if (strcasecmp(s, "false") == 0 || strcmp(s, "0") == 0) return false;
+    return fallback;
+}
+
+static const char *bool_to_str(bool b) { return b ? "true" : "false"; }
+
+static void default_path(char *out, size_t out_size) {
+    const char *home = getenv("HOME");
+    if (!home) home = ".";
+    snprintf(out, out_size, "%s/.config/1985/1985.conf", home);
+}
+
+static void ensure_parent(const char *path) {
+    char tmp[PATH_MAX];
+    snprintf(tmp, sizeof(tmp), "%s", path);
+    char *slash = strrchr(tmp, '/');
+    if (!slash) return;
+    *slash = 0;
+    /* Walk up creating each missing directory. */
+    char *p = tmp;
+    if (*p == '/') p++;
+    while ((p = strchr(p, '/')) != NULL) {
+        *p = 0;
+        MKDIR(tmp);
+        *p = '/';
+        p++;
+    }
+    MKDIR(tmp);
+}
+
+void config_defaults(Config *c) {
+    memset(c, 0, sizeof(*c));
+    c->model                = PCW_MODEL_8256;
+    c->memory_kb            = 256;
+    c->scale                = 2;
+    c->fullscreen           = false;
+    c->fullscreen_smoothing = true;
+    c->monochrome           = MONO_GREEN;
+    c->tinker               = false;
+    c->debug                = false;
+}
+
+void config_load(Config *c, const char *path) {
+    config_defaults(c);
+    if (path) snprintf(c->path, sizeof(c->path), "%s", path);
+    else      default_path(c->path, sizeof(c->path));
+
+    FILE *f = fopen(c->path, "r");
+    if (!f) return;
+
+    char line[512];
+    while (fgets(line, sizeof(line), f)) {
+        char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == '\0' || *p == '#' || *p == ';' || *p == '\n' || *p == '[')
+            continue;
+
+        char *eq = strchr(p, '=');
+        if (!eq) continue;
+        *eq = 0;
+        char *k = p, *v = eq + 1;
+        char *nl = strchr(v, '\n');
+        if (nl) *nl = 0;
+
+        /* Trim trailing whitespace from key */
+        char *end = k + strlen(k);
+        while (end > k && (end[-1] == ' ' || end[-1] == '\t')) *(--end) = 0;
+        while (*v == ' ' || *v == '\t') v++;
+        end = v + strlen(v);
+        while (end > v && (end[-1] == ' ' || end[-1] == '\t' || end[-1] == '\r')) *(--end) = 0;
+
+        if      (strcmp(k, "model")                == 0) c->model = parse_model(v, c->model);
+        else if (strcmp(k, "memory_kb")            == 0) c->memory_kb = atoi(v);
+        else if (strcmp(k, "drive_a")              == 0) snprintf(c->drive_a, sizeof(c->drive_a), "%s", v);
+        else if (strcmp(k, "drive_b")              == 0) snprintf(c->drive_b, sizeof(c->drive_b), "%s", v);
+        else if (strcmp(k, "scale")                == 0) c->scale = atoi(v);
+        else if (strcmp(k, "fullscreen")           == 0) c->fullscreen = parse_bool(v, c->fullscreen);
+        else if (strcmp(k, "fullscreen_smoothing") == 0) c->fullscreen_smoothing = parse_bool(v, c->fullscreen_smoothing);
+        else if (strcmp(k, "monochrome")           == 0) c->monochrome = parse_mono(v, c->monochrome);
+        else if (strcmp(k, "tinker")               == 0) c->tinker = parse_bool(v, c->tinker);
+        else if (strcmp(k, "debug")                == 0) c->debug  = parse_bool(v, c->debug);
+        else if (strcmp(k, "trace_io")             == 0) c->trace_io    = parse_bool(v, c->trace_io);
+        else if (strcmp(k, "trace_fdc")            == 0) c->trace_fdc   = parse_bool(v, c->trace_fdc);
+        else if (strcmp(k, "trace_input")          == 0) c->trace_input = parse_bool(v, c->trace_input);
+    }
+    fclose(f);
+
+    if (c->scale     < 1) c->scale     = 1;
+    if (c->scale     > 4) c->scale     = 4;
+    if (c->memory_kb < 256) c->memory_kb = 256;
+}
+
+int config_save(const Config *c) {
+    ensure_parent(c->path);
+    FILE *f = fopen(c->path, "w");
+    if (!f) { perror("config_save"); return -1; }
+
+    fprintf(f, "# 1985 — Amstrad PCW 8256 emulator\n");
+    fprintf(f, "# Edited automatically by the F9 overlay.\n\n");
+
+    fprintf(f, "[machine]\n");
+    fprintf(f, "model = %s\n", model_to_str(c->model));
+    fprintf(f, "memory_kb = %d\n\n", c->memory_kb);
+
+    fprintf(f, "[storage]\n");
+    fprintf(f, "drive_a = %s\n", c->drive_a);
+    fprintf(f, "drive_b = %s\n\n", c->drive_b);
+
+    fprintf(f, "[display]\n");
+    fprintf(f, "scale = %d\n", c->scale);
+    fprintf(f, "fullscreen = %s\n", bool_to_str(c->fullscreen));
+    fprintf(f, "fullscreen_smoothing = %s\n", bool_to_str(c->fullscreen_smoothing));
+    fprintf(f, "monochrome = %s\n\n", mono_to_str(c->monochrome));
+
+    fprintf(f, "[advanced]\n");
+    fprintf(f, "tinker = %s\n", bool_to_str(c->tinker));
+    fprintf(f, "debug = %s\n", bool_to_str(c->debug));
+    fprintf(f, "trace_io = %s\n", bool_to_str(c->trace_io));
+    fprintf(f, "trace_fdc = %s\n", bool_to_str(c->trace_fdc));
+    fprintf(f, "trace_input = %s\n", bool_to_str(c->trace_input));
+
+    fclose(f);
+    return 0;
+}

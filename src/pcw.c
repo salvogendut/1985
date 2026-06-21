@@ -1,0 +1,112 @@
+#include "pcw.h"
+#include <stdio.h>
+#include <string.h>
+
+/* 4 MHz Z80, 50 Hz frame → 80,000 T-states per frame. */
+#define CYCLES_PER_FRAME  80000
+
+static u8 bus_mem_read(void *ctx, u16 addr) {
+    return mem_read(&((PCW *)ctx)->mem, addr);
+}
+
+static void bus_mem_write(void *ctx, u16 addr, u8 val) {
+    mem_write(&((PCW *)ctx)->mem, addr, val);
+}
+
+static u8 bus_io_read(void *ctx, u16 port) {
+    PCW *pcw = (PCW *)ctx;
+    u8 lo = (u8)(port & 0xFF);
+    if (pcw->trace_io)
+        fprintf(stderr, "io_read  %04X (lo=%02X)\n", port, lo);
+
+    /* FDC: 0x00 status, 0x01 data. (Address decode is on A0 only;
+     * bits 1..7 are don't-care on the PCW. The 8256 routes both
+     * 0x00 and 0x01 to the FDC; everything else is decoded by the
+     * ASIC.) */
+    if (lo <= 0x01) return fdc_read(&pcw->fdc, lo);
+
+    /* ASIC system control and video registers. */
+    if (lo == 0xF4 || lo == 0xF8) return asic_read(&pcw->asic, lo);
+
+    /* Printer status. */
+    if (lo == 0xFC || lo == 0xFD) return printer_read(&pcw->printer, lo);
+
+    return 0xFF;
+}
+
+static void bus_io_write(void *ctx, u16 port, u8 val) {
+    PCW *pcw = (PCW *)ctx;
+    u8 lo = (u8)(port & 0xFF);
+    if (pcw->trace_io)
+        fprintf(stderr, "io_write %04X=%02X\n", port, val);
+
+    if (lo <= 0x01) { fdc_write(&pcw->fdc, lo, val); return; }
+
+    if (lo >= 0xF0 && lo <= 0xF3) {
+        mem_bank_write(&pcw->mem, lo, val);
+        return;
+    }
+    if (lo >= 0xF4 && lo <= 0xF8) {
+        asic_write(&pcw->asic, lo, val);
+        return;
+    }
+    if (lo == 0xFC || lo == 0xFD) {
+        printer_write(&pcw->printer, lo, val);
+        return;
+    }
+}
+
+void pcw_init(PCW *pcw, PcwModel model) {
+    memset(pcw, 0, sizeof(*pcw));
+
+    pcw->model = model;
+
+    bootstrap_init(&pcw->boot);
+    mem_init(&pcw->mem);
+    pcw->mem.bootstrap = &pcw->boot;
+    pcw->mem.kbd       = &pcw->kbd;
+
+    kbd_init    (&pcw->kbd);
+    fdc_init    (&pcw->fdc);
+    crtc_init   (&pcw->crtc);
+    printer_init(&pcw->printer);
+    asic_init   (&pcw->asic, &pcw->boot, &pcw->fdc);
+
+    pcw->bus.mem_read  = bus_mem_read;
+    pcw->bus.mem_write = bus_mem_write;
+    pcw->bus.io_read   = bus_io_read;
+    pcw->bus.io_write  = bus_io_write;
+    pcw->bus.tick      = NULL;
+    pcw->bus.ctx       = pcw;
+
+    z80_init(&pcw->cpu);
+    pcw_reset(pcw);
+}
+
+void pcw_reset(PCW *pcw) {
+    bootstrap_reset(&pcw->boot);
+    mem_reset(&pcw->mem);
+    fdc_reset(&pcw->fdc);
+    crtc_reset(&pcw->crtc);
+    asic_reset(&pcw->asic);
+    z80_reset(&pcw->cpu);
+
+    /* On the real machine PC starts at 0x0000 and the bootstrap
+     * stream is what the fetcher sees. z80_reset() already zeroes
+     * PC; nothing else to do here. */
+}
+
+void pcw_frame(PCW *pcw) {
+    int cycles = 0;
+    while (cycles < CYCLES_PER_FRAME) {
+        cycles += z80_step(&pcw->cpu, &pcw->bus);
+        if (pcw->cpu.halted) {
+            /* Burn the rest of the frame; IRQ will wake it. */
+            cycles = CYCLES_PER_FRAME;
+        }
+    }
+    if (crtc_frame(&pcw->crtc)) {
+        asic_frame(&pcw->asic);
+        z80_interrupt(&pcw->cpu);
+    }
+}
