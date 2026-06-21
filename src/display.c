@@ -40,8 +40,8 @@ int display_init(Display *d, const Config *cfg) {
         return -1;
     }
 
-    int win_w = DISPLAY_W * d->scale;
-    int win_h = DISPLAY_H * d->scale;
+    int win_w = DISPLAY_LOGICAL_W * d->scale;
+    int win_h = DISPLAY_LOGICAL_H * d->scale;
 
     SDL_WindowFlags wf = SDL_WINDOW_RESIZABLE;
     if (d->fullscreen) wf |= SDL_WINDOW_FULLSCREEN;
@@ -57,7 +57,8 @@ int display_init(Display *d, const Config *cfg) {
         fprintf(stderr, "SDL_CreateRenderer: %s\n", SDL_GetError());
         return -1;
     }
-    SDL_SetRenderLogicalPresentation(d->renderer, DISPLAY_W, DISPLAY_H,
+    SDL_SetRenderLogicalPresentation(d->renderer,
+                                     DISPLAY_LOGICAL_W, DISPLAY_LOGICAL_H,
                                      SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
     d->tex = SDL_CreateTexture(d->renderer, SDL_PIXELFORMAT_XRGB8888,

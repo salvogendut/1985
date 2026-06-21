@@ -15,6 +15,12 @@
 #define DISPLAY_W  720
 #define DISPLAY_H  256
 
+/* Logical presentation size: PCW pixels are 2:1 (tall), so we stretch
+ * the 720×256 framebuffer vertically into a 720×512 logical area.
+ * Window/letterbox calculations use these dimensions. */
+#define DISPLAY_LOGICAL_W  DISPLAY_W
+#define DISPLAY_LOGICAL_H  (DISPLAY_H * 2)
+
 typedef struct Display {
     SDL_Window   *win;
     SDL_Renderer *renderer;
