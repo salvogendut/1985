@@ -19,7 +19,8 @@ void asic_reset(Asic *a) {
     a->screen_enabled  = true;   /* firmware blanks/unblanks explicitly */
     a->inverse_video   = false;
     a->flyback         = false;
-    a->timer           = 0;
+    a->interrupt_counter = 0;
+    a->bank_force      = 0;
     a->fdc_irq_mode    = 0;   /* power-on default: FDC IRQ ignored; boot code enables it */
 }
 
@@ -28,6 +29,13 @@ void asic_frame(Asic *a) {
      * firmware's busy-wait loops break out. Real cadence is set by
      * the 6845 VSYNC pulse. */
     a->flyback = !a->flyback;
+}
+
+bool asic_timer_tick(Asic *a) {
+    /* MAME pcw.cpp:141-149 + :184-191 — 300 Hz periodic tick increments
+     * the interrupt counter, saturating at 0x0F, and asserts /INT. */
+    if (a->interrupt_counter < 0x0F) a->interrupt_counter++;
+    return true;
 }
 
 int asic_poll_fdc_irq(Asic *a) {
@@ -39,17 +47,25 @@ int asic_poll_fdc_irq(Asic *a) {
     return req;
 }
 
+static u8 sys_status(const Asic *a) {
+    u8 v = a->interrupt_counter & 0x0F;
+    if (a->flyback)            v |= 0x40;
+    if (a->fdc && a->fdc->irq) v |= 0x20;
+    return v;
+}
+
 u8 asic_read(Asic *a, u8 port) {
     switch (port) {
-        case 0xF4: return a->timer;
-        case 0xF8: {
-            /* bit 6 = vblank/flyback, bit 5 = FDC IRQ status.
-             * Matches MAME pcw.cpp:pcw_get_sys_status(). */
-            u8 v = 0;
-            if (a->flyback)               v |= 0x40;
-            if (a->fdc && a->fdc->irq)    v |= 0x20;
+        case 0xF4: {
+            /* MAME pcw.cpp:358-373 — reads the same status byte as F8
+             * but additionally clears the interrupt counter. The BIOS
+             * uses this to ack pending timer interrupts. */
+            u8 v = sys_status(a);
+            a->interrupt_counter = 0;
             return v;
         }
+        case 0xF8:
+            return sys_status(a);
         default:
             return 0xFF;
     }
@@ -57,7 +73,12 @@ u8 asic_read(Asic *a, u8 port) {
 
 void asic_write(Asic *a, u8 port, u8 val) {
     switch (port) {
-        case 0xF4: a->timer = val; break;
+        case 0xF4:
+            /* Bank-force register (MAME pcw.cpp:385-393). Latch only —
+             * mem.c doesn't honour it yet; the CP/M+ boot trace shows
+             * no writes here so this is a forward-compatibility stub. */
+            a->bank_force = val;
+            break;
         case 0xF5: a->roller_base = val; break;
         case 0xF6: a->scroll_y    = val; break;
         case 0xF7:
