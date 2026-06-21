@@ -58,7 +58,6 @@ static void enter_exec_read(Fdc *f) {
     f->msr   = MSR_RQM | MSR_DIO | MSR_NDM | MSR_BUSY;
 }
 
-__attribute__((unused))
 static void enter_exec_write(Fdc *f) {
     f->phase = FDC_PHASE_EXEC_WRITE;
     f->msr   = MSR_RQM | MSR_NDM | MSR_BUSY;
@@ -253,25 +252,78 @@ static void finish_read_data(Fdc *f) {
                    f->cmd_buf[4], f->cmd_buf[5]);
 }
 
+/* WRITE DATA: same parameter layout as READ DATA. Host streams one
+ * sector's worth of bytes into exec_buf; on completion we copy them
+ * into the disk image and mark it dirty. */
+static void cmd_write_data(Fdc *f) {
+    f->cur_unit = f->cmd_buf[1] & 0x03;
+    f->cur_head = (f->cmd_buf[1] >> 2) & 0x01;
+    u8 C = f->cmd_buf[2];
+    u8 H = f->cmd_buf[3];
+    u8 R = f->cmd_buf[4];
+    u8 N = f->cmd_buf[5];
+    Disk *d = &f->drive[f->cur_unit];
+
+    leds_ping(f->cur_unit ? LED_FDC_B : LED_FDC_A);
+
+    if (!d->inserted) {
+        push_rw_result(f, build_st0(f, ST0_IC_ABNORMAL) | ST0_NR,
+                       0, 0, C, H, R, N);
+        enter_result(f);
+        return;
+    }
+    if (d->write_protected) {
+        /* ST1 NW = not writable. */
+        push_rw_result(f, build_st0(f, ST0_IC_ABNORMAL), 0x02, 0,
+                       C, H, R, N);
+        enter_result(f);
+        return;
+    }
+
+    DiskSector *s = disk_find_sector(d, f->cur_head, C, H, R, N);
+    if (!s) {
+        /* ST1 ND = no data. */
+        push_rw_result(f, build_st0(f, ST0_IC_ABNORMAL), 0x04, 0,
+                       C, H, R, N);
+        enter_result(f);
+        return;
+    }
+
+    int size = s->size;
+    if (size > FDC_EXEC_BUF_LEN) size = FDC_EXEC_BUF_LEN;
+    f->exec_len = size;
+    f->exec_pos = 0;
+
+    f->cmd_buf[2] = s->C; f->cmd_buf[3] = s->H;
+    f->cmd_buf[4] = s->R; f->cmd_buf[5] = s->N;
+
+    enter_exec_write(f);
+}
+
+/* When EXEC_WRITE fills (or TC fires), commit bytes back into the
+ * sector and assemble the result. Partial writes (TC mid-sector) are
+ * still committed up to exec_pos. */
+static void finish_write_data(Fdc *f) {
+    Disk *d = &f->drive[f->cur_unit];
+    DiskSector *s = disk_find_sector(d, f->cur_head,
+                                     f->cmd_buf[2], f->cmd_buf[3],
+                                     f->cmd_buf[4], f->cmd_buf[5]);
+    if (s) {
+        DiskTrack *tr = &d->track[d->cur_track][f->cur_head];
+        int n = f->exec_pos;
+        if (n > s->size) n = s->size;
+        memcpy(&tr->data[s->offset], f->exec_buf, (size_t)n);
+        d->dirty = true;
+    }
+    push_rw_result(f, build_st0(f, ST0_IC_NORMAL), 0, 0,
+                   f->cmd_buf[2], f->cmd_buf[3],
+                   f->cmd_buf[4], f->cmd_buf[5]);
+}
+
 static void cmd_invalid(Fdc *f) {
     /* Invalid opcode: a single ST0 result byte with IC=INVALID, no state change. */
     f->result_len = 0;
     result_push(f, ST0_IC_INVALID);
-    enter_result(f);
-}
-
-static void cmd_stub_error(Fdc *f) {
-    /* Stub: report abnormal termination. Real handler lands in later milestones. */
-    f->cur_unit = f->cmd_buf[1] & 0x03;
-    f->cur_head = (f->cmd_buf[1] >> 2) & 0x01;
-    f->result_len = 0;
-    result_push(f, build_st0(f, ST0_IC_ABNORMAL));
-    result_push(f, 0);                  /* ST1 */
-    result_push(f, 0);                  /* ST2 */
-    result_push(f, f->cmd_buf[2]);      /* C */
-    result_push(f, f->cmd_buf[3]);      /* H */
-    result_push(f, f->cmd_buf[4]);      /* R */
-    result_push(f, f->cmd_buf[5]);      /* N */
     enter_result(f);
 }
 
@@ -284,13 +336,9 @@ static void dispatch_command(Fdc *f) {
         case 0x08: cmd_sense_interrupt   (f); break;
         case 0x0F: cmd_seek              (f); break;
 
-        case 0x06: cmd_read_data(f); break;
-        case 0x0A: cmd_read_id  (f); break;
-
-        /* WRITE DATA lands in milestone 4. */
-        case 0x05:
-            cmd_stub_error(f);
-            break;
+        case 0x05: cmd_write_data(f); break;
+        case 0x06: cmd_read_data (f); break;
+        case 0x0A: cmd_read_id   (f); break;
 
         default:
             cmd_invalid(f);
@@ -318,8 +366,9 @@ void fdc_reset(Fdc *f) {
 static void finish_execution(Fdc *f) {
     u8 op = f->cmd_buf[0] & 0x1F;
     switch (op) {
-        case 0x06: finish_read_data(f); break;
-        default:   f->result_len = 0;   break;
+        case 0x05: finish_write_data(f); break;
+        case 0x06: finish_read_data (f); break;
+        default:   f->result_len = 0;    break;
     }
     enter_result(f);
 }
@@ -377,7 +426,7 @@ void fdc_write(Fdc *f, u8 port, u8 val) {
             if (f->exec_pos < FDC_EXEC_BUF_LEN)
                 f->exec_buf[f->exec_pos++] = val;
             if (f->exec_pos >= f->exec_len)
-                enter_result(f);
+                finish_execution(f);
             break;
         }
         default:
