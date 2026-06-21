@@ -225,8 +225,15 @@ bool overlay_handle_event(Overlay *ov, SDL_Event *ev) {
             else close_overlay(ov, false);
             break;
         case SDLK_TAB:
+        case SDLK_RIGHT:
             do {
                 ov->section = (OvSection)((ov->section + 1) % OV_SEC_COUNT);
+            } while (row_count(ov, ov->section) == 0);
+            ov->row = 0;
+            break;
+        case SDLK_LEFT:
+            do {
+                ov->section = (OvSection)((ov->section + OV_SEC_COUNT - 1) % OV_SEC_COUNT);
             } while (row_count(ov, ov->section) == 0);
             ov->row = 0;
             break;
@@ -280,6 +287,10 @@ void overlay_render(Overlay *ov, SDL_Renderer *r) {
         draw_text(r, ORIGIN_X, y, label, R, G, B);
         draw_text(r, VAL_X,    y, val,   R, G, B);
     }
+
+    draw_text(r, ORIGIN_X, 260,
+              "\x1B \x1A: tabs   \x18 \x19: row   Enter: change   Esc: close",
+              140, 140, 140);
 
     if (ov->section == OV_MEDIA) {
         draw_text(r, ORIGIN_X, ORIGIN_Y + 4 * LINE_H,
