@@ -11,15 +11,13 @@
  * the main key matrix; rows 10..11 carry the optional keyboard-side
  * joystick (J1/J2).
  *
- * A '1' bit means the key is currently pressed. (Joyce's notation
- * is inverted in places — see Docs/hardware.txt — but the firmware
- * reads the same set of bytes either way.)
+ * Bits are ACTIVE-LOW from the firmware's perspective: a '0' bit
+ * means the key is currently pressed (MAME pcw.cpp:1071+, IP_ACTIVE_LOW
+ * port definitions). Internally Keyboard.row[] stores the intuitive
+ * "1 = pressed" form and kbd_matrix_byte inverts on read.
  *
- * The actual SDL-scancode → (row, bit) mapping is filled in by
- * kbd.c. For the scaffold pass we only wire a handful so the F-key
- * and overlay code compiles and the emulator can be exercised; the
- * full PCW layout (EXIT, EXTRA, COPY, CUT, PASTE, ENTER, DEL→ etc.)
- * lands in a follow-up.
+ * The full SDL-scancode → (row, bit) mapping is in kbd.c, transcribed
+ * from joyce-2.4.2's JoycePcwKeyboard.cxx:43-167.
  */
 
 #define KBD_ROWS  16

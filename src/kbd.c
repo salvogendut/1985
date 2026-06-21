@@ -2,33 +2,111 @@
 #include <string.h>
 
 /*
- * Scaffold mapping — a tiny subset of the PCW matrix is wired so the
- * emulator can be exercised. Full matrix (96 keys + 2 joysticks)
- * lands later, transcribed from `bin/JoycePcwKeyboard.cxx`.
+ * PCW key matrix — transcribed from joyce's JoycePcwKeyboard.cxx:43-167.
  *
- * Layout legend (row, bit) from Docs/hardware.txt:
- *   0x3FF1 bit 0 = EXIT
- *   0x3FF1 bit 2 = CUT
- *   0x3FF1 bit 3 = COPY
- *   0x3FF0 bit 3 = PASTE
- *   0x3FF8 bit 1 = STOP
- *   ... etc.
- * The placeholders below give us SPACE → row 5 bit 7 and the four
- * cursor keys, just so something happens when keys are pressed.
+ * Each entry maps a host SDL3 scancode to a PCW (row, bit) where bit
+ * is the bit POSITION within the row byte (joyce stores it as a mask
+ * 1/2/4/.../128; we use 0..7 to match kbd_press's existing API).
+ * Joyce's table has separate unshifted/shifted variants but for the
+ * main alphabetic/punctuation keys they're identical — physical-key
+ * scancodes don't change under shift, the PCW firmware reads the
+ * SHIFT bit (row 2 bit 5) alongside.
  */
 typedef struct { int row, bit; } MatrixPos;
 
 static MatrixPos sdl_to_matrix(SDL_Scancode s) {
     switch (s) {
-        case SDL_SCANCODE_SPACE:    return (MatrixPos){5, 7};
-        case SDL_SCANCODE_RETURN:   return (MatrixPos){2, 2};
-        case SDL_SCANCODE_LEFT:     return (MatrixPos){1, 0};
-        case SDL_SCANCODE_RIGHT:    return (MatrixPos){1, 1};
-        case SDL_SCANCODE_UP:       return (MatrixPos){1, 2};
-        case SDL_SCANCODE_DOWN:     return (MatrixPos){1, 3};
+        /* Letters */
+        case SDL_SCANCODE_A: return (MatrixPos){8, 5};
+        case SDL_SCANCODE_B: return (MatrixPos){6, 6};
+        case SDL_SCANCODE_C: return (MatrixPos){7, 6};
+        case SDL_SCANCODE_D: return (MatrixPos){7, 5};
+        case SDL_SCANCODE_E: return (MatrixPos){7, 2};
+        case SDL_SCANCODE_F: return (MatrixPos){6, 5};
+        case SDL_SCANCODE_G: return (MatrixPos){6, 4};
+        case SDL_SCANCODE_H: return (MatrixPos){5, 4};
+        case SDL_SCANCODE_I: return (MatrixPos){4, 3};
+        case SDL_SCANCODE_J: return (MatrixPos){5, 5};
+        case SDL_SCANCODE_K: return (MatrixPos){4, 5};
+        case SDL_SCANCODE_L: return (MatrixPos){4, 4};
+        case SDL_SCANCODE_M: return (MatrixPos){4, 6};
+        case SDL_SCANCODE_N: return (MatrixPos){5, 6};
+        case SDL_SCANCODE_O: return (MatrixPos){4, 2};
+        case SDL_SCANCODE_P: return (MatrixPos){3, 3};
+        case SDL_SCANCODE_Q: return (MatrixPos){8, 3};
+        case SDL_SCANCODE_R: return (MatrixPos){6, 2};
+        case SDL_SCANCODE_S: return (MatrixPos){7, 4};
+        case SDL_SCANCODE_T: return (MatrixPos){6, 3};
+        case SDL_SCANCODE_U: return (MatrixPos){5, 2};
+        case SDL_SCANCODE_V: return (MatrixPos){6, 7};
+        case SDL_SCANCODE_W: return (MatrixPos){7, 3};
+        case SDL_SCANCODE_X: return (MatrixPos){7, 7};
+        case SDL_SCANCODE_Y: return (MatrixPos){5, 3};
+        case SDL_SCANCODE_Z: return (MatrixPos){8, 7};
+
+        /* Digits */
+        case SDL_SCANCODE_0: return (MatrixPos){4, 0};
+        case SDL_SCANCODE_1: return (MatrixPos){8, 0};
+        case SDL_SCANCODE_2: return (MatrixPos){8, 1};
+        case SDL_SCANCODE_3: return (MatrixPos){7, 1};
+        case SDL_SCANCODE_4: return (MatrixPos){7, 0};
+        case SDL_SCANCODE_5: return (MatrixPos){6, 1};
+        case SDL_SCANCODE_6: return (MatrixPos){6, 0};
+        case SDL_SCANCODE_7: return (MatrixPos){5, 1};
+        case SDL_SCANCODE_8: return (MatrixPos){5, 0};
+        case SDL_SCANCODE_9: return (MatrixPos){4, 1};
+
+        /* Punctuation */
+        case SDL_SCANCODE_SPACE:        return (MatrixPos){5, 7};
+        case SDL_SCANCODE_APOSTROPHE:   return (MatrixPos){3, 4};
+        case SDL_SCANCODE_COMMA:        return (MatrixPos){4, 7};
+        case SDL_SCANCODE_MINUS:        return (MatrixPos){3, 1};
+        case SDL_SCANCODE_PERIOD:       return (MatrixPos){3, 7};
+        case SDL_SCANCODE_SLASH:        return (MatrixPos){3, 6};
+        case SDL_SCANCODE_BACKSLASH:    return (MatrixPos){2, 6};
+        case SDL_SCANCODE_SEMICOLON:    return (MatrixPos){3, 5};
+        case SDL_SCANCODE_EQUALS:       return (MatrixPos){3, 0};
+        case SDL_SCANCODE_LEFTBRACKET:  return (MatrixPos){3, 2};
+        case SDL_SCANCODE_RIGHTBRACKET: return (MatrixPos){2, 1};
+        case SDL_SCANCODE_GRAVE:        return (MatrixPos){8, 2};
+
+        /* Editing / control */
+        case SDL_SCANCODE_RETURN:       return (MatrixPos){2, 2};
+        case SDL_SCANCODE_KP_ENTER:     return (MatrixPos){10, 5};
+        case SDL_SCANCODE_BACKSPACE:    return (MatrixPos){9, 7};
+        case SDL_SCANCODE_TAB:          return (MatrixPos){8, 4};
+        case SDL_SCANCODE_ESCAPE:       return (MatrixPos){1, 0};
+        case SDL_SCANCODE_DELETE:       return (MatrixPos){2, 0};
+        case SDL_SCANCODE_INSERT:       return (MatrixPos){1, 2};
+        case SDL_SCANCODE_HOME:         return (MatrixPos){1, 3};
+        case SDL_SCANCODE_END:          return (MatrixPos){10, 2};
+        case SDL_SCANCODE_PAGEUP:       return (MatrixPos){0, 3};
+        case SDL_SCANCODE_PAGEDOWN:     return (MatrixPos){1, 4};
+        case SDL_SCANCODE_CAPSLOCK:     return (MatrixPos){10, 5};
+
+        /* Arrows */
+        case SDL_SCANCODE_UP:           return (MatrixPos){1, 6};
+        case SDL_SCANCODE_DOWN:         return (MatrixPos){10, 6};
+        case SDL_SCANCODE_LEFT:         return (MatrixPos){1, 7};
+        case SDL_SCANCODE_RIGHT:        return (MatrixPos){0, 6};
+
+        /* Modifiers */
         case SDL_SCANCODE_LSHIFT:
-        case SDL_SCANCODE_RSHIFT:   return (MatrixPos){2, 5};
-        default:                    return (MatrixPos){-1, -1};
+        case SDL_SCANCODE_RSHIFT:       return (MatrixPos){2, 5};
+        case SDL_SCANCODE_LCTRL:
+        case SDL_SCANCODE_RCTRL:        return (MatrixPos){10, 1};
+        case SDL_SCANCODE_LALT:
+        case SDL_SCANCODE_RALT:         return (MatrixPos){10, 7};
+
+        /* PCW function-key block (F1=f1, F3=f3, F5=f5, F7=f7;
+         * F2/F4/F6/F8 are SHIFT+Fn on the real keyboard).
+         * F9..F12 are reserved for the host overlay/quit (handled in main.c). */
+        case SDL_SCANCODE_F1: return (MatrixPos){0, 2};
+        case SDL_SCANCODE_F3: return (MatrixPos){0, 0};
+        case SDL_SCANCODE_F5: return (MatrixPos){10, 0};
+        case SDL_SCANCODE_F7: return (MatrixPos){10, 4};
+
+        default: return (MatrixPos){-1, -1};
     }
 }
 
@@ -37,8 +115,11 @@ void kbd_init(Keyboard *k) {
 }
 
 u8 kbd_matrix_byte(Keyboard *k, u8 row) {
-    if (row >= KBD_ROWS) return 0;
-    return k->row[row];
+    /* Matrix is ACTIVE-LOW from the firmware's perspective (MAME
+     * pcw.cpp:1071 onward — IP_ACTIVE_LOW port bits). Internally we
+     * store the intuitive "1 = pressed" form; invert on read. */
+    if (row >= KBD_ROWS) return 0xFF;
+    return (u8)~k->row[row];
 }
 
 void kbd_press(Keyboard *k, int row, int bit) {
