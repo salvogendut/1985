@@ -209,6 +209,7 @@ int main(int argc, char **argv) {
         overlay_tick(&ov);
         pcw_frame(&pcw);
         roller_render(&pcw.mem, &pcw.asic, &disp);
+        display_draw_framebuffer(&disp);
         overlay_render(&ov, disp.renderer);
 
         if (gc) gifcap_frame(gc, disp.fb);

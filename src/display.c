@@ -92,11 +92,14 @@ void display_put_pixel(Display *d, int x, int y, bool lit) {
     d->fb[y * DISPLAY_W + x] = lit ? d->fg : d->bg;
 }
 
-void display_present(Display *d) {
+void display_draw_framebuffer(Display *d) {
     SDL_UpdateTexture(d->tex, NULL, d->fb, DISPLAY_W * 4);
     SDL_SetRenderDrawColor(d->renderer, 0, 0, 0, 255);
     SDL_RenderClear(d->renderer);
     SDL_RenderTexture(d->renderer, d->tex, NULL, NULL);
+}
+
+void display_present(Display *d) {
     SDL_RenderPresent(d->renderer);
 }
 

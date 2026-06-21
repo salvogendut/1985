@@ -48,7 +48,11 @@ void display_clear(Display *d);
 /* Set a single 1bpp pixel. lit=true → fg, false → bg. */
 void display_put_pixel(Display *d, int x, int y, bool lit);
 
-/* Upload the framebuffer to the texture and present. */
+/* Clear the renderer and draw the framebuffer texture into it. Call
+ * this first each frame, then draw any overlays on top, then present. */
+void display_draw_framebuffer(Display *d);
+
+/* Present the current renderer contents to the window. */
 void display_present(Display *d);
 
 void display_toggle_fullscreen(Display *d);

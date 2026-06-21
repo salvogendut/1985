@@ -181,6 +181,9 @@ bool overlay_handle_event(Overlay *ov, SDL_Event *ev) {
 
     if (!ov->visible) return false;
 
+    /* Never swallow window-close — the user must always be able to quit. */
+    if (ev->type == SDL_EVENT_QUIT) return false;
+
     if (ev->type != SDL_EVENT_KEY_DOWN) return true;
 
     if (ov->state == OV_STATE_CONFIRM) {
