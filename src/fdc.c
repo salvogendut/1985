@@ -40,6 +40,13 @@ static const u8 bytes_in_cmd[32] = {
     [0x1D] = 9,   /* SCAN HIGH-OR-EQUAL */
 };
 
+/* PCW 8256-era firmware probes drive 2/3 as aliases of 0/1. We only
+ * model two physical drives, so decode to the low bit before touching
+ * the drive array. */
+static int decode_unit(u8 raw_unit) {
+    return raw_unit & 0x01;
+}
+
 /* MSR per phase. */
 static void enter_idle(Fdc *f) {
     f->phase = FDC_PHASE_IDLE;
@@ -97,16 +104,17 @@ static void cmd_specify(Fdc *f) {
 
 /* SENSE DRIVE STATUS: 1-byte result (ST3). */
 static void cmd_sense_drive_status(Fdc *f) {
-    f->cur_unit = f->cmd_buf[1] & 0x03;
+    f->cur_unit = decode_unit(f->cmd_buf[1]);
     f->cur_head = (f->cmd_buf[1] >> 2) & 0x01;
     leds_ping(f->cur_unit ? LED_FDC_B : LED_FDC_A);
     const Disk *d = &f->drive[f->cur_unit];
+    bool ready = d->inserted && f->motor_on;
 
     u8 st3 = (u8)((f->cur_unit & 0x03)
                 | (f->cur_head ? 0x04 : 0)
                 | (d->sides > 1 ? 0x08 : 0)
                 | (f->cur_cyl[f->cur_unit] == 0 ? 0x10 : 0)
-                | (d->inserted ? 0x20 : 0)
+                | (ready ? 0x20 : 0)
                 | (d->write_protected ? 0x40 : 0));
     f->result_len = 0;
     result_push(f, st3);
@@ -115,7 +123,7 @@ static void cmd_sense_drive_status(Fdc *f) {
 
 /* RECALIBRATE: seek head to track 0, raise seek-end interrupt. No result. */
 static void cmd_recalibrate(Fdc *f) {
-    f->cur_unit = f->cmd_buf[1] & 0x03;
+    f->cur_unit = decode_unit(f->cmd_buf[1]);
     f->cur_cyl[f->cur_unit] = 0;
     f->drive[f->cur_unit].cur_track = 0;
     leds_ping(f->cur_unit ? LED_FDC_B : LED_FDC_A);
@@ -128,7 +136,7 @@ static void cmd_recalibrate(Fdc *f) {
 
 /* SEEK: move head to NCN, raise seek-end interrupt. No result. */
 static void cmd_seek(Fdc *f) {
-    f->cur_unit = f->cmd_buf[1] & 0x03;
+    f->cur_unit = decode_unit(f->cmd_buf[1]);
     f->cur_head = (f->cmd_buf[1] >> 2) & 0x01;
     int ncn = f->cmd_buf[2];
     if (ncn >= DISK_MAX_TRACKS) ncn = DISK_MAX_TRACKS - 1;
@@ -176,7 +184,7 @@ static void push_rw_result(Fdc *f, u8 st0, u8 st1, u8 st2,
 /* READ ID: return the next sector's CHRN from the current track.
  * Rotates through the track's sector table on successive calls. */
 static void cmd_read_id(Fdc *f) {
-    f->cur_unit = f->cmd_buf[1] & 0x03;
+    f->cur_unit = decode_unit(f->cmd_buf[1]);
     f->cur_head = (f->cmd_buf[1] >> 2) & 0x01;
     Disk *d = &f->drive[f->cur_unit];
 
@@ -212,7 +220,7 @@ static void cmd_read_id(Fdc *f) {
  * Multi-sector and multi-track are deferred — we stop after the first
  * matched sector or when TC is asserted. */
 static void cmd_read_data(Fdc *f) {
-    f->cur_unit = f->cmd_buf[1] & 0x03;
+    f->cur_unit = decode_unit(f->cmd_buf[1]);
     f->cur_head = (f->cmd_buf[1] >> 2) & 0x01;
     u8 C = f->cmd_buf[2];
     u8 H = f->cmd_buf[3];
@@ -263,7 +271,7 @@ static void finish_read_data(Fdc *f) {
  * sector's worth of bytes into exec_buf; on completion we copy them
  * into the disk image and mark it dirty. */
 static void cmd_write_data(Fdc *f) {
-    f->cur_unit = f->cmd_buf[1] & 0x03;
+    f->cur_unit = decode_unit(f->cmd_buf[1]);
     f->cur_head = (f->cmd_buf[1] >> 2) & 0x01;
     u8 C = f->cmd_buf[2];
     u8 H = f->cmd_buf[3];

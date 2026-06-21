@@ -14,6 +14,7 @@
  *
  *   DI
  *   LD SP, 0x7E00
+ *   OUT (0xF8), 9   ; motor on
  *   SPECIFY (3 bytes)
  *   RECALIBRATE drive 0
  *   SENSE INT (drain seek-end result)
@@ -46,6 +47,7 @@ static void build_stream(void) {
 
     EMIT(0xF3);                         /* DI */
     EMIT(0x31, 0x00, 0x7E);             /* LD SP, 0x7E00 */
+    EMIT(0x3E, 0x09, 0xD3, 0xF8);       /* OUT (0xF8), 9 = motor on */
 
     /* SPECIFY 03 D1 03 (SRT=D, HUT=1, HLT=1, ND=1). */
     EMIT(0x3E, 0x03, 0xD3, 0x01);

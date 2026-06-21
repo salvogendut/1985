@@ -13,7 +13,7 @@ void mem_reset(Mem *m) {
      * slot i -> physical block i. CP/M+'s loader relies on this
      * default (it doesn't reprogram every bank before writing). */
     for (int i = 0; i < 4; i++) m->read_bank[i] = m->write_bank[i] = (u8)i;
-    m->lock = 0;
+    m->bank_force = 0;
 }
 
 void mem_bank_write(Mem *m, u8 port, u8 val) {
@@ -28,14 +28,18 @@ void mem_bank_write(Mem *m, u8 port, u8 val) {
         /* CPC standard mode — separate read- and write-banks.
          * bits 6-4 = block to read, bits 3-0 = block to write
          * (limited to blocks 0-15 / first 128 KB). */
-        m->read_bank [slot] = (val >> 4) & 0x07;
+        u8 read_bank = (val >> 4) & 0x07;
         m->write_bank[slot] =  val       & 0x0F;
+        if ((m->bank_force >> (slot + 4)) & 1)
+            read_bank = m->write_bank[slot];
+        m->read_bank[slot] = read_bank;
     }
 }
 
 void mem_set_lock(Mem *m, u8 val) {
-    /* bit (slot+4) high → reads from that slot go to write_bank instead of read_bank. */
-    m->lock = val;
+    /* Bits 4-7 force the corresponding slot's read bank to equal the
+     * write bank when CPC-style bank programming is used. */
+    m->bank_force = val;
 }
 
 u8 mem_read(Mem *m, u16 addr) {
@@ -47,8 +51,7 @@ u8 mem_read(Mem *m, u16 addr) {
         return bootstrap_read(m->bootstrap, addr);
 
     int slot = addr >> 14;
-    bool locked = (m->lock >> (slot + 4)) & 1;
-    u8 block = locked ? m->write_bank[slot] : m->read_bank[slot];
+    u8 block = m->read_bank[slot];
 
     /* Memory-mapped keyboard: whichever slot maps block 3 sees the
      * live matrix at offset 0x3FF0..0x3FFF instead of stored RAM. */

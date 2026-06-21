@@ -12,7 +12,15 @@
  */
 
 typedef struct {
-    int dummy;
+    bool connected;
+    bool bail_in;
+    bool paper_present;
+    bool feeder_present;
+    bool head_at_left;
+    bool busy;
+    int  busy_ticks;
+    u8   cmd[2];
+    int  cmd_pos;
 } Printer;
 
 void printer_init(Printer *p);

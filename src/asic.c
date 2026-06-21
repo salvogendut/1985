@@ -56,7 +56,9 @@ int asic_poll_fdc_irq(Asic *a) {
 }
 
 static u8 sys_status(const Asic *a) {
-    u8 v = a->interrupt_counter & 0x0F;
+    /* PCW CP/M reads the low nibble as the timer counter and bit 5 as
+     * the FDC-interrupt latch. The remaining bits are not needed here. */
+    u8 v = (a->interrupt_counter & 0x0F);
     if (a->flyback)            v |= 0x40;
     if (a->fdc && a->fdc->irq) v |= 0x20;
     return v;

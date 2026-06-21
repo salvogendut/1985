@@ -22,14 +22,31 @@ static u8 bus_io_read(void *ctx, u16 port) {
     /* FDC: A0 selects MSR vs Data, mirrored across 0x00..0x7F
      * (A1..A6 are don't-care, A7=0 selects the FDC window).
      * MAME pcw.cpp: map(0x000, 0x001).mirror(0x7e). */
-    if (lo < 0x80) return fdc_read(&pcw->fdc, lo & 0x01);
+    if (lo < 0x80) {
+        u8 v = fdc_read(&pcw->fdc, lo & 0x01);
+        if (pcw->trace_io)
+            fprintf(stderr, "        -> %02X\n", v);
+        return v;
+    }
 
     /* ASIC system control and video registers. */
-    if (lo == 0xF4 || lo == 0xF8) return asic_read(&pcw->asic, lo);
+    if (lo == 0xF4 || lo == 0xF8) {
+        u8 v = asic_read(&pcw->asic, lo);
+        if (pcw->trace_io)
+            fprintf(stderr, "        -> %02X\n", v);
+        return v;
+    }
 
     /* Printer status. */
-    if (lo == 0xFC || lo == 0xFD) return printer_read(&pcw->printer, lo);
+    if (lo == 0xFC || lo == 0xFD) {
+        u8 v = printer_read(&pcw->printer, lo);
+        if (pcw->trace_io)
+            fprintf(stderr, "        -> %02X\n", v);
+        return v;
+    }
 
+    if (pcw->trace_io)
+        fprintf(stderr, "        -> FF\n");
     return 0xFF;
 }
 
@@ -123,7 +140,8 @@ void pcw_frame(PCW *pcw) {
         else if (req == 2) z80_interrupt(&pcw->cpu);
 
         while (cycles >= next_tick) {
-            if (asic_timer_tick(&pcw->asic)) z80_interrupt(&pcw->cpu);
+            if (asic_timer_tick(&pcw->asic) && pcw->cpu.iff1)
+                z80_interrupt(&pcw->cpu);
             next_tick += CYCLES_PER_TICK;
         }
     }

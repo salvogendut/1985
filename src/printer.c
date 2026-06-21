@@ -3,24 +3,77 @@
 
 void printer_init(Printer *p) {
     memset(p, 0, sizeof(*p));
+    p->connected = true;
+    p->bail_in = true;
+    p->paper_present = true;
+    p->feeder_present = true;
+    p->head_at_left = true;
 }
 
 u8 printer_read(Printer *p, u8 port) {
-    (void)p;
-    /* Canned MCU responses, matching joyce's combinational stub
-     * (JoyceMatrix.cxx:107-131). The boot firmware polls these to
-     * decide whether the printer is alive; 0xFF (our previous stub)
-     * is invalid and wedges the printer-check loop.
-     *
-     *   0xFC error type  — 0xF8 = "no errors"
-     *   0xFD status      — 0xCC = BAIL_IN | READY | FEEDER | PAPER
-     *                      (8256 at power-on, bail bar in, head parked)
-     */
-    if (port == 0xFC) return 0xF8;
-    if (port == 0xFD) return 0xCC;
-    return 0xFF;
+    if (!p->connected) {
+        if (port == 0xFC) return 0x01;
+        return 0x21;    /* bail in + no printer */
+    }
+
+    if (p->busy && p->busy_ticks > 0) {
+        p->busy_ticks--;
+        if (p->busy_ticks == 0)
+            p->busy = false;
+    }
+
+    if (port == 0xFC) return 0xF8;     /* no controller error */
+
+    u8 v = 0x00;
+    if (p->bail_in)      v |= 0x80;
+    if (!p->busy)        v |= 0x40;
+    if (p->head_at_left) ; else v |= 0x10;
+    if (p->feeder_present) v |= 0x08;
+    if (p->paper_present)  v |= 0x04;
+    if (p->busy)         v |= 0x02;
+    return v;
 }
 
 void printer_write(Printer *p, u8 port, u8 val) {
-    (void)p; (void)port; (void)val;
+    (void)port;
+
+    if (!p->connected) return;
+
+    p->cmd[p->cmd_pos++] = val;
+    if (p->cmd_pos < 2) return;
+
+    u8 cmd0 = p->cmd[0];
+    u8 cmd1 = p->cmd[1];
+    p->cmd_pos = 0;
+
+    p->busy = true;
+    p->busy_ticks = 2;
+
+    switch (cmd0) {
+        case 0x00:
+            /* Init sequence during boot. */
+            break;
+        case 0xA4:
+            /* Line feed. */
+            break;
+        case 0xA8: case 0xA9: case 0xAA: case 0xAB:
+            /* Print head motion and/or print line. */
+            p->head_at_left = false;
+            break;
+        case 0xAC:
+            /* Line feed. */
+            break;
+        case 0xB8:
+            if (cmd1 == 0)
+                p->head_at_left = true;
+            break;
+        case 0xC0:
+            /* End of command sequence. */
+            p->busy = false;
+            p->busy_ticks = 0;
+            break;
+        default:
+            /* Unknown commands complete quickly. */
+            break;
+    }
 }
