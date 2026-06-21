@@ -9,9 +9,10 @@ void mem_init(Mem *m) {
 }
 
 void mem_reset(Mem *m) {
-    /* On reset all four slots map block 0. The PCW firmware
-     * reprograms them immediately. */
-    for (int i = 0; i < 4; i++) m->bank[i] = 0;
+    /* Power-on default per MAME pcw.cpp:994-998 — identity map:
+     * slot i -> physical block i. CP/M+'s loader relies on this
+     * default (it doesn't reprogram every bank before writing). */
+    for (int i = 0; i < 4; i++) m->bank[i] = (u8)i;
 }
 
 void mem_bank_write(Mem *m, u8 port, u8 val) {

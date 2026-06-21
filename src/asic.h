@@ -35,8 +35,9 @@ typedef struct Asic {
     u8  roller_base;        /* port 0xF5 */
     u8  scroll_y;           /* port 0xF6 */
     u8  display_ctrl;       /* port 0xF7 */
-    bool display_enabled;
-    bool inverse_video;
+    bool display_enabled;   /* port 0xF8 cmd 7/8 — system-level gate */
+    bool screen_enabled;    /* port 0xF7 bit 6 — video-control gate */
+    bool inverse_video;     /* port 0xF7 bit 7 */
     bool flyback;           /* port 0xF8 read bit 6 */
     u8  timer;              /* port 0xF4 */
     int fdc_irq_mode;       /* 0=ignore, 1=NMI, 2=IRQ */

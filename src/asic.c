@@ -15,7 +15,8 @@ void asic_reset(Asic *a) {
     a->roller_base     = 0;
     a->scroll_y        = 0;
     a->display_ctrl    = 0;
-    a->display_enabled = false;
+    a->display_enabled = true;   /* both gates default to enabled — the */
+    a->screen_enabled  = true;   /* firmware blanks/unblanks explicitly */
     a->inverse_video   = false;
     a->flyback         = false;
     a->timer           = 0;
@@ -60,9 +61,9 @@ void asic_write(Asic *a, u8 port, u8 val) {
         case 0xF5: a->roller_base = val; break;
         case 0xF6: a->scroll_y    = val; break;
         case 0xF7:
-            a->display_ctrl    = val;
-            a->display_enabled = (val & 0x40) != 0;
-            a->inverse_video   = (val & 0x80) != 0;
+            a->display_ctrl   = val;
+            a->screen_enabled = (val & 0x40) != 0;
+            a->inverse_video  = (val & 0x80) != 0;
             break;
         case 0xF8:
             switch (val) {
