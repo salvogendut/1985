@@ -16,21 +16,14 @@ u8 printer_read(Printer *p, u8 port) {
         return 0x21;    /* bail in + no printer */
     }
 
-    if (p->busy && p->busy_ticks > 0) {
-        p->busy_ticks--;
-        if (p->busy_ticks == 0)
-            p->busy = false;
-    }
-
     if (port == 0xFC) return 0xF8;     /* no controller error */
 
     u8 v = 0x00;
     if (p->bail_in)      v |= 0x80;
-    if (!p->busy)        v |= 0x40;
-    if (p->head_at_left) ; else v |= 0x10;
+    v |= 0x40;                       /* ready */
+    if (!p->head_at_left) v |= 0x10;
     if (p->feeder_present) v |= 0x08;
     if (p->paper_present)  v |= 0x04;
-    if (p->busy)         v |= 0x02;
     return v;
 }
 
@@ -45,9 +38,6 @@ void printer_write(Printer *p, u8 port, u8 val) {
     u8 cmd0 = p->cmd[0];
     u8 cmd1 = p->cmd[1];
     p->cmd_pos = 0;
-
-    p->busy = true;
-    p->busy_ticks = 2;
 
     switch (cmd0) {
         case 0x00:
@@ -69,8 +59,6 @@ void printer_write(Printer *p, u8 port, u8 val) {
             break;
         case 0xC0:
             /* End of command sequence. */
-            p->busy = false;
-            p->busy_ticks = 0;
             break;
         default:
             /* Unknown commands complete quickly. */

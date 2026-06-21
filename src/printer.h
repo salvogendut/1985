@@ -6,9 +6,9 @@
  * head; the 9512+ ships a daisy wheel instead). Ports 0xFC and
  * 0xFD carry control and data.
  *
- * Today this is a no-op: writes are discarded, status reads always
- * report "ready". Just enough to keep CP/M+ printer probing from
- * hanging.
+ * The startup code only really needs the controller to look sane:
+ * report "printer present", stay ready, and remember whether the
+ * head has been reset to the left margin.
  */
 
 typedef struct {
@@ -17,8 +17,6 @@ typedef struct {
     bool paper_present;
     bool feeder_present;
     bool head_at_left;
-    bool busy;
-    int  busy_ticks;
     u8   cmd[2];
     int  cmd_pos;
 } Printer;

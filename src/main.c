@@ -32,6 +32,7 @@ static const char *USAGE =
 "  --memory KB                 RAM size: 256, 512 or 2048\n"
 "  --disk-a PATH               mount .dsk in drive A\n"
 "  --disk-b PATH               mount .dsk in drive B\n"
+"  --boot-ems PATH             load raw EMS/EMT image at 0000h\n"
 "  --paste TEXT                type TEXT after boot (\\n = Enter)\n"
 "  --load-sna PATH             load .sna at init (stub)\n"
 "  --save-sna-at N:PATH        save .sna at frame N (stub)\n"
@@ -45,6 +46,7 @@ typedef struct {
     const char *paste_text;
     const char *disk_a;
     const char *disk_b;
+    const char *boot_ems;
     const char *load_sna;
     const char *save_sna_arg;     /* "N:PATH" */
     const char *screenshot_arg;   /* "N:PATH" */
@@ -91,6 +93,7 @@ static int parse_cli(int argc, char **argv, Cli *cli) {
         if ((v = eq_value(a, "--memory"))      && *v) { cli->memory_kb   = atoi(v); continue; }
         if ((v = eq_value(a, "--disk-a"))      && *v) { cli->disk_a      = v; continue; }
         if ((v = eq_value(a, "--disk-b"))      && *v) { cli->disk_b      = v; continue; }
+        if ((v = eq_value(a, "--boot-ems"))    && *v) { cli->boot_ems    = v; continue; }
         if ((v = eq_value(a, "--paste"))       && *v) { cli->paste_text  = v; continue; }
         if ((v = eq_value(a, "--load-sna"))    && *v) { cli->load_sna    = v; continue; }
         if ((v = eq_value(a, "--save-sna-at")) && *v) { cli->save_sna_arg = v; continue; }
@@ -103,6 +106,7 @@ static int parse_cli(int argc, char **argv, Cli *cli) {
         if (strcmp(a, "--memory")        == 0 && i+1 < argc) { cli->memory_kb   = atoi(argv[++i]); continue; }
         if (strcmp(a, "--disk-a")        == 0 && i+1 < argc) { cli->disk_a      = argv[++i]; continue; }
         if (strcmp(a, "--disk-b")        == 0 && i+1 < argc) { cli->disk_b      = argv[++i]; continue; }
+        if (strcmp(a, "--boot-ems")      == 0 && i+1 < argc) { cli->boot_ems    = argv[++i]; continue; }
         if (strcmp(a, "--paste")         == 0 && i+1 < argc) { cli->paste_text  = argv[++i]; continue; }
         if (strcmp(a, "--load-sna")      == 0 && i+1 < argc) { cli->load_sna    = argv[++i]; continue; }
         if (strcmp(a, "--save-sna-at")   == 0 && i+1 < argc) { cli->save_sna_arg = argv[++i]; continue; }
@@ -117,6 +121,37 @@ static int parse_cli(int argc, char **argv, Cli *cli) {
         fprintf(stderr, "unexpected positional argument: %s\n%s", a, USAGE);
         return -1;
     }
+    return 0;
+}
+
+static int load_raw_image(PCW *pcw, const char *path, u16 base) {
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        perror(path);
+        return -1;
+    }
+
+    if (fseek(f, 0, SEEK_END) != 0) {
+        fclose(f);
+        return -1;
+    }
+    long size = ftell(f);
+    if (size < 0 || size > (long)(MEM_SIZE - base)) {
+        fclose(f);
+        fprintf(stderr, "boot image too large: %s\n", path);
+        return -1;
+    }
+    if (fseek(f, 0, SEEK_SET) != 0) {
+        fclose(f);
+        return -1;
+    }
+
+    if (fread(&pcw->mem.ram[base], 1, (size_t)size, f) != (size_t)size) {
+        fclose(f);
+        fprintf(stderr, "boot image read failed: %s\n", path);
+        return -1;
+    }
+    fclose(f);
     return 0;
 }
 
@@ -143,6 +178,7 @@ int main(int argc, char **argv) {
     if (cfg.drive_b[0]) disk_load(&pcw.fdc.drive[1], cfg.drive_b);
 
     if (cli.load_sna) snapshot_load(&pcw, cli.load_sna);
+    if (cli.boot_ems && load_raw_image(&pcw, cli.boot_ems, 0) < 0) return 1;
 
     Overlay ov;
     overlay_init(&ov, &cfg, &pcw);
