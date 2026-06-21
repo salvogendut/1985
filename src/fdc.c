@@ -84,7 +84,71 @@ static u8 build_st0(Fdc *f, u8 ic) {
               | (f->cur_unit & ST0_US_MASK));
 }
 
-/* ---- Command dispatch — all stubs in milestone 1 ---- */
+/* ---- Command handlers ---- */
+
+/* SPECIFY: stash timing parameters (we ignore them — we don't model
+ * step-rate, head-load/unload, or DMA mode). No result, no interrupt. */
+static void cmd_specify(Fdc *f) {
+    enter_idle(f);
+}
+
+/* SENSE DRIVE STATUS: 1-byte result (ST3). */
+static void cmd_sense_drive_status(Fdc *f) {
+    f->cur_unit = f->cmd_buf[1] & 0x03;
+    f->cur_head = (f->cmd_buf[1] >> 2) & 0x01;
+    const Disk *d = &f->drive[f->cur_unit];
+
+    u8 st3 = (u8)((f->cur_unit & 0x03)
+                | (f->cur_head ? 0x04 : 0)
+                | (d->sides > 1 ? 0x08 : 0)
+                | (f->cur_cyl[f->cur_unit] == 0 ? 0x10 : 0)
+                | (d->inserted ? 0x20 : 0)
+                | (d->write_protected ? 0x40 : 0));
+    f->result_len = 0;
+    result_push(f, st3);
+    enter_result(f);
+}
+
+/* RECALIBRATE: seek head to track 0, raise seek-end interrupt. No result. */
+static void cmd_recalibrate(Fdc *f) {
+    f->cur_unit = f->cmd_buf[1] & 0x03;
+    f->cur_cyl[f->cur_unit] = 0;
+    f->st0 = (u8)(ST0_IC_NORMAL | ST0_SE | (f->cur_unit & ST0_US_MASK));
+    if (!f->drive[f->cur_unit].inserted) f->st0 |= ST0_NR;
+    f->int_pending = true;
+    enter_idle(f);
+}
+
+/* SEEK: move head to NCN, raise seek-end interrupt. No result. */
+static void cmd_seek(Fdc *f) {
+    f->cur_unit = f->cmd_buf[1] & 0x03;
+    f->cur_head = (f->cmd_buf[1] >> 2) & 0x01;
+    int ncn = f->cmd_buf[2];
+    if (ncn >= DISK_MAX_TRACKS) ncn = DISK_MAX_TRACKS - 1;
+    f->cur_cyl[f->cur_unit] = ncn;
+    f->st0 = (u8)(ST0_IC_NORMAL | ST0_SE
+               | (f->cur_head ? ST0_HD : 0)
+               | (f->cur_unit & ST0_US_MASK));
+    if (!f->drive[f->cur_unit].inserted) f->st0 |= ST0_NR;
+    f->int_pending = true;
+    enter_idle(f);
+}
+
+/* SENSE INTERRUPT STATUS: consumes a pending seek-end interrupt and
+ * returns ST0 + PCN. If no interrupt is pending, returns ST0 = 0x80
+ * (invalid command) per the datasheet. */
+static void cmd_sense_interrupt(Fdc *f) {
+    f->result_len = 0;
+    if (!f->int_pending) {
+        result_push(f, ST0_IC_INVALID);
+        enter_result(f);
+        return;
+    }
+    f->int_pending = false;
+    result_push(f, f->st0);
+    result_push(f, (u8)f->cur_cyl[f->st0 & ST0_US_MASK]);
+    enter_result(f);
+}
 
 static void cmd_invalid(Fdc *f) {
     /* Invalid opcode: a single ST0 result byte with IC=INVALID, no state change. */
@@ -111,17 +175,19 @@ static void cmd_stub_error(Fdc *f) {
 static void dispatch_command(Fdc *f) {
     u8 op = f->cmd_buf[0] & 0x1F;
     switch (op) {
-        /* Phase 2 milestones — handlers land in commits 2..5. */
-        case 0x03: /* SPECIFY              */
-        case 0x04: /* SENSE DRIVE STATUS   */
-        case 0x05: /* WRITE DATA           */
-        case 0x06: /* READ DATA            */
-        case 0x07: /* RECALIBRATE          */
-        case 0x08: /* SENSE INTERRUPT      */
-        case 0x0A: /* READ ID              */
-        case 0x0F: /* SEEK                 */
+        case 0x03: cmd_specify           (f); break;
+        case 0x04: cmd_sense_drive_status(f); break;
+        case 0x07: cmd_recalibrate       (f); break;
+        case 0x08: cmd_sense_interrupt   (f); break;
+        case 0x0F: cmd_seek              (f); break;
+
+        /* Data-transfer commands land in milestones 3 & 4. */
+        case 0x05: /* WRITE DATA */
+        case 0x06: /* READ DATA  */
+        case 0x0A: /* READ ID    */
             cmd_stub_error(f);
             break;
+
         default:
             cmd_invalid(f);
             break;
