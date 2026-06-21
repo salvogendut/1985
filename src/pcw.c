@@ -45,7 +45,13 @@ static void bus_io_write(void *ctx, u16 port, u8 val) {
         mem_bank_write(&pcw->mem, lo, val);
         return;
     }
-    if (lo >= 0xF4 && lo <= 0xF8) {
+    if (lo == 0xF4) {
+        /* F4 write = per-slot read/write lock register, owned by mem.c.
+         * (F4 read still goes to asic.c for the interrupt-counter clear.) */
+        mem_set_lock(&pcw->mem, val);
+        return;
+    }
+    if (lo >= 0xF5 && lo <= 0xF8) {
         asic_write(&pcw->asic, lo, val);
         return;
     }

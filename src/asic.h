@@ -43,7 +43,6 @@ typedef struct Asic {
     bool inverse_video;     /* port 0xF7 bit 7 */
     bool flyback;           /* port 0xF8 read bit 6 */
     u8  interrupt_counter;  /* port 0xF8 read bits 0-3; cleared by F4-read */
-    u8  bank_force;         /* port 0xF4 write — full semantics deferred */
     int fdc_irq_mode;       /* 0=ignore, 1=NMI, 2=IRQ */
     bool prev_fdc_irq;      /* edge-detect for FDC IRQ line */
 
