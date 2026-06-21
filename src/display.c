@@ -1,4 +1,5 @@
 #include "display.h"
+#include "leds.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -40,8 +41,8 @@ int display_init(Display *d, const Config *cfg) {
         return -1;
     }
 
-    int win_w = DISPLAY_W * d->scale;
-    int win_h = DISPLAY_H * d->scale;
+    int win_w = DISPLAY_LOGICAL_W * d->scale;
+    int win_h = DISPLAY_LOGICAL_H * d->scale;
 
     SDL_WindowFlags wf = SDL_WINDOW_RESIZABLE;
     if (d->fullscreen) wf |= SDL_WINDOW_FULLSCREEN;
@@ -57,7 +58,8 @@ int display_init(Display *d, const Config *cfg) {
         fprintf(stderr, "SDL_CreateRenderer: %s\n", SDL_GetError());
         return -1;
     }
-    SDL_SetRenderLogicalPresentation(d->renderer, DISPLAY_W, DISPLAY_H,
+    SDL_SetRenderLogicalPresentation(d->renderer,
+                                     DISPLAY_LOGICAL_W, DISPLAY_LOGICAL_H,
                                      SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
     d->tex = SDL_CreateTexture(d->renderer, SDL_PIXELFORMAT_XRGB8888,
@@ -91,11 +93,20 @@ void display_put_pixel(Display *d, int x, int y, bool lit) {
     d->fb[y * DISPLAY_W + x] = lit ? d->fg : d->bg;
 }
 
-void display_present(Display *d) {
+void display_draw_framebuffer(Display *d) {
     SDL_UpdateTexture(d->tex, NULL, d->fb, DISPLAY_W * 4);
     SDL_SetRenderDrawColor(d->renderer, 0, 0, 0, 255);
     SDL_RenderClear(d->renderer);
-    SDL_RenderTexture(d->renderer, d->tex, NULL, NULL);
+
+    SDL_FRect screen = { 0.0f, 0.0f,
+                         (float)DISPLAY_LOGICAL_W, (float)DISPLAY_SCREEN_H };
+    SDL_RenderTexture(d->renderer, d->tex, NULL, &screen);
+
+    leds_render(d->renderer, 0, DISPLAY_SCREEN_H,
+                DISPLAY_LOGICAL_W, DISPLAY_LED_BAR_H);
+}
+
+void display_present(Display *d) {
     SDL_RenderPresent(d->renderer);
 }
 

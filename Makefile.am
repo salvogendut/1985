@@ -12,6 +12,7 @@ dist_man1_MANS = 1985.1
 	src/fdc.c \
 	src/gifcap.c \
 	src/kbd.c \
+	src/leds.c \
 	src/main.c \
 	src/mem.c \
 	src/overlay.c \
@@ -35,6 +36,7 @@ noinst_HEADERS = \
 	src/fdc.h \
 	src/gifcap.h \
 	src/kbd.h \
+	src/leds.h \
 	src/mem.h \
 	src/overlay.h \
 	src/paste.h \

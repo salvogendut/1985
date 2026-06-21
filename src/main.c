@@ -13,6 +13,7 @@
 #include "roller.h"
 #include "snapshot.h"
 #include "gifcap.h"
+#include "leds.h"
 
 #ifndef PROG_GIT_COMMIT
 #define PROG_GIT_COMMIT "unknown"
@@ -145,6 +146,9 @@ int main(int argc, char **argv) {
     Overlay ov;
     overlay_init(&ov, &cfg, &pcw);
 
+    leds_set_enabled(LED_FDC_A, true);
+    leds_set_enabled(LED_FDC_B, true);
+
     Paste paste;
     paste_init(&paste);
     if (cli.paste_text) paste_text(&paste, cli.paste_text);
@@ -209,6 +213,7 @@ int main(int argc, char **argv) {
         overlay_tick(&ov);
         pcw_frame(&pcw);
         roller_render(&pcw.mem, &pcw.asic, &disp);
+        display_draw_framebuffer(&disp);
         overlay_render(&ov, disp.renderer);
 
         if (gc) gifcap_frame(gc, disp.fb);
