@@ -1,4 +1,5 @@
 #include "display.h"
+#include "leds.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -96,7 +97,13 @@ void display_draw_framebuffer(Display *d) {
     SDL_UpdateTexture(d->tex, NULL, d->fb, DISPLAY_W * 4);
     SDL_SetRenderDrawColor(d->renderer, 0, 0, 0, 255);
     SDL_RenderClear(d->renderer);
-    SDL_RenderTexture(d->renderer, d->tex, NULL, NULL);
+
+    SDL_FRect screen = { 0.0f, 0.0f,
+                         (float)DISPLAY_LOGICAL_W, (float)DISPLAY_SCREEN_H };
+    SDL_RenderTexture(d->renderer, d->tex, NULL, &screen);
+
+    leds_render(d->renderer, 0, DISPLAY_SCREEN_H,
+                DISPLAY_LOGICAL_W, DISPLAY_LED_BAR_H);
 }
 
 void display_present(Display *d) {

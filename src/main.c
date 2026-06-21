@@ -13,6 +13,7 @@
 #include "roller.h"
 #include "snapshot.h"
 #include "gifcap.h"
+#include "leds.h"
 
 #ifndef PROG_GIT_COMMIT
 #define PROG_GIT_COMMIT "unknown"
@@ -144,6 +145,9 @@ int main(int argc, char **argv) {
 
     Overlay ov;
     overlay_init(&ov, &cfg, &pcw);
+
+    leds_set_enabled(LED_FDC_A, true);
+    leds_set_enabled(LED_FDC_B, true);
 
     Paste paste;
     paste_init(&paste);

@@ -16,10 +16,12 @@
 #define DISPLAY_H  256
 
 /* Logical presentation size: PCW pixels are 2:1 (tall), so we stretch
- * the 720×256 framebuffer vertically into a 720×512 logical area.
- * Window/letterbox calculations use these dimensions. */
-#define DISPLAY_LOGICAL_W  DISPLAY_W
-#define DISPLAY_LOGICAL_H  (DISPLAY_H * 2)
+ * the 720×256 framebuffer vertically into a 720×512 logical area, and
+ * reserve a strip below it for the drive-activity LED bar. */
+#define DISPLAY_LOGICAL_W   DISPLAY_W
+#define DISPLAY_SCREEN_H    (DISPLAY_H * 2)        /* PCW image area */
+#define DISPLAY_LED_BAR_H   22
+#define DISPLAY_LOGICAL_H   (DISPLAY_SCREEN_H + DISPLAY_LED_BAR_H)
 
 typedef struct Display {
     SDL_Window   *win;

@@ -99,13 +99,39 @@ static void cycle_mono(MonoMode *m) {
     *m = (MonoMode)(((int)*m + 1) % 4);
 }
 
+static void overlay_file_callback(void *userdata, const char * const *files,
+                                  int filter) {
+    (void)filter;
+    Overlay *ov = userdata;
+    if (files && files[0]) {
+        snprintf(ov->dialog_path, sizeof(ov->dialog_path), "%s", files[0]);
+        SDL_MemoryBarrierRelease();
+        ov->dialog_ready = true;
+    } else {
+        ov->dialog_drive = -1;
+        ov->dialog_kind  = DIALOG_NONE;
+    }
+}
+
 static void open_disk_dialog(Overlay *ov, int drive) {
-    /* File picker wiring lands in a follow-up; for the scaffold we
-     * just mark a pending dialog so the caller knows nothing happens
-     * — disk paths are set via 1985.conf for now. */
     ov->dialog_kind  = DIALOG_DISK;
     ov->dialog_drive = drive;
     ov->dialog_ready = false;
+    static const SDL_DialogFileFilter filters[] = {
+        { "DSK images", "dsk;DSK" },
+        { "All files",  "*"       },
+    };
+    SDL_ShowOpenFileDialog(overlay_file_callback, ov, NULL,
+                           filters, 2, NULL, false);
+}
+
+static void eject_disk(Overlay *ov, int drive) {
+    Config *c = ov->cfg;
+    char *slot = (drive == 0) ? c->drive_a : c->drive_b;
+    if (slot[0] == 0) return;
+    slot[0] = 0;
+    disk_eject(&ov->pcw->fdc.drive[drive]);
+    ov->dirty = true;
 }
 
 static void activate(Overlay *ov) {
@@ -211,6 +237,11 @@ bool overlay_handle_event(Overlay *ov, SDL_Event *ev) {
         case SDLK_SPACE:
             activate(ov);
             break;
+        case SDLK_DELETE:
+        case SDLK_BACKSPACE:
+            if (ov->section == OV_MEDIA && (ov->row == 0 || ov->row == 1))
+                eject_disk(ov, ov->row);
+            break;
     }
     return true;
 }
@@ -248,6 +279,11 @@ void overlay_render(Overlay *ov, SDL_Renderer *r) {
         if (sel) draw_text(r, ORIGIN_X - 12, y, ">", R, G, B);
         draw_text(r, ORIGIN_X, y, label, R, G, B);
         draw_text(r, VAL_X,    y, val,   R, G, B);
+    }
+
+    if (ov->section == OV_MEDIA) {
+        draw_text(r, ORIGIN_X, ORIGIN_Y + 4 * LINE_H,
+                  "Enter: select DSK   Del: eject", 160, 160, 160);
     }
 
     if (ov->state == OV_STATE_CONFIRM) {

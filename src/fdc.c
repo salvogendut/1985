@@ -1,4 +1,5 @@
 #include "fdc.h"
+#include "leds.h"
 #include <string.h>
 
 #define MSR_RQM   0x80   /* request for master — host can transfer */
@@ -34,8 +35,12 @@ u8 fdc_read(Fdc *f, u8 port) {
 }
 
 void fdc_write(Fdc *f, u8 port, u8 val) {
-    (void)f; (void)port; (void)val;
-    /* Command byte stream is silently discarded for the scaffold. */
+    (void)f; (void)val;
+    /* Command byte stream is silently discarded for the scaffold; we
+     * still pulse the activity LED so the user sees the firmware is
+     * talking to the drive. Until per-command drive select is parsed
+     * we always pulse drive A. */
+    if (port == 0x01) leds_ping(LED_FDC_A);
 }
 
 void fdc_set_terminal_count(Fdc *f, bool on) {
