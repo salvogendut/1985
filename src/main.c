@@ -145,7 +145,17 @@ static void dump_state(PCW *pcw, int frame) {
     }
 
     /* Memory dump of likely work-queue heads. */
-    static const u16 mem_pts[] = { 0x0000, 0x0021, 0x0040, 0x0060, 0x0100, 0x0D00, 0x1010, 0x10A0, 0x0E80, 0x4720, 0xBFF0, 0xFFF0 };
+    static const u16 mem_pts[] = { 0x0000, 0x0021, 0x0030, 0x0038, 0x0040, 0x0060, 0x0100, 0x0D00, 0x1010, 0x10A0, 0x0E80, 0x4720, 0xBFF0, 0xFC00, 0xFE70, 0xFE77, 0xFFF0 };
+    /* Follow (0xFE77) — BIOS-installed custom-ISR pointer. */
+    u16 fe77 = mem_read(&pcw->mem, 0xFE77) | (mem_read(&pcw->mem, 0xFE78) << 8);
+    fprintf(stderr, "--- disasm @ (0xFE77)=%04X ---\n", fe77);
+    u16 fp = fe77;
+    for (int i = 0; i < 24; i++) {
+        char buf[64];
+        int n = z80dis(snap, fp, buf, sizeof(buf));
+        fprintf(stderr, "  %04X: %s\n", fp, buf);
+        fp = (u16)(fp + n);
+    }
     /* Also dump raw block 3 at offset 0x3FF0 (where keyboard window
      * physically lives, independent of which slot maps it). */
     fprintf(stderr, "raw blk3@3FF0:");

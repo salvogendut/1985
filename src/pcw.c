@@ -34,10 +34,10 @@ static void dump_pc_bytes(PCW *pcw, u16 pc, const char *tag) {
 
 static void bus_mem_write(void *ctx, u16 addr, u8 val) {
     PCW *pcw = (PCW *)ctx;
-    /* Trace ALL writes (zero and nonzero) to the BIOS scheduler queue
-     * regions, with the per-slot read/write bank at the moment of the
-     * write. If write_bank != read_bank, the seed lands in a physical
-     * block the dispatcher never reads back from. */
+    /* Seed-write trace was useful for the queue-investigation phase
+     * but produces ~10M lines for a 12k-frame run, drowning all other
+     * traces. Gated off by default; flip the macro to re-enable. */
+#ifdef PCW_SEED_TRACE
     if ((addr >= 0x1010 && addr < 0x1018)
         || (addr >= 0x0D00 && addr < 0x0D10)
         || (addr >= 0x10A0 && addr < 0x10B0)
@@ -47,13 +47,12 @@ static void bus_mem_write(void *ctx, u16 addr, u8 val) {
             int slot = addr >> 14;
             fprintf(stderr,
                 "seed_write pc=%04X %04X %02X->%02X slot=%d rb=%02X wb=%02X bf=%02X\n",
-                pcw->cpu.pc, addr, old, val,
-                slot,
-                pcw->mem.read_bank[slot],
-                pcw->mem.write_bank[slot],
+                pcw->cpu.pc, addr, old, val, slot,
+                pcw->mem.read_bank[slot], pcw->mem.write_bank[slot],
                 pcw->mem.bank_force);
         }
     }
+#endif
     mem_write(&pcw->mem, addr, val);
 }
 
@@ -203,7 +202,17 @@ void pcw_frame(PCW *pcw) {
             }
             /* BDOS-call trace: CP/M+ apps enter BDOS via CALL 5.
              * At PC=5, C = function, DE = parameter. Return address
-             * is on the stack (top word). */
+             * is on the stack (top word). Also catch returns. */
+            static u16 g_bdos_pending_ret = 0xFFFF;
+            static u8  g_bdos_pending_fn  = 0xFF;
+            static u32 g_bdos_call_count  = 0;
+            if (pcw->cpu.pc == g_bdos_pending_ret && g_bdos_pending_ret != 0xFFFF) {
+                fprintf(stderr, "bdos return fn=%02X -> PC=%04X HL=%04X A=%02X (BC=%04X DE=%04X)\n",
+                        g_bdos_pending_fn, pcw->cpu.pc,
+                        pcw->cpu.hl, (u8)(pcw->cpu.af >> 8),
+                        pcw->cpu.bc, pcw->cpu.de);
+                g_bdos_pending_ret = 0xFFFF;
+            }
             if (pcw->cpu.pc == 0x0005) {
                 static u32 last = 0;
                 static u8  last_c = 0xFF; static u16 last_de = 0;
@@ -212,10 +221,13 @@ void pcw_frame(PCW *pcw) {
                 u16 sp = pcw->cpu.sp;
                 u16 ret = mem_read(&pcw->mem, sp)
                         | (mem_read(&pcw->mem, (u16)(sp+1)) << 8);
+                g_bdos_pending_ret = ret;
+                g_bdos_pending_fn  = c;
+                g_bdos_call_count++;
                 /* De-dupe immediate repeats so polled functions don't drown the log. */
                 if (++last == 1 || c != last_c || de != last_de) {
-                    fprintf(stderr, "bdos f=%02X (C=%02X) DE=%04X ret=%04X bank0=%02X bank1=%02X bank2=%02X bank3=%02X\n",
-                            c, c, de, ret,
+                    fprintf(stderr, "bdos call#%u f=%02X (C=%02X) DE=%04X ret=%04X bank0=%02X bank1=%02X bank2=%02X bank3=%02X\n",
+                            g_bdos_call_count, c, c, de, ret,
                             pcw->mem.read_bank[0], pcw->mem.read_bank[1],
                             pcw->mem.read_bank[2], pcw->mem.read_bank[3]);
                     /* For OPEN/MAKE/SEARCH FILE calls, dump the FCB (12 bytes
@@ -235,9 +247,14 @@ void pcw_frame(PCW *pcw) {
             cycles += z80_step(&pcw->cpu, &pcw->bus);
         }
 
+        /* Re-assert IRQ only while iff1=1. If the ISR is mid-flight
+         * (iff1=0 after accept), holding the line high would re-fire
+         * IRQ as soon as a single instruction inside the ISR happens
+         * to EI, before the FDC result phase has been drained. NMI is
+         * not gated since NMI accept is unconditional. */
         int req = asic_poll_fdc_irq(&pcw->asic);
         if (req == 1)      z80_nmi      (&pcw->cpu);
-        else if (req == 2) z80_interrupt(&pcw->cpu);
+        else if (req == 2 && pcw->cpu.iff1) z80_interrupt(&pcw->cpu);
 
         while (cycles >= next_tick) {
             kbd_tick(&pcw->kbd);
