@@ -53,7 +53,6 @@ static void enter_command(Fdc *f) {
     f->msr   = MSR_RQM | MSR_BUSY;
 }
 
-__attribute__((unused))
 static void enter_exec_read(Fdc *f) {
     f->phase = FDC_PHASE_EXEC_READ;
     f->msr   = MSR_RQM | MSR_DIO | MSR_NDM | MSR_BUSY;
@@ -96,6 +95,7 @@ static void cmd_specify(Fdc *f) {
 static void cmd_sense_drive_status(Fdc *f) {
     f->cur_unit = f->cmd_buf[1] & 0x03;
     f->cur_head = (f->cmd_buf[1] >> 2) & 0x01;
+    leds_ping(f->cur_unit ? LED_FDC_B : LED_FDC_A);
     const Disk *d = &f->drive[f->cur_unit];
 
     u8 st3 = (u8)((f->cur_unit & 0x03)
@@ -113,6 +113,8 @@ static void cmd_sense_drive_status(Fdc *f) {
 static void cmd_recalibrate(Fdc *f) {
     f->cur_unit = f->cmd_buf[1] & 0x03;
     f->cur_cyl[f->cur_unit] = 0;
+    f->drive[f->cur_unit].cur_track = 0;
+    leds_ping(f->cur_unit ? LED_FDC_B : LED_FDC_A);
     f->st0 = (u8)(ST0_IC_NORMAL | ST0_SE | (f->cur_unit & ST0_US_MASK));
     if (!f->drive[f->cur_unit].inserted) f->st0 |= ST0_NR;
     f->int_pending = true;
@@ -126,6 +128,8 @@ static void cmd_seek(Fdc *f) {
     int ncn = f->cmd_buf[2];
     if (ncn >= DISK_MAX_TRACKS) ncn = DISK_MAX_TRACKS - 1;
     f->cur_cyl[f->cur_unit] = ncn;
+    f->drive[f->cur_unit].cur_track = ncn;
+    leds_ping(f->cur_unit ? LED_FDC_B : LED_FDC_A);
     f->st0 = (u8)(ST0_IC_NORMAL | ST0_SE
                | (f->cur_head ? ST0_HD : 0)
                | (f->cur_unit & ST0_US_MASK));
@@ -148,6 +152,105 @@ static void cmd_sense_interrupt(Fdc *f) {
     result_push(f, f->st0);
     result_push(f, (u8)f->cur_cyl[f->st0 & ST0_US_MASK]);
     enter_result(f);
+}
+
+/* Push the 7-byte standard read/write result: ST0, ST1, ST2, C, H, R, N. */
+static void push_rw_result(Fdc *f, u8 st0, u8 st1, u8 st2,
+                           u8 C, u8 H, u8 R, u8 N) {
+    f->result_len = 0;
+    result_push(f, st0);
+    result_push(f, st1);
+    result_push(f, st2);
+    result_push(f, C);
+    result_push(f, H);
+    result_push(f, R);
+    result_push(f, N);
+}
+
+/* READ ID: return the next sector's CHRN from the current track.
+ * Rotates through the track's sector table on successive calls. */
+static void cmd_read_id(Fdc *f) {
+    f->cur_unit = f->cmd_buf[1] & 0x03;
+    f->cur_head = (f->cmd_buf[1] >> 2) & 0x01;
+    Disk *d = &f->drive[f->cur_unit];
+
+    if (!d->inserted || f->cur_head >= d->sides
+        || d->cur_track >= d->track_count) {
+        push_rw_result(f, build_st0(f, ST0_IC_ABNORMAL) | ST0_NR,
+                       0, 0, 0, 0, 0, 0);
+        enter_result(f);
+        leds_ping(f->cur_unit ? LED_FDC_B : LED_FDC_A);
+        return;
+    }
+
+    DiskTrack *tr = &d->track[d->cur_track][f->cur_head];
+    if (tr->sector_count == 0) {
+        push_rw_result(f, build_st0(f, ST0_IC_ABNORMAL),
+                       0x01 /* ST1 MA = missing address mark */,
+                       0, 0, 0, 0, 0);
+        enter_result(f);
+        leds_ping(f->cur_unit ? LED_FDC_B : LED_FDC_A);
+        return;
+    }
+
+    int idx = f->last_id_read[f->cur_unit] % tr->sector_count;
+    f->last_id_read[f->cur_unit] = idx + 1;
+    DiskSector *s = &tr->sectors[idx];
+    push_rw_result(f, build_st0(f, ST0_IC_NORMAL), 0, 0,
+                   s->C, s->H, s->R, s->N);
+    enter_result(f);
+    leds_ping(f->cur_unit ? LED_FDC_B : LED_FDC_A);
+}
+
+/* READ DATA: stream one sector's data through exec phase.
+ * Multi-sector and multi-track are deferred — we stop after the first
+ * matched sector or when TC is asserted. */
+static void cmd_read_data(Fdc *f) {
+    f->cur_unit = f->cmd_buf[1] & 0x03;
+    f->cur_head = (f->cmd_buf[1] >> 2) & 0x01;
+    u8 C = f->cmd_buf[2];
+    u8 H = f->cmd_buf[3];
+    u8 R = f->cmd_buf[4];
+    u8 N = f->cmd_buf[5];
+    Disk *d = &f->drive[f->cur_unit];
+
+    leds_ping(f->cur_unit ? LED_FDC_B : LED_FDC_A);
+
+    if (!d->inserted) {
+        push_rw_result(f, build_st0(f, ST0_IC_ABNORMAL) | ST0_NR,
+                       0, 0, C, H, R, N);
+        enter_result(f);
+        return;
+    }
+
+    DiskSector *s = disk_find_sector(d, f->cur_head, C, H, R, N);
+    if (!s) {
+        /* ST1 ND = no data (sector not found). */
+        push_rw_result(f, build_st0(f, ST0_IC_ABNORMAL), 0x04, 0,
+                       C, H, R, N);
+        enter_result(f);
+        return;
+    }
+
+    DiskTrack *tr = &d->track[d->cur_track][f->cur_head];
+    int size = s->size;
+    if (size > FDC_EXEC_BUF_LEN) size = FDC_EXEC_BUF_LEN;
+    memcpy(f->exec_buf, &tr->data[s->offset], (size_t)size);
+    f->exec_len = size;
+    f->exec_pos = 0;
+
+    /* Stash the CHRN we'll echo in the result so the result phase has it. */
+    f->cmd_buf[2] = s->C; f->cmd_buf[3] = s->H;
+    f->cmd_buf[4] = s->R; f->cmd_buf[5] = s->N;
+
+    enter_exec_read(f);
+}
+
+/* When EXEC_READ drains (or TC fires), assemble the standard read result. */
+static void finish_read_data(Fdc *f) {
+    push_rw_result(f, build_st0(f, ST0_IC_NORMAL), 0, 0,
+                   f->cmd_buf[2], f->cmd_buf[3],
+                   f->cmd_buf[4], f->cmd_buf[5]);
 }
 
 static void cmd_invalid(Fdc *f) {
@@ -181,10 +284,11 @@ static void dispatch_command(Fdc *f) {
         case 0x08: cmd_sense_interrupt   (f); break;
         case 0x0F: cmd_seek              (f); break;
 
-        /* Data-transfer commands land in milestones 3 & 4. */
-        case 0x05: /* WRITE DATA */
-        case 0x06: /* READ DATA  */
-        case 0x0A: /* READ ID    */
+        case 0x06: cmd_read_data(f); break;
+        case 0x0A: cmd_read_id  (f); break;
+
+        /* WRITE DATA lands in milestone 4. */
+        case 0x05:
             cmd_stub_error(f);
             break;
 
@@ -210,6 +314,16 @@ void fdc_reset(Fdc *f) {
     enter_idle(f);
 }
 
+/* Dispatch the per-command result-assembly when execution ends. */
+static void finish_execution(Fdc *f) {
+    u8 op = f->cmd_buf[0] & 0x1F;
+    switch (op) {
+        case 0x06: finish_read_data(f); break;
+        default:   f->result_len = 0;   break;
+    }
+    enter_result(f);
+}
+
 u8 fdc_read(Fdc *f, u8 port) {
     if (port == 0) return f->msr;
 
@@ -222,7 +336,7 @@ u8 fdc_read(Fdc *f, u8 port) {
         }
         case FDC_PHASE_EXEC_READ: {
             u8 b = (f->exec_pos < f->exec_len) ? f->exec_buf[f->exec_pos++] : 0xFF;
-            if (f->exec_pos >= f->exec_len) enter_result(f);
+            if (f->exec_pos >= f->exec_len) finish_execution(f);
             return b;
         }
         default:
@@ -271,13 +385,11 @@ void fdc_write(Fdc *f, u8 port, u8 val) {
             break;
     }
 
-    /* Pulse the activity LED on any data-port traffic from the host. */
-    if (port == 1) leds_ping(LED_FDC_A);
 }
 
 void fdc_set_terminal_count(Fdc *f, bool on) {
     f->tc = on;
     /* Rising edge during execution ends the transfer early. */
     if (on && (f->phase == FDC_PHASE_EXEC_READ || f->phase == FDC_PHASE_EXEC_WRITE))
-        enter_result(f);
+        finish_execution(f);
 }
