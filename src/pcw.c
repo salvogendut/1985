@@ -180,6 +180,26 @@ void pcw_frame(PCW *pcw) {
             /* Skip straight to the next tick — IRQ will wake the CPU. */
             cycles = next_tick;
         } else {
+            /* BDOS-call trace: CP/M+ apps enter BDOS via CALL 5.
+             * At PC=5, C = function, DE = parameter. Return address
+             * is on the stack (top word). */
+            if (pcw->cpu.pc == 0x0005) {
+                static u32 last = 0;
+                static u8  last_c = 0xFF; static u16 last_de = 0;
+                u8  c = pcw->cpu.c;
+                u16 de = pcw->cpu.de;
+                u16 sp = pcw->cpu.sp;
+                u16 ret = mem_read(&pcw->mem, sp)
+                        | (mem_read(&pcw->mem, (u16)(sp+1)) << 8);
+                /* De-dupe immediate repeats so polled functions don't drown the log. */
+                if (++last == 1 || c != last_c || de != last_de) {
+                    fprintf(stderr, "bdos f=%02X (C=%02X) DE=%04X ret=%04X bank0=%02X bank1=%02X bank2=%02X bank3=%02X\n",
+                            c, c, de, ret,
+                            pcw->mem.read_bank[0], pcw->mem.read_bank[1],
+                            pcw->mem.read_bank[2], pcw->mem.read_bank[3]);
+                    last_c = c; last_de = de;
+                }
+            }
             cycles += z80_step(&pcw->cpu, &pcw->bus);
         }
 

@@ -121,12 +121,34 @@ The system is alive, idle, and running its background ISRs. CCP printed the bann
 2. **Is autoexec'ing PROFILE.SUB** and stuck waiting for the SUBMIT mechanism (which uses `$$$.SUB` files on the disk).
 3. **Has reached `A>` internally but is still inside BDOS warm-boot finalization** — never gets a chance to actually print and prompt because some final init step deadlocks against an interrupt we mis-deliver.
 
-## Concrete next probes
+## BDOS trace result (concrete stuck point)
 
-1. **Take a screenshot at frame 5000+** and visually confirm what's on the screen after "Drive is A:". Has `A>` appeared and we just can't see it because of a display bug? Or is the cursor still where it was at end-of-banner?
-2. **Try injecting a keypress (Enter)**. If `A>` appears after Enter, the issue is "CCP is waiting for the user but our automatic post-banner key isn't being delivered." If nothing happens, CCP is genuinely stuck.
-3. **Look for PROFILE.SUB on the disk image** and the SUBMIT runtime in BDOS. Trace the SUBMIT cold-start path.
-4. **Trace BDOS calls** (RST 5 / CALL 5) post-banner. The last BDOS function CCP makes will name what it's waiting on.
+Hook on `pc == 0x0005` (BDOS entry vector) logs every BDOS call with function number, DE, and return address. The CCP startup sequence captured:
+
+```
+bdos f=31 (Get DPB)          DE=0D6A  ret=0429
+bdos f=31 (Get DPB)          DE=0392  ret=0458
+bdos f=62 (Set/Get DR Vector)DE=0392  ret=045D
+bdos f=98 (Parse Filename)   DE=0D6C  ret=0AF3
+bdos f=1A (Set DMA Address)  DE=0DA2  ret=09A5
+bdos f=0F (OPEN FILE)        DE=0DAD  ret=09B2   <-- never returns
+```
+
+CCP is trying to **OPEN FILE** (likely PROFILE.SUB or a startup script) at FCB=0x0DAD. BDOS goes into the open path, tries to read the directory from disk, and never returns. After this point: no more BDOS calls, no FDC commands issued, system enters its idle 300Hz printer-poll loop.
+
+So the bug is: **BDOS OPEN FILE never issues a disk read that completes**. Either:
+- BDOS is stuck in a tight loop polling a memory byte BIOS should be flipping
+- BDOS issues the BIOS "read directory sector" call but BIOS is stuck in its own polling loop on FDC state
+- A bank-switch in BDOS->BIOS->driver chain leaves an inconsistent paging state that traps execution
+
+Visual confirmation done: screenshot at frame 5000 shows banner + cursor block + "Drive is A:", no `A>`. Enter-key inject has no effect (confirmed CCP is not waiting for user input — real PCW shows `A>` autonomously).
+
+## Cross-emulator comparison (in progress)
+
+Plan: read MAME (pcw.cpp + upd765.cpp + i8275.cpp + z80.cpp), ZEsarUX (machines/pcw.c + cpu_z80.c), Joyce 2.4.2 (JoyceAsic.cxx, PcwFdc.cxx, Z80core.cxx, JoycePcwKeyboard.cxx) and compare against our implementation, component by component. See bottom of file for findings as they accumulate.
+
+## Cross-emulator divergence findings (running log)
+
 
 ## Reference
 
