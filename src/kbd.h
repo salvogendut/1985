@@ -25,13 +25,23 @@
 
 typedef struct Keyboard {
     u8 row[KBD_ROWS];
+    u8 ticker;          /* serial-protocol heartbeat — bits 7,6 of byte 0xFFFF */
 } Keyboard;
 
 void kbd_init(Keyboard *k);
 
-/* Return raw matrix byte for row 0..15. mem.c calls this when the
- * Z80 reads 0x3FF0..0x3FFF in the slot currently mapping block 3. */
+/* Advance the keyboard MCU's serial-clock ticker. Called at ~300 Hz from
+ * the ASIC timer tick. Joyce JoycePcwKeyboard.cxx:475-478 — bits 7 and 6
+ * of PCW byte 0xFFFF (keyboard row 15) toggle as the MCU's serial bit
+ * clock; CP/M+ uses this as a "keyboard alive" heartbeat. */
+void kbd_tick(Keyboard *k);
+
+/* Return raw matrix byte for row 0..15. */
 u8   kbd_matrix_byte(Keyboard *k, u8 row);
+
+/* Write current matrix state into the 16-byte keyboard window in RAM
+ * (joyce-style — RAM-backed kbd map that the MCU periodically refreshes). */
+void kbd_scan_into_ram(Keyboard *k, u8 *kbd_window);
 
 /* SDL keyboard event → matrix update. */
 void kbd_handle(Keyboard *k, const SDL_KeyboardEvent *e);

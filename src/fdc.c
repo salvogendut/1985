@@ -363,16 +363,28 @@ static const char *opcode_name(u8 op) {
     }
 }
 
+static const char *phase_name(FdcPhase p) {
+    switch (p) {
+        case FDC_PHASE_IDLE:       return "IDLE";
+        case FDC_PHASE_COMMAND:    return "COMMAND";
+        case FDC_PHASE_EXEC_READ:  return "EXEC_READ";
+        case FDC_PHASE_EXEC_WRITE: return "EXEC_WRITE";
+        case FDC_PHASE_RESULT:     return "RESULT";
+        default:                   return "?";
+    }
+}
+
 static void trace_cmd(Fdc *f) {
     if (!f->trace) return;
-    fprintf(stderr, "fdc cmd %02X (%s)", f->cmd_buf[0], opcode_name(f->cmd_buf[0]));
+    fprintf(stderr, "fdc cmd %02X (%s) phase=%s", f->cmd_buf[0], opcode_name(f->cmd_buf[0]),
+            phase_name(f->phase));
     for (int i = 1; i < f->cmd_len; i++) fprintf(stderr, " %02X", f->cmd_buf[i]);
     fputc('\n', stderr);
 }
 
 static void trace_result(Fdc *f) {
     if (!f->trace || f->result_len == 0) return;
-    fprintf(stderr, "fdc res");
+    fprintf(stderr, "fdc res phase=%s", phase_name(f->phase));
     for (int i = 0; i < f->result_len; i++) fprintf(stderr, " %02X", f->result_buf[i]);
     fputc('\n', stderr);
 }
@@ -426,22 +438,32 @@ static void finish_execution(Fdc *f) {
 }
 
 u8 fdc_read(Fdc *f, u8 port) {
-    if (port == 0) return f->msr;
+    if (port == 0) {
+        if (f->trace)
+            fprintf(stderr, "fdc msr phase=%s -> %02X\n", phase_name(f->phase), f->msr);
+        return f->msr;
+    }
 
     /* Data register read. */
     switch (f->phase) {
         case FDC_PHASE_RESULT: {
             u8 b = (f->result_pos < f->result_len) ? f->result_buf[f->result_pos++] : 0xFF;
+            if (f->trace)
+                fprintf(stderr, "fdc data phase=RESULT -> %02X\n", b);
             f->irq = false;   /* first result byte read drops the IRQ line */
             if (f->result_pos >= f->result_len) enter_idle(f);
             return b;
         }
         case FDC_PHASE_EXEC_READ: {
             u8 b = (f->exec_pos < f->exec_len) ? f->exec_buf[f->exec_pos++] : 0xFF;
+            if (f->trace)
+                fprintf(stderr, "fdc data phase=EXEC_READ -> %02X\n", b);
             if (f->exec_pos >= f->exec_len) finish_execution(f);
             return b;
         }
         default:
+            if (f->trace)
+                fprintf(stderr, "fdc data phase=%s -> FF\n", phase_name(f->phase));
             return 0xFF;
     }
 }

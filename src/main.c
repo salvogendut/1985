@@ -14,6 +14,10 @@
 #include "snapshot.h"
 #include "gifcap.h"
 #include "leds.h"
+#include "z80dis.h"
+#include "mem.h"
+#include "fdc.h"
+#include "asic.h"
 
 #ifndef PROG_GIT_COMMIT
 #define PROG_GIT_COMMIT "unknown"
@@ -55,7 +59,83 @@ typedef struct {
     bool        auto_space;
     int         memory_kb;        /* 0 = leave config alone */
     int         exit_after;       /* -1 = run forever */
+    int         dump_at;          /* -1 = no dump */
 } Cli;
+
+static void dump_state(PCW *pcw, int frame) {
+    Z80 *c = &pcw->cpu;
+    fprintf(stderr, "\n==== DUMP frame=%d ====\n", frame);
+    fprintf(stderr, "PC=%04X SP=%04X AF=%04X BC=%04X DE=%04X HL=%04X IX=%04X IY=%04X\n",
+            c->pc, c->sp, c->af, c->bc, c->de, c->hl, c->ix, c->iy);
+    fprintf(stderr, "AF'=%04X BC'=%04X DE'=%04X HL'=%04X I=%02X R=%02X IM=%d iff1=%d iff2=%d halted=%d\n",
+            c->af_, c->bc_, c->de_, c->hl_, c->i, c->r, c->im, c->iff1, c->iff2, c->halted);
+    fprintf(stderr, "bank R[%02X %02X %02X %02X] W[%02X %02X %02X %02X] force=%02X\n",
+            pcw->mem.read_bank[0], pcw->mem.read_bank[1], pcw->mem.read_bank[2], pcw->mem.read_bank[3],
+            pcw->mem.write_bank[0], pcw->mem.write_bank[1], pcw->mem.write_bank[2], pcw->mem.write_bank[3],
+            pcw->mem.bank_force);
+    fprintf(stderr, "asic ic=%X fdc_irq_mode=%d prev_fdc_irq=%d flyback=%d\n",
+            pcw->asic.interrupt_counter, pcw->asic.fdc_irq_mode, pcw->asic.prev_fdc_irq, pcw->asic.flyback);
+    fprintf(stderr, "fdc  phase=%d irq=%d tc=%d motor=%d cur_cyl=[%d %d]\n",
+            pcw->fdc.phase, pcw->fdc.irq, pcw->fdc.tc, pcw->fdc.motor_on,
+            pcw->fdc.cur_cyl[0], pcw->fdc.cur_cyl[1]);
+
+    /* Disassemble 24 instructions around PC. */
+    static u8 snap[65536];
+    for (int a = 0; a < 65536; a++) snap[a] = mem_read(&pcw->mem, (u16)a);
+    fprintf(stderr, "--- disasm @ PC ---\n");
+    u16 dp = c->pc;
+    for (int i = 0; i < 24; i++) {
+        char buf[64];
+        int n = z80dis(snap, dp, buf, sizeof(buf));
+        fprintf(stderr, "  %04X: %s\n", dp, buf);
+        dp = (u16)(dp + n);
+    }
+
+    /* Also disassemble at known dispatcher entry/timer-handler points. */
+    const u16 dump_dis[] = { 0x0D43, 0x0AD0, 0x0A98, 0x07D4, 0x0030, 0x0B6A, 0x4734, 0x4E84 };
+    for (size_t k = 0; k < sizeof(dump_dis)/sizeof(dump_dis[0]); k++) {
+        u16 dpp = dump_dis[k];
+        fprintf(stderr, "--- disasm @ %04X ---\n", dpp);
+        for (int i = 0; i < 20; i++) {
+            char buf[64];
+            int n = z80dis(snap, dpp, buf, sizeof(buf));
+            fprintf(stderr, "  %04X: %s\n", dpp, buf);
+            dpp = (u16)(dpp + n);
+        }
+    }
+    /* Follow the (0x10A0) callback pointer. */
+    u16 cb = mem_read(&pcw->mem, 0x10A0) | (mem_read(&pcw->mem, 0x10A1) << 8);
+    fprintf(stderr, "--- disasm @ (0x10A0)=%04X ---\n", cb);
+    u16 dpp = cb;
+    for (int i = 0; i < 16; i++) {
+        char buf[64];
+        int n = z80dis(snap, dpp, buf, sizeof(buf));
+        fprintf(stderr, "  %04X: %s\n", dpp, buf);
+        dpp = (u16)(dpp + n);
+    }
+
+    /* Memory dump of likely work-queue heads. */
+    static const u16 mem_pts[] = { 0x0000, 0x0021, 0x0040, 0x0060, 0x0100, 0x0D00, 0x1010, 0x10A0, 0x0E80, 0x4720, 0xBFF0, 0xFFF0 };
+    /* Also dump raw block 3 at offset 0x3FF0 (where keyboard window
+     * physically lives, independent of which slot maps it). */
+    fprintf(stderr, "raw blk3@3FF0:");
+    for (int i = 0; i < 16; i++)
+        fprintf(stderr, " %02X", pcw->mem.ram[3 * MEM_BLOCK_SIZE + 0x3FF0 + i]);
+    fprintf(stderr, "\n");
+    for (size_t k = 0; k < sizeof(mem_pts)/sizeof(mem_pts[0]); k++) {
+        u16 base = mem_pts[k];
+        fprintf(stderr, "mem %04X:", base);
+        for (int i = 0; i < 32; i++)
+            fprintf(stderr, " %02X", mem_read(&pcw->mem, (u16)(base + i)));
+        fprintf(stderr, "\n");
+    }
+    /* Stack peek (SP..SP+16) */
+    fprintf(stderr, "stk %04X:", c->sp);
+    for (int i = 0; i < 16; i++)
+        fprintf(stderr, " %02X", mem_read(&pcw->mem, (u16)(c->sp + i)));
+    fprintf(stderr, "\n==== END DUMP ====\n");
+    fflush(stderr);
+}
 
 static int parse_n_path(const char *arg, char *path_out, size_t path_size) {
     const char *colon = strchr(arg, ':');
@@ -82,6 +162,7 @@ static const char *eq_value(const char *s, const char *flag) {
 static int parse_cli(int argc, char **argv, Cli *cli) {
     memset(cli, 0, sizeof(*cli));
     cli->exit_after = -1;
+    cli->dump_at    = -1;
 
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
@@ -102,6 +183,7 @@ static int parse_cli(int argc, char **argv, Cli *cli) {
         if ((v = eq_value(a, "--screenshot-at")) && *v) { cli->screenshot_arg = v; continue; }
         if ((v = eq_value(a, "--gif-out"))     && *v) { cli->gif_out     = v; continue; }
         if ((v = eq_value(a, "--exit-after"))  && *v) { cli->exit_after  = atoi(v); continue; }
+        if ((v = eq_value(a, "--dump-at"))     && *v) { cli->dump_at     = atoi(v); continue; }
         if (strcmp(a, "--auto-space") == 0) { cli->auto_space = true; continue; }
 
         /* Two-token form: --flag VALUE */
@@ -116,6 +198,7 @@ static int parse_cli(int argc, char **argv, Cli *cli) {
         if (strcmp(a, "--screenshot-at") == 0 && i+1 < argc) { cli->screenshot_arg = argv[++i]; continue; }
         if (strcmp(a, "--gif-out")       == 0 && i+1 < argc) { cli->gif_out     = argv[++i]; continue; }
         if (strcmp(a, "--exit-after")    == 0 && i+1 < argc) { cli->exit_after  = atoi(argv[++i]); continue; }
+        if (strcmp(a, "--dump-at")       == 0 && i+1 < argc) { cli->dump_at     = atoi(argv[++i]); continue; }
         if (strcmp(a, "--auto-space")    == 0) { cli->auto_space = true; continue; }
 
         if (starts_with(a, "--")) {
@@ -278,6 +361,7 @@ int main(int argc, char **argv) {
             running = false;
         }
         if (frame == save_sna_frame) snapshot_save(&pcw, save_sna_path);
+        if (cli.dump_at >= 0 && frame == cli.dump_at) dump_state(&pcw, frame);
         if (cli.exit_after >= 0 && frame >= cli.exit_after) running = false;
 
         display_present(&disp);

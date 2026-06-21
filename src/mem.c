@@ -52,15 +52,6 @@ u8 mem_read(Mem *m, u16 addr) {
 
     int slot = addr >> 14;
     u8 block = m->read_bank[slot];
-
-    /* Memory-mapped keyboard: whichever slot maps block 3 sees the
-     * live matrix at offset 0x3FF0..0x3FFF instead of stored RAM. */
-    if (m->kbd && block == MEM_KBD_BLOCK) {
-        u16 off = addr & (MEM_BLOCK_SIZE - 1);
-        if (off >= MEM_KBD_OFFSET && off < MEM_KBD_OFFSET + MEM_KBD_LEN)
-            return kbd_matrix_byte(m->kbd, off - MEM_KBD_OFFSET);
-    }
-
     return m->ram[block * MEM_BLOCK_SIZE + (addr & (MEM_BLOCK_SIZE - 1))];
 }
 

@@ -115,13 +115,28 @@ void kbd_init(Keyboard *k) {
 }
 
 u8 kbd_matrix_byte(Keyboard *k, u8 row) {
-    /* The memory-mapped keyboard bytes use ACTIVE-HIGH (1 = pressed):
-     * joyce-2.4.2's JoycePcwKeyboard.cxx:489 directly writes its
-     * "1 = pressed" m_pcwKeyMap[] into PCWRAM[0xFFF0+k]. MAME's
-     * IP_ACTIVE_LOW operates at the port-input level before the
-     * keyboard MCU buffers bytes into the memory window. */
     if (row >= KBD_ROWS) return 0;
+    if (row == 15) {
+        u8 v = k->row[15] & 0x3F;
+        if (k->ticker & 1) v |= 0x80;
+        if (k->ticker & 2) v |= 0x40;
+        return v;
+    }
     return k->row[row];
+}
+
+void kbd_tick(Keyboard *k) {
+    k->ticker++;
+}
+
+void kbd_scan_into_ram(Keyboard *k, u8 *kbd_window) {
+    /* Joyce JoycePcwKeyboard.cxx:484-489 — the keyboard MCU "writes" the
+     * scanned matrix into PCWRAM[0xFFF0..0xFFFF] periodically. CPU writes
+     * into that window survive between scans (it's just RAM). We mirror
+     * that: the periodic scan overwrites the 16 bytes with our current
+     * matrix data; in between, the RAM is whatever the CPU last wrote. */
+    for (int i = 0; i < KBD_ROWS; i++)
+        kbd_window[i] = kbd_matrix_byte(k, (u8)i);
 }
 
 void kbd_press(Keyboard *k, int row, int bit) {

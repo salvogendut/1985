@@ -9,6 +9,29 @@ static u8 bus_mem_read(void *ctx, u16 addr) {
     return mem_read(&((PCW *)ctx)->mem, addr);
 }
 
+static void dump_pc_bytes(PCW *pcw, u16 pc, const char *tag) {
+    static bool dumped_077b = false;
+    static bool dumped_5d76 = false;
+    static bool dumped_08a0 = false;
+    static bool dumped_08ab = false;
+    bool *flag = NULL;
+
+    if (pc == 0x077B) flag = &dumped_077b;
+    else if (pc == 0x5D76) flag = &dumped_5d76;
+    else if (pc == 0x08A0) flag = &dumped_08a0;
+    else if (pc == 0x08AB) flag = &dumped_08ab;
+    else return;
+    if (*flag) return;
+    *flag = true;
+
+    fprintf(stderr, "%s pc=%04X bytes:", tag, pc);
+    for (int i = -16; i < 48; i++) {
+        u16 a = (u16)(pc + i);
+        fprintf(stderr, " %02X", mem_read(&pcw->mem, a));
+    }
+    fputc('\n', stderr);
+}
+
 static void bus_mem_write(void *ctx, u16 addr, u8 val) {
     mem_write(&((PCW *)ctx)->mem, addr, val);
 }
@@ -17,7 +40,9 @@ static u8 bus_io_read(void *ctx, u16 port) {
     PCW *pcw = (PCW *)ctx;
     u8 lo = (u8)(port & 0xFF);
     if (pcw->trace_io)
-        fprintf(stderr, "io_read  %04X (lo=%02X)\n", port, lo);
+        fprintf(stderr, "io_read  pc=%04X op=%02X port=%04X (lo=%02X)\n",
+                pcw->cpu.pc, pcw->cpu.last_op, port, lo);
+    dump_pc_bytes(pcw, pcw->cpu.pc, "pcdump");
 
     /* FDC: A0 selects MSR vs Data, mirrored across 0x00..0x7F
      * (A1..A6 are don't-care, A7=0 selects the FDC window).
@@ -54,7 +79,9 @@ static void bus_io_write(void *ctx, u16 port, u8 val) {
     PCW *pcw = (PCW *)ctx;
     u8 lo = (u8)(port & 0xFF);
     if (pcw->trace_io)
-        fprintf(stderr, "io_write %04X=%02X\n", port, val);
+        fprintf(stderr, "io_write pc=%04X op=%02X port=%04X=%02X\n",
+                pcw->cpu.pc, pcw->cpu.last_op, port, val);
+    dump_pc_bytes(pcw, pcw->cpu.pc, "pcdump");
 
     if (lo < 0x80) { fdc_write(&pcw->fdc, lo & 0x01, val); return; }
 
@@ -140,6 +167,11 @@ void pcw_frame(PCW *pcw) {
         else if (req == 2) z80_interrupt(&pcw->cpu);
 
         while (cycles >= next_tick) {
+            kbd_tick(&pcw->kbd);
+            /* Joyce-style periodic kbd-MCU scan: refresh the matrix bytes
+             * in physical RAM block 3 at offset 0x3FF0..0x3FFF. */
+            kbd_scan_into_ram(&pcw->kbd,
+                &pcw->mem.ram[MEM_KBD_BLOCK * MEM_BLOCK_SIZE + MEM_KBD_OFFSET]);
             if (asic_timer_tick(&pcw->asic) && pcw->cpu.iff1)
                 z80_interrupt(&pcw->cpu);
             next_tick += CYCLES_PER_TICK;

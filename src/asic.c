@@ -56,11 +56,13 @@ int asic_poll_fdc_irq(Asic *a) {
 }
 
 static u8 sys_status(const Asic *a) {
-    /* PCW CP/M reads the low nibble as the timer counter and bit 5 as
-     * the FDC-interrupt latch. The remaining bits are not needed here. */
+    /* MAME pcw.cpp:196-206 + Joyce JoyceAsic.cxx:89-93: bit 5 is a LIVE
+     * mirror of the FDC INTRQ line, NOT a sticky latch. The host clears
+     * it implicitly by draining the FDC result phase (which causes the
+     * FDC to drop its IRQ line). */
     u8 v = (a->interrupt_counter & 0x0F);
-    if (a->flyback)            v |= 0x40;
-    if (a->fdc && a->fdc->irq) v |= 0x20;
+    if (a->flyback)                       v |= 0x40;
+    if (a->fdc && a->fdc->irq)            v |= 0x20;
     return v;
 }
 
