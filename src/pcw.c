@@ -239,10 +239,18 @@ void pcw_frame(PCW *pcw) {
     serial_poll(&pcw->serial);
     perryfi_poll(&pcw->perryfi);
 
+    /* F8 monitor controls: paused freezes the CPU; step_once lets one
+     * instruction through then re-pauses. Breakpoints are checked
+     * after each z80_step inside the loop below. */
+    if (pcw->paused && !pcw->step_once) return;
+    bool was_stepping = pcw->step_once;
+    pcw->step_once = false;
+    bool stop_early = false;
+
     int cycles = 0;
     int next_tick = CYCLES_PER_TICK;
 
-    while (cycles < CYCLES_PER_FRAME) {
+    while (cycles < CYCLES_PER_FRAME && !stop_early) {
         if (pcw->cpu.halted) {
             /* Skip straight to the next tick — IRQ will wake the CPU. */
             cycles = next_tick;
@@ -530,6 +538,17 @@ void pcw_frame(PCW *pcw) {
             }
           }  /* end pcw->debug_traces gate */
             cycles += z80_step(&pcw->cpu, &pcw->bus);
+
+            /* Monitor breakpoints: stop the frame as soon as the PC
+             * lands on any armed breakpoint. */
+            for (int b = 0; b < PCW_MAX_BREAKPOINTS; b++) {
+                if (pcw->bp_enabled[b] && pcw->cpu.pc == pcw->breakpoints[b]) {
+                    pcw->paused = true;
+                    stop_early  = true;
+                    break;
+                }
+            }
+            if (stop_early || was_stepping) break;
         }
 
         /* Re-assert IRQ only while iff1=1. If the ISR is mid-flight

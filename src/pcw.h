@@ -20,6 +20,8 @@
 
 typedef enum { PCW_MODEL_8256 = 0, PCW_MODEL_8512, PCW_MODEL_9512 } PcwModel;
 
+#define PCW_MAX_BREAKPOINTS 16
+
 typedef struct PCW {
     Z80        cpu;
     Z80Bus     bus;
@@ -44,6 +46,12 @@ typedef struct PCW {
 
     /* Per-channel sub-flags. Effective only when debug_traces is true. */
     bool       trace_io;
+
+    /* F8 memory-monitor controls — mirrors 1984's CPC monitor state. */
+    bool       paused;
+    bool       step_once;
+    u16        breakpoints[PCW_MAX_BREAKPOINTS];
+    bool       bp_enabled [PCW_MAX_BREAKPOINTS];
 } PCW;
 
 void pcw_init (PCW *pcw, PcwModel model, int memory_kb);

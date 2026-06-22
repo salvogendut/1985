@@ -16,6 +16,7 @@ dist_man1_MANS = 1985.1
 	src/leds.c \
 	src/main.c \
 	src/mem.c \
+	src/monitor.c \
 	src/overlay.c \
 	src/paste.c \
 	src/pcw.c \
@@ -42,6 +43,7 @@ noinst_HEADERS = \
 	src/kbd.h \
 	src/leds.h \
 	src/mem.h \
+	src/monitor.h \
 	src/overlay.h \
 	src/paste.h \
 	src/pcw.h \
