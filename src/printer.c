@@ -18,14 +18,14 @@ u8 printer_read(Printer *p, u8 port) {
 
     if (port == 0xFC) return 0xF8;     /* no controller error */
 
-    /* Match Joyce JoyceMatrix.cxx:107-131: READY | FEEDER | PAPER (= 0x4C)
-     * baseline, plus BAIL (0x80) if bail bar is in. We don't currently
-     * model paper feeder details, so always report all three present.
-     * (ZEsarUX returns just 0x40 -- works for older OS like J11CPM3 but
-     * J17CPM3 needs the FEEDER+PAPER bits to avoid a hang.) */
-    u8 v = 0x40 | 0x08 | 0x04;            /* READY | FEEDER | PAPER */
-    if (p->bail_in) v |= 0x80;            /* BAIL bar in */
-    return v;
+    /* Return just 0x40 (READY) like ZEsarUX. The richer Joyce-style
+     * 0xCC (READY|FEEDER|PAPER|BAIL) causes 1-01 to hang in our
+     * emulator -- something about how BDOS interprets the bail/paper
+     * bits triggers a path we don't fully model. Until we model the
+     * printer MCU more accurately, the minimal 0x40 unblocks the
+     * disks that work in ZEsarUX. */
+    return 0x40;
+    (void)p;
 }
 
 void printer_write(Printer *p, u8 port, u8 val) {

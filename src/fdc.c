@@ -85,8 +85,13 @@ static void enter_result(Fdc *f) {
     f->phase = FDC_PHASE_RESULT;
     f->msr   = MSR_RQM | MSR_DIO | MSR_BUSY;
     f->result_pos = 0;
+    /* Keep f->irq HIGH (it should already be true from EXEC entry).
+     * Don't bump pulse_count here -- if we enter RESULT from inside
+     * an NMI ISR that was draining the EXEC buffer, bumping would
+     * cause re-entrant NMI inside the ISR. Real FDC INTRQ stays
+     * asserted through the EXEC->RESULT transition and only drops
+     * when the host reads the first RESULT byte. */
     f->irq = true;
-    f->irq_pulse_count++;
     trace_result(f);
 }
 
@@ -505,15 +510,12 @@ u8 fdc_read(Fdc *f, u8 port) {
             u8 b = (f->exec_pos < f->exec_len) ? f->exec_buf[f->exec_pos++] : 0xFF;
             if (f->trace)
                 fprintf(stderr, "fdc data phase=EXEC_READ -> %02X\n", b);
-            /* Drop INTRQ on read; re-assert if more bytes pending.
-             * In non-DMA mode the FDC raises INTRQ for each byte. */
-            f->irq = false;
-            if (f->exec_pos >= f->exec_len) {
-                finish_execution(f);
-            } else {
-                f->irq = true;
-                f->irq_pulse_count++;
-            }
+            /* INTRQ stays HIGH throughout EXEC -- the PCW BIOS NMI
+             * handler drains the whole sector in a tight loop on RQM
+             * after the single NMI that fired at EXEC entry. Real
+             * uPD765A behavior in non-DMA mode: INTRQ stays high
+             * until the host reads the first RESULT byte. */
+            if (f->exec_pos >= f->exec_len) finish_execution(f);
             return b;
         }
         default:
@@ -555,13 +557,8 @@ void fdc_write(Fdc *f, u8 port, u8 val) {
         case FDC_PHASE_EXEC_WRITE: {
             if (f->exec_pos < FDC_EXEC_BUF_LEN)
                 f->exec_buf[f->exec_pos++] = val;
-            f->irq = false;
-            if (f->exec_pos >= f->exec_len) {
-                finish_execution(f);
-            } else {
-                f->irq = true;
-                f->irq_pulse_count++;
-            }
+            /* INTRQ stays HIGH throughout EXEC, same as EXEC_READ. */
+            if (f->exec_pos >= f->exec_len) finish_execution(f);
             break;
         }
         default:
