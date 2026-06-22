@@ -134,6 +134,7 @@ void config_load(Config *c, const char *path) {
         else if (strcmp(k, "fullscreen")           == 0) c->fullscreen = parse_bool(v, c->fullscreen);
         else if (strcmp(k, "fullscreen_smoothing") == 0) c->fullscreen_smoothing = parse_bool(v, c->fullscreen_smoothing);
         else if (strcmp(k, "monochrome")           == 0) c->monochrome = parse_mono(v, c->monochrome);
+        else if (strcmp(k, "ext_second_drive")     == 0) c->ext_second_drive = parse_bool(v, c->ext_second_drive);
         else if (strcmp(k, "tinker")               == 0) c->tinker = parse_bool(v, c->tinker);
         else if (strcmp(k, "debug")                == 0) c->debug  = parse_bool(v, c->debug);
         else if (strcmp(k, "debug_traces")         == 0) c->debug_traces = parse_bool(v, c->debug_traces);
@@ -169,6 +170,9 @@ int config_save(const Config *c) {
     fprintf(f, "fullscreen = %s\n", bool_to_str(c->fullscreen));
     fprintf(f, "fullscreen_smoothing = %s\n", bool_to_str(c->fullscreen_smoothing));
     fprintf(f, "monochrome = %s\n\n", mono_to_str(c->monochrome));
+
+    fprintf(f, "[extensions]\n");
+    fprintf(f, "ext_second_drive = %s\n\n", bool_to_str(c->ext_second_drive));
 
     fprintf(f, "[advanced]\n");
     fprintf(f, "tinker = %s\n", bool_to_str(c->tinker));

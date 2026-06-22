@@ -6,7 +6,15 @@
 
 void mem_init(Mem *m) {
     memset(m, 0, sizeof(*m));
+    m->ram_blocks = 16;   /* default: bare PCW 8256 — 256 KB */
     mem_reset(m);
+}
+
+void mem_set_size_kb(Mem *m, int kb) {
+    int blocks = kb / 16;
+    if (blocks < 16)              blocks = 16;
+    if (blocks > MEM_BLOCK_COUNT) blocks = MEM_BLOCK_COUNT;
+    m->ram_blocks = blocks;
 }
 
 void mem_reset(Mem *m) {
@@ -60,13 +68,21 @@ u8 mem_read(Mem *m, u16 addr) {
      * and executed). With an overlay-on-reads model, the JP 0000
      * would re-fetch the original ROM byte and infinite-loop. */
     int slot = addr >> 14;
-    u8 block = m->read_bank[slot];
+    int block = m->read_bank[slot];
+    /* On real PCW hardware the high address bits beyond the populated
+     * memory wrap, so paging a "non-existent" bank actually aliases an
+     * existing one. The firmware's RAM-size probe relies on that:
+     * it writes a known byte to bank N, then reads back through bank
+     * N % ram_blocks; matching content means the upper bits were
+     * dropped and there is no real RAM up there. */
+    if (block >= m->ram_blocks) block %= m->ram_blocks;
     return m->ram[block * MEM_BLOCK_SIZE + (addr & (MEM_BLOCK_SIZE - 1))];
 }
 
 void mem_write(Mem *m, u16 addr, u8 val) {
     int slot = addr >> 14;
-    u8 block = m->write_bank[slot];
+    int block = m->write_bank[slot];
+    if (block >= m->ram_blocks) block %= m->ram_blocks;
     int a = block * MEM_BLOCK_SIZE + (addr & (MEM_BLOCK_SIZE - 1));
     m->ram[a] = val;
     m->ram_written[a >> 3] |= (u8)(1u << (a & 7));

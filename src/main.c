@@ -323,7 +323,7 @@ int main(int argc, char **argv) {
     if (display_init(&disp, &cfg) < 0) return 1;
 
     PCW pcw;
-    pcw_init(&pcw, cfg.model);
+    pcw_init(&pcw, cfg.model, cfg.memory_kb);
     pcw.debug_traces = cfg.debug_traces;
     pcw.trace_io  = cfg.debug_traces && cfg.trace_io;
     pcw.fdc.trace = cfg.debug_traces && cfg.trace_fdc;

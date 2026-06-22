@@ -30,8 +30,17 @@ static const char *section_title(OvSection s) {
 static int row_count(const Overlay *ov, OvSection s) {
     switch (s) {
         case OV_GENERAL:    return 3;  /* model, memory, tinker */
-        case OV_MEDIA:      return 2;  /* drive A, drive B */
-        case OV_EXTENSIONS: return 1;  /* printer placeholder */
+        case OV_MEDIA:
+            /* 8256 shipped with a single floppy; 8512/9512 had two.
+             * Users can bolt a second drive onto an 8256 via the
+             * Extensions tab — when enabled, drive B reappears here. */
+            if (ov->cfg->model == PCW_MODEL_8256)
+                return ov->cfg->ext_second_drive ? 2 : 1;
+            return 2;
+        case OV_EXTENSIONS:
+            /* "Second drive" toggle only applies to the 8256. Printer
+             * placeholder is always shown. */
+            return (ov->cfg->model == PCW_MODEL_8256) ? 2 : 1;
         case OV_TINKER:     return ov->cfg->tinker ? 9 : 0;
         default:            return 0;
     }
@@ -78,6 +87,11 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
         case OV_EXTENSIONS:
             switch (row) {
                 case 0: snprintf(label, lsz, "Printer"); snprintf(val, vsz, "(not implemented)"); break;
+                case 1:
+                    /* Only reachable when model == 8256 (row_count gates it). */
+                    snprintf(label, lsz, "Second drive");
+                    snprintf(val,   vsz, "%s", bool_str(cfg->ext_second_drive));
+                    break;
             }
             break;
         case OV_TINKER:
@@ -143,6 +157,20 @@ static void activate(Overlay *ov) {
             switch (ov->row) {
                 case 0:
                     c->model = (PcwModel)(((int)c->model + 1) % 3);
+                    /* Snap RAM and monitor to the chosen model's stock
+                     * configuration: 8256=256K+green, 8512=512K+green,
+                     * 9512=512K+white. The user can still override RAM
+                     * afterwards (e.g. an upgraded 8256 with 512K). */
+                    if (c->model == PCW_MODEL_8256) {
+                        c->memory_kb  = 256;
+                        c->monochrome = MONO_GREEN;
+                    } else if (c->model == PCW_MODEL_8512) {
+                        c->memory_kb  = 512;
+                        c->monochrome = MONO_GREEN;
+                    } else { /* PCW_MODEL_9512 */
+                        c->memory_kb  = 512;
+                        c->monochrome = MONO_WHITE;
+                    }
                     ov->dirty = true;
                     break;
                 case 1:
@@ -159,6 +187,10 @@ static void activate(Overlay *ov) {
             open_disk_dialog(ov, ov->row);
             break;
         case OV_EXTENSIONS:
+            if (ov->row == 1 && c->model == PCW_MODEL_8256) {
+                c->ext_second_drive = !c->ext_second_drive;
+                ov->dirty = true;
+            }
             break;
         case OV_TINKER:
             switch (ov->row) {
@@ -185,8 +217,20 @@ void overlay_init(Overlay *ov, Config *cfg, struct PCW *pcw) {
 
 static void close_overlay(Overlay *ov, bool save) {
     if (save && ov->dirty) {
+        /* Spot model / RAM changes before persisting and trigger a
+         * full power-cycle so the new hardware actually takes effect
+         * (warm reset would leave stale paging, FDC and ASIC state). */
+        bool need_cold_boot = (ov->cfg->model     != ov->saved.model)
+                           || (ov->cfg->memory_kb != ov->saved.memory_kb);
         config_save(ov->cfg);
         ov->dirty = false;
+        if (need_cold_boot && ov->pcw) {
+            pcw_cold_boot(ov->pcw, ov->cfg->model, ov->cfg->memory_kb);
+            /* pcw_init zeroed the FDC — re-mount the disk images so
+             * the machine boots from them just like at first launch. */
+            if (ov->cfg->drive_a[0]) disk_load(&ov->pcw->fdc.drive[0], ov->cfg->drive_a);
+            if (ov->cfg->drive_b[0]) disk_load(&ov->pcw->fdc.drive[1], ov->cfg->drive_b);
+        }
     } else if (!save) {
         *ov->cfg = ov->saved;
     }
