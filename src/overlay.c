@@ -1,4 +1,5 @@
 #include "overlay.h"
+#include "display.h"
 #include "pcw.h"
 #include "disk.h"
 #include "snapshot.h"
@@ -14,7 +15,7 @@
 #define LINE_H   16
 #define ORIGIN_X 24
 #define ORIGIN_Y 28
-#define VAL_X    220
+#define VAL_X    136
 
 static const char *section_title(OvSection s) {
     switch (s) {
@@ -215,8 +216,12 @@ bool overlay_handle_event(Overlay *ov, SDL_Event *ev) {
     if (ev->type != SDL_EVENT_KEY_DOWN) return true;
 
     if (ov->state == OV_STATE_CONFIRM) {
-        if (ev->key.key == SDLK_Y) close_overlay(ov, true);
-        else if (ev->key.key == SDLK_N) close_overlay(ov, false);
+        if (ev->key.key == SDLK_RETURN || ev->key.key == SDLK_KP_ENTER
+            || ev->key.key == SDLK_Y) {
+            close_overlay(ov, true);
+        } else if (ev->key.key == SDLK_ESCAPE || ev->key.key == SDLK_N) {
+            close_overlay(ov, false);
+        }
         return true;
     }
 
@@ -260,6 +265,22 @@ static void draw_text(SDL_Renderer *r, int x, int y, const char *s, u8 R, u8 G, 
     SDL_RenderDebugText(r, (float)x, (float)y, s);
 }
 
+static void fill_rect(SDL_Renderer *r, float x, float y, float w, float h,
+                      u8 R, u8 G, u8 B, u8 A) {
+    SDL_SetRenderDrawBlendMode(r, A < 255 ? SDL_BLENDMODE_BLEND : SDL_BLENDMODE_NONE);
+    SDL_SetRenderDrawColor(r, R, G, B, A);
+    SDL_FRect rect = { x, y, w, h };
+    SDL_RenderFillRect(r, &rect);
+}
+
+static void draw_rect_outline(SDL_Renderer *r, float x, float y, float w, float h,
+                              u8 R, u8 G, u8 B) {
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
+    SDL_SetRenderDrawColor(r, R, G, B, 255);
+    SDL_FRect rect = { x, y, w, h };
+    SDL_RenderRect(r, &rect);
+}
+
 void overlay_render(Overlay *ov, SDL_Renderer *r) {
     if (!ov->visible) return;
 
@@ -299,9 +320,34 @@ void overlay_render(Overlay *ov, SDL_Renderer *r) {
                   "Enter: select DSK   Del: eject", 160, 160, 160);
     }
 
+    /* Centered confirm dialog (matches 1984's modal). Drawn on top of
+     * the dimmed window so the user can read context behind it. The
+     * renderer uses a fixed logical-presentation size (see display.c
+     * SDL_SetRenderLogicalPresentation), so we centre against that
+     * rather than the physical output. */
     if (ov->state == OV_STATE_CONFIRM) {
-        draw_text(r, ORIGIN_X, ORIGIN_Y + 9 * LINE_H + 8,
-                  "Save changes? (Y/N)", 255, 80, 80);
+        int ww = DISPLAY_LOGICAL_W;
+        int wh = DISPLAY_LOGICAL_H;
+        /* SDL3 debug font cell is ~8 logical pixels wide / tall. */
+        const int FONT_W = 8, FONT_H = 8;
+        const char *line1 = "Save changes?";
+        const char *line2 = "Enter = Save      Esc = Discard";
+        int l1w = (int)strlen(line1) * FONT_W;
+        int l2w = (int)strlen(line2) * FONT_W;
+        int box_w = l2w + 24;
+        int box_h = FONT_H * 2 + 24;
+        float bx = (ww - box_w) / 2.0f;
+        float by = (wh - box_h) / 2.0f;
+
+        /* Dim the whole window behind the box. */
+        fill_rect(r, 0, 0, (float)ww, (float)wh, 0, 0, 0, 140);
+        fill_rect(r, bx, by, (float)box_w, (float)box_h, 25, 25, 60, 255);
+        draw_rect_outline(r, bx, by, (float)box_w, (float)box_h, 70, 90, 200);
+
+        draw_text(r, (int)(bx + (box_w - l1w) / 2.0f), (int)(by + 6),
+                  line1, 255, 255, 255);
+        draw_text(r, (int)(bx + (box_w - l2w) / 2.0f), (int)(by + 6 + FONT_H + 8),
+                  line2, 200, 200, 100);
     }
 }
 
