@@ -51,13 +51,14 @@ void mem_set_lock(Mem *m, u8 val) {
 }
 
 u8 mem_read(Mem *m, u16 addr) {
-    /* Boot overlay lives in low memory; reads above the stream length
-     * (notably stack pops at ~0x7E00) must fall through to RAM, or
-     * RET would return 0x0000 and restart the loader. */
-    if (m->bootstrap && bootstrap_active(m->bootstrap)
-        && addr < (u16)m->bootstrap->len)
-        return bootstrap_read(m->bootstrap, addr);
-
+    /* No overlay -- the boot ROM is now copied directly into bank 0
+     * RAM by pcw_reset(). This matches ZEsarUX's model and the real
+     * PCW: the boot ROM bytes coexist with RAM and get overwritten
+     * by subsequent writes (which is critical -- the boot ROM at
+     * 0x0102 writes the OUT (F8),A instruction to RAM[0,1] then
+     * JP 0000, relying on the just-written instruction to be fetched
+     * and executed). With an overlay-on-reads model, the JP 0000
+     * would re-fetch the original ROM byte and infinite-loop. */
     int slot = addr >> 14;
     u8 block = m->read_bank[slot];
     return m->ram[block * MEM_BLOCK_SIZE + (addr & (MEM_BLOCK_SIZE - 1))];

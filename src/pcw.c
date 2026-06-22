@@ -187,9 +187,13 @@ void pcw_reset(PCW *pcw) {
     asic_reset(&pcw->asic);
     z80_reset(&pcw->cpu);
 
-    /* On the real machine PC starts at 0x0000 and the bootstrap
-     * stream is what the fetcher sees. z80_reset() already zeroes
-     * PC; nothing else to do here. */
+    /* Copy the boot ROM bytes into BANK 0 RAM at offset 0. The real
+     * PCW does this via its printer-MCU ROM at reset. Reads of low
+     * memory then return RAM (which initially contains the ROM bytes),
+     * and the boot ROM's self-modifying-code trick (writing D3 F8 at
+     * RAM[0,1] then JP 0000 to execute the new instruction) works
+     * naturally. ZEsarUX models this the same way. */
+    memcpy(pcw->mem.ram, pcw->boot.stream, (size_t)pcw->boot.len);
 }
 
 /* 4 MHz / 300 Hz ≈ 13_333 cycles per timer tick. The PCW asserts /INT
