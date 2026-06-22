@@ -52,6 +52,9 @@ typedef struct {
     bool     ext_dktronics;             /* DK'tronics PCW Sound + Joystick:
                                          * AY-3-8912 + DB9 at 0xA9-0xAB.
                                          * Needs the PCW Backplane. */
+    bool     ext_pdf_printer;           /* Host-side PDF sink for built-in
+                                         * printer/Centronics output. */
+    char     ext_pdf_printer_dir[PATH_MAX];
 
     /* [advanced] */
     bool     tinker;

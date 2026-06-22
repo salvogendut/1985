@@ -30,7 +30,7 @@
   <releases>
     <release version="0.1.0" date="2026-06-21">
       <description>
-        <p>Initial scaffolding: SDL3 window, F9 overlay framework copied from 1984, Z80 core wired against PCW memory and I/O ports (0x00/0x01 FDC, 0xF0-0xF3 banking, 0xF4-0xF8 ASIC, 0xFC/0xFD printer stub), 778-byte boot stream + boot loader at 0x0002. Roller-RAM rendering, real FDC drive backend, and printer output are stubbed for follow-up sessions.</p>
+        <p>Initial scaffolding: SDL3 window, F9 overlay framework copied from 1984, Z80 core wired against PCW memory and I/O ports (0x00/0x01 FDC, 0xF0-0xF3 banking, 0xF4-0xF8 ASIC, 0xFC/0xFD printer status), 778-byte boot stream + boot loader at 0x0002. PDF printer output is available from the Extensions overlay.</p>
       </description>
     </release>
   </releases>

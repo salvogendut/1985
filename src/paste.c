@@ -74,37 +74,35 @@ static const CpcKey keymap[128] = {
     ['W'] = { 7, 3, true, true }, ['X'] = { 7, 7, true, true },
     ['Y'] = { 5, 3, true, true }, ['Z'] = { 8, 7, true, true },
 
-    /* Symbols — unshifted on CPC */
+    /* PCW symbol layout. Positions tracked in kbd.c (Joyce hardware
+     * matrix); only the unshifted/shifted *character* needs choosing.
+     * The CPC mapping inherited from 1984 was wrong for ':', '=',
+     * ';', '\'' etc. — the PCW shifts those differently.
+     * TODO: audit the full shifted set against Joyce's hardware.txt;
+     * for now we cover what shows up in common CP/M commands. */
     ['-']  = { 3, 1, false, true },
-    ['@']  = { 3, 2, false, true },
-    [';']  = { 3, 4, false, true },
-    [':']  = { 3, 5, false, true },
+    ['=']  = { 3, 0, false, true },
+    [';']  = { 3, 5, false, true },
+    ['\''] = { 3, 4, false, true },
     ['/']  = { 3, 6, false, true },
     ['.']  = { 3, 7, false, true },
     [',']  = { 4, 7, false, true },
-    ['[']  = { 2, 1, false, true },
-    [']']  = { 2, 3, false, true },
+    ['[']  = { 3, 2, false, true },
+    [']']  = { 2, 1, false, true },
     ['\\'] = { 2, 6, false, true },
-    ['^']  = { 3, 0, false, true },
 
-    /* Symbols — require shift on CPC */
+    /* Shifted symbols — the safe subset. */
     ['!']  = { 8, 0, true, true },   /* shift+1 */
     ['"']  = { 8, 1, true, true },   /* shift+2 */
-    ['#']  = { 7, 1, true, true },   /* shift+3 */
     ['$']  = { 7, 0, true, true },   /* shift+4 */
     ['%']  = { 6, 1, true, true },   /* shift+5 */
     ['&']  = { 6, 0, true, true },   /* shift+6 */
-    ['\''] = { 5, 1, true, true },   /* shift+7 */
     ['(']  = { 5, 0, true, true },   /* shift+8 */
     [')']  = { 4, 1, true, true },   /* shift+9 */
-    ['_']  = { 4, 0, true, true },   /* shift+0 */
-    ['=']  = { 3, 1, true, true },   /* shift+- */
-    ['+']  = { 3, 4, true, true },   /* shift+; */
-    ['*']  = { 3, 5, true, true },   /* shift+: */
+    [':']  = { 3, 5, true, true },   /* shift+; */
     ['?']  = { 3, 6, true, true },   /* shift+/ */
     ['>']  = { 3, 7, true, true },   /* shift+. */
     ['<']  = { 4, 7, true, true },   /* shift+, */
-    ['|']  = { 3, 2, true, true },   /* shift+@ */
 };
 
 static void key_down(Keyboard *k, const CpcKey *ck) {
@@ -133,14 +131,31 @@ void paste_free(Paste *p) {
 
 void paste_text(Paste *p, const char *text) {
     free(p->buf);
-    p->len = (int)strlen(text);
-    p->buf = malloc(p->len + 2);  /* +1 for appended newline, +1 for NUL */
+    /* --paste TEXT advertises "\n = Enter" so the user can compose a
+     * multi-line script on the command line without shell heredocs.
+     * Decode \n, \r, \t and \\ here before queuing the bytes. */
+    int n = (int)strlen(text);
+    p->buf = malloc(n + 2);  /* +1 appended newline, +1 NUL */
     if (!p->buf) { p->len = 0; return; }
-    memcpy(p->buf, text, p->len);
-    p->buf[p->len++] = '\n';
-    p->buf[p->len]   = '\0';
+    int w = 0;
+    for (int i = 0; i < n; i++) {
+        char c = text[i];
+        if (c == '\\' && i + 1 < n) {
+            switch (text[i + 1]) {
+                case 'n':  p->buf[w++] = '\n'; i++; continue;
+                case 'r':  p->buf[w++] = '\r'; i++; continue;
+                case 't':  p->buf[w++] = '\t'; i++; continue;
+                case '\\': p->buf[w++] = '\\'; i++; continue;
+                default:   break;
+            }
+        }
+        p->buf[w++] = c;
+    }
+    p->buf[w++] = '\n';
+    p->buf[w]   = '\0';
+    p->len   = w;
     p->pos   = 0;
-    p->timer = 3;   /* wait 3 frames for Ctrl to clear from the CPC matrix */
+    p->timer = 3;   /* wait 3 frames for Ctrl to clear from the matrix */
     p->held  = false;
 }
 

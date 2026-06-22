@@ -14,6 +14,7 @@ typedef enum {
 typedef enum {
     OV_STATE_MENU    = 0,
     OV_STATE_CONFIRM = 1,
+    OV_STATE_KEYS    = 2,
 } OvState;
 
 typedef enum {
@@ -21,6 +22,7 @@ typedef enum {
     DIALOG_DISK          = 1,
     DIALOG_SNAPSHOT_LOAD = 2,
     DIALOG_SNAPSHOT_SAVE = 3,
+    DIALOG_PRINT_DIR     = 4,
 } DialogKind;
 
 struct PCW;
@@ -37,7 +39,7 @@ typedef struct {
     /* pending file-dialog result */
     DialogKind  dialog_kind;
     int         dialog_drive;    /* 0=A, 1=B */
-    char        dialog_path[512];
+    char        dialog_path[PATH_MAX];
     bool        dialog_ready;
     bool        needs_cold_boot;
 } Overlay;

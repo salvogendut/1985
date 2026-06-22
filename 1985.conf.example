@@ -18,10 +18,22 @@ fullscreen_smoothing = true
 # off / green / amber / white. PCW shipped with a green-phosphor monitor.
 monochrome = green
 
+[extensions]
+ext_second_drive        = false
+ext_sanpollo_backplane  = false
+ext_serial              = false
+ext_serial_backend      = pty
+ext_serial_tcp_port     = 4002
+ext_perryfi             = false
+ext_dktronics           = false
+ext_pdf_printer         = false
+ext_pdf_printer_dir     =
+
 [advanced]
 # Set tinker=true to unlock the Advanced tab in the F9 overlay.
 tinker = false
 debug = false
+debug_traces = false
 trace_io = false
 trace_fdc = false
 trace_input = false

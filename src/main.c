@@ -333,6 +333,9 @@ int main(int argc, char **argv) {
 
     PCW pcw;
     pcw_init(&pcw, cfg.model, cfg.memory_kb);
+    printer_set_pdf_output_dir(&pcw.printer, cfg.ext_pdf_printer_dir);
+    printer_set_pdf_enabled(&pcw.printer,
+                            cfg.ext_pdf_printer && cfg.ext_pdf_printer_dir[0]);
     pcw.debug_traces = cfg.debug_traces;
     pcw.trace_io  = cfg.debug_traces && cfg.trace_io;
     pcw.fdc.trace = cfg.debug_traces && cfg.trace_fdc;
@@ -404,6 +407,7 @@ int main(int argc, char **argv) {
 
     leds_set_enabled(LED_FDC_A, true);
     leds_set_enabled(LED_FDC_B, true);
+    leds_set_enabled(LED_PRINTER, true);
 
     Paste paste;
     paste_init(&paste);
@@ -461,6 +465,14 @@ int main(int argc, char **argv) {
                     }
                     break;
                 case SDL_EVENT_KEY_DOWN:
+                    /* Shift+F1..Shift+F8 are PCW f1..f8 — let the matrix
+                     * handler take them before any host shortcut fires. */
+                    if (ev.key.scancode >= SDL_SCANCODE_F1
+                        && ev.key.scancode <= SDL_SCANCODE_F8
+                        && (ev.key.mod & SDL_KMOD_SHIFT)) {
+                        kbd_handle(&pcw.kbd, &ev.key);
+                        break;
+                    }
                     switch (ev.key.key) {
                         case SDLK_F4: {
                             char path[64];
@@ -580,6 +592,7 @@ int main(int argc, char **argv) {
         }
 
         pcw_frame(&pcw);
+        printer_tick(&pcw.printer);
 
         /* Render one frame of AY audio (clears to silence when AY is
          * absent — keeps the SDL stream pacing steady). */
@@ -705,6 +718,7 @@ int main(int argc, char **argv) {
     if (gamepad)   SDL_CloseGamepad(gamepad);
     if (ay_stream) SDL_DestroyAudioStream(ay_stream);
     paste_free(&paste);
+    printer_shutdown(&pcw.printer);
     display_quit(&disp);
     return 0;
 }

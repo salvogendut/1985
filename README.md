@@ -22,6 +22,11 @@ floppies, white). Changing model or RAM in the overlay triggers a full
 cold boot.
 
 Extensions available (Extensions tab):
+- **PDF printer** — host-side PDF capture for the built-in PCW
+  dot-matrix printer protocol and CPS8256 Centronics bytes. Enabling it
+  opens a folder chooser; the first print event creates a timestamped
+  `1985-print-YYYYMMDD-HHMMSS.pdf` there, with later pages appended
+  until the printer is disabled or the emulator exits.
 - **Second drive** — bolt-on drive B for the 8256 (8512/9512 always have two).
 - **PCW Backplane** — SanPollo 50-pin edge-connector hub. Acts as a
   gate for the items that physically plug into it.
@@ -46,8 +51,8 @@ Extensions available (Extensions tab):
   the host enumerates (Atari-style: up/down/left/right + two fire
   buttons mapped to South/East).
 
-Still stubbed: internal dot-matrix printer, RAM-disc M:, snapshot
-save, and most game-side hardware extensions.
+Still stubbed: RAM-disc M:, snapshot save, 9512 daisywheel fidelity,
+and most game-side hardware extensions.
 
 <p align="center">
   <img src="screenshots/cpm.png" alt="CP/M+ boot banner and A&gt; prompt" width="380">
@@ -63,7 +68,7 @@ save, and most game-side hardware extensions.
 ## Build (Fedora)
 
 ```bash
-sudo dnf install gcc make autoconf automake pkgconf-pkg-config sdl3-devel
+sudo dnf install gcc make autoconf automake pkgconf-pkg-config sdl3-devel cairo-devel
 autoreconf -fiv
 ./configure
 make
@@ -74,6 +79,8 @@ make
 
 | Key | Action |
 |-----|--------|
+| Click in window | Capture keyboard input for guest |
+| Ctrl+Enter | Release captured keyboard input |
 | F4  | Save PPM screenshot |
 | F5  | Reset |
 | F8  | Memory monitor / disassembler |

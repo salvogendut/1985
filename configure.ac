@@ -25,6 +25,7 @@ esac
 PKG_PROG_PKG_CONFIG
 
 PKG_CHECK_MODULES([SDL3], [sdl3], [], [AC_MSG_ERROR([SDL3 not found])])
+PKG_CHECK_MODULES([CAIRO], [cairo], [], [AC_MSG_ERROR([cairo not found])])
 AC_CHECK_LIB([m], [sqrt], [], [AC_MSG_ERROR([libm not found])])
 
 case $host_os in

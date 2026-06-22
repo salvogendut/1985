@@ -60,9 +60,9 @@ noinst_HEADERS = \
 	src/z80.h \
 	src/z80dis.h
 
-1985_CFLAGS  = $(AM_CFLAGS) $(SDL3_CFLAGS) -Wall -Wextra \
+1985_CFLAGS  = $(AM_CFLAGS) $(SDL3_CFLAGS) $(CAIRO_CFLAGS) -Wall -Wextra \
                -DPROG_GIT_COMMIT=\"$(PROG_GIT_COMMIT)\"
-1985_LDADD        = $(SDL3_LIBS) -lm $(WIN_LIBS) $(WIN_RC_OBJ)
+1985_LDADD        = $(SDL3_LIBS) $(CAIRO_LIBS) -lm $(WIN_LIBS) $(WIN_RC_OBJ)
 1985_DEPENDENCIES = $(WIN_RC_OBJ)
 
 icons/1985-rc.o: $(srcdir)/icons/1985.rc $(srcdir)/icons/1985.ico

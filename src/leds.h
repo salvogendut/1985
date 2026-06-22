@@ -18,6 +18,7 @@
 typedef enum {
     LED_FDC_A = 0,
     LED_FDC_B,
+    LED_PRINTER,    /* Orange. Pulses while bytes arrive at FCh/FDh. */
     LED_SERIAL,     /* Split LED: left half = RX (red), right half = TX (green). */
     LED_COUNT
 } LedId;

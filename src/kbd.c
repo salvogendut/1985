@@ -77,12 +77,34 @@ static MatrixPos sdl_to_matrix(SDL_Scancode s) {
         case SDL_SCANCODE_TAB:          return (MatrixPos){8, 4};
         case SDL_SCANCODE_ESCAPE:       return (MatrixPos){1, 0};
         case SDL_SCANCODE_DELETE:       return (MatrixPos){2, 0};
+        /* Editor cluster — Joyce mapping (Docs/joyce.txt §4.1):
+         * Ins=CUT, Home=COPY, PgUp=PASTE, Del=DEL→, End=CAN, PgDn=DOC/PAGE. */
         case SDL_SCANCODE_INSERT:       return (MatrixPos){1, 2};
         case SDL_SCANCODE_HOME:         return (MatrixPos){1, 3};
         case SDL_SCANCODE_END:          return (MatrixPos){10, 2};
         case SDL_SCANCODE_PAGEUP:       return (MatrixPos){0, 3};
         case SDL_SCANCODE_PAGEDOWN:     return (MatrixPos){1, 4};
         case SDL_SCANCODE_CAPSLOCK:     return (MatrixPos){10, 5};
+        case SDL_SCANCODE_PRINTSCREEN:  return (MatrixPos){1, 1};   /* PTR */
+
+        /* Numeric keypad — Joyce mapping. The PCW's keypad doubles as
+         * a cursor/editing cluster (LINE/EOL, FIND/EXCH, etc.); these
+         * positions are the PCW labels under each pad key. */
+        case SDL_SCANCODE_KP_0:         return (MatrixPos){0, 1};   /* RELAY */
+        case SDL_SCANCODE_KP_1:         return (MatrixPos){2, 4};   /* FIND/EXCH */
+        case SDL_SCANCODE_KP_2:         return (MatrixPos){10, 6};  /* ↓ */
+        case SDL_SCANCODE_KP_3:         return (MatrixPos){0, 4};   /* UNIT/PARA */
+        case SDL_SCANCODE_KP_4:         return (MatrixPos){1, 7};   /* ← */
+        case SDL_SCANCODE_KP_5:         return (MatrixPos){0, 7};
+        case SDL_SCANCODE_KP_6:         return (MatrixPos){0, 6};   /* → */
+        case SDL_SCANCODE_KP_7:         return (MatrixPos){1, 5};   /* LINE/EOL */
+        case SDL_SCANCODE_KP_8:         return (MatrixPos){1, 6};   /* ↑ */
+        case SDL_SCANCODE_KP_9:         return (MatrixPos){0, 5};   /* WORD/CHAR */
+        case SDL_SCANCODE_KP_PERIOD:    return (MatrixPos){10, 2};  /* CAN */
+        case SDL_SCANCODE_KP_DIVIDE:    return (MatrixPos){3, 6};   /* / */
+        case SDL_SCANCODE_KP_MULTIPLY:  return (MatrixPos){1, 1};   /* PTR */
+        case SDL_SCANCODE_KP_MINUS:     return (MatrixPos){10, 3};  /* [-] Clear */
+        case SDL_SCANCODE_KP_PLUS:      return (MatrixPos){2, 7};   /* [+] Set */
 
         /* Arrows */
         case SDL_SCANCODE_UP:           return (MatrixPos){1, 6};
@@ -98,14 +120,24 @@ static MatrixPos sdl_to_matrix(SDL_Scancode s) {
         case SDL_SCANCODE_LALT:
         case SDL_SCANCODE_RALT:         return (MatrixPos){10, 7};
 
-        /* PCW function-key block (F1=f1, F3=f3, F5=f5, F7=f7;
-         * F2/F4/F6/F8 are SHIFT+Fn on the real keyboard).
-         * F9..F12 are reserved for the host overlay/quit (handled in main.c). */
-        case SDL_SCANCODE_F1: return (MatrixPos){0, 2};
-        case SDL_SCANCODE_F3: return (MatrixPos){0, 0};
-        case SDL_SCANCODE_F5: return (MatrixPos){10, 0};
-        case SDL_SCANCODE_F7: return (MatrixPos){10, 4};
+        /* PCW function keys live behind Shift+F1..Shift+F8 — see
+         * kbd_handle below. Unshifted F1..F12 are reserved for the
+         * emulator's own shortcuts (overlay, screenshot, quit, …). */
 
+        default: return (MatrixPos){-1, -1};
+    }
+}
+
+/* Shift+F1..Shift+F8 → PCW f1..f8. Even indices (F1/F3/F5/F7) sit on
+ * their own matrix bit; odd indices (F2/F4/F6/F8) share that bit and
+ * pick up the "shift" half from the host Shift key the user is
+ * holding — that's how the real PCW spells f2/f4/f6/f8. */
+static MatrixPos pcw_fkey_pos(SDL_Scancode s) {
+    switch (s) {
+        case SDL_SCANCODE_F1: case SDL_SCANCODE_F2: return (MatrixPos){0, 2};
+        case SDL_SCANCODE_F3: case SDL_SCANCODE_F4: return (MatrixPos){0, 0};
+        case SDL_SCANCODE_F5: case SDL_SCANCODE_F6: return (MatrixPos){10, 0};
+        case SDL_SCANCODE_F7: case SDL_SCANCODE_F8: return (MatrixPos){10, 4};
         default: return (MatrixPos){-1, -1};
     }
 }
@@ -150,6 +182,24 @@ void kbd_release(Keyboard *k, int row, int bit) {
 }
 
 void kbd_handle(Keyboard *k, const SDL_KeyboardEvent *e) {
+    /* PCW f1..f8 are reached via Shift+F1..Shift+F8. On key-down we
+     * only press the matrix bit when Shift is actually held — otherwise
+     * F-keys are entirely the host's. On key-up we always release: if
+     * the user lets go of Shift before the F-key, the F-key UP event
+     * arrives with no Shift modifier, and we still need to clear the
+     * matrix bit we set during the DOWN. */
+    if (e->scancode >= SDL_SCANCODE_F1 && e->scancode <= SDL_SCANCODE_F8) {
+        MatrixPos fp = pcw_fkey_pos(e->scancode);
+        if (fp.row < 0) return;
+        if (e->down) {
+            if (!(e->mod & SDL_KMOD_SHIFT)) return;
+            kbd_press(k, fp.row, fp.bit);
+        } else {
+            kbd_release(k, fp.row, fp.bit);
+        }
+        return;
+    }
+
     MatrixPos p = sdl_to_matrix(e->scancode);
     if (p.row < 0) return;
     if (e->down) kbd_press  (k, p.row, p.bit);

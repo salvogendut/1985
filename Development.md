@@ -25,7 +25,7 @@ src/
   roller.c                   Roller-RAM bitmap decode (stub)
   fdc.c                      uPD765A (ported from 1984, ports 0x00/0x01)
   disk.c                     .dsk loader
-  printer.c                  Port 0xFC/0xFD stub
+  printer.c                  PCW printer protocol + PDF output sink
   snapshot.c                 .sna stub
 ```
 
@@ -50,7 +50,8 @@ checkout). Best for ASIC and FDC shape:
 **ZEsarUX** — César Hernández Bañó's multi-machine Z80 emulator
 (`zesarux-ZEsarUX-13.0/`). Cross-checked against for FDC IRQ delivery,
 printer port 0xFD return value, F4 lock bits, and expansion-port
-behaviour.
+behaviour. Joyce's `JoyceMatrix.cxx` is the reference for the
+dot-matrix command stream that 1985 renders to PDF.
 
 ## Build inside the container
 

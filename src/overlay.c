@@ -50,6 +50,14 @@ static bool ext_serial_available(const Config *cfg) {
     return cfg->model == PCW_MODEL_9512 || cfg->ext_sanpollo_backplane;
 }
 
+static void apply_pdf_printer(Overlay *ov) {
+    if (!ov->pcw) return;
+    printer_set_pdf_output_dir(&ov->pcw->printer, ov->cfg->ext_pdf_printer_dir);
+    printer_set_pdf_enabled(&ov->pcw->printer,
+                            ov->cfg->ext_pdf_printer
+                            && ov->cfg->ext_pdf_printer_dir[0]);
+}
+
 static const char *section_title(OvSection s) {
     switch (s) {
         case OV_GENERAL:    return "General";
@@ -85,7 +93,7 @@ static int row_count(const Overlay *ov, OvSection s) {
             if (ov->cfg->model == PCW_MODEL_8256) n++;
             return n;
         }
-        case OV_TINKER:     return ov->cfg->tinker ? 10 : 0;
+        case OV_TINKER:     return ov->cfg->tinker ? 11 : 0;
         default:            return 0;
     }
 }
@@ -131,8 +139,13 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
         case OV_EXTENSIONS:
             switch (ext_row_at(cfg, row)) {
                 case EXT_PRINTER:
-                    snprintf(label, lsz, "Printer");
-                    snprintf(val,   vsz, "(not implemented)");
+                    snprintf(label, lsz, "PDF printer");
+                    if (!cfg->ext_pdf_printer)
+                        snprintf(val, vsz, "no");
+                    else if (cfg->ext_pdf_printer_dir[0])
+                        snprintf(val, vsz, "yes: %s", cfg->ext_pdf_printer_dir);
+                    else
+                        snprintf(val, vsz, "yes: [choose folder]");
                     break;
                 case EXT_SECOND_DRIVE:
                     snprintf(label, lsz, "Second drive");
@@ -195,8 +208,9 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                     else
                         snprintf(val, vsz, "PTY");
                     break;
-                case 8: snprintf(label, lsz, "Load snapshot");  snprintf(val, vsz, "...");                                     break;
-                case 9: snprintf(label, lsz, "Version");        snprintf(val, vsz, "1985 v" "0.1.0");                          break;
+                case 8: snprintf(label, lsz, "Show keyboard layout"); snprintf(val, vsz, "...");                               break;
+                case 9: snprintf(label, lsz, "Load snapshot");  snprintf(val, vsz, "...");                                     break;
+                case 10: snprintf(label, lsz, "Version");       snprintf(val, vsz, "1985 v" "0.1.0");                          break;
             }
             break;
         default: break;
@@ -231,6 +245,16 @@ static void open_disk_dialog(Overlay *ov, int drive) {
     };
     SDL_ShowOpenFileDialog(overlay_file_callback, ov, NULL,
                            filters, 2, NULL, false);
+}
+
+static void open_printer_dir_dialog(Overlay *ov) {
+    ov->dialog_kind  = DIALOG_PRINT_DIR;
+    ov->dialog_drive = -1;
+    ov->dialog_ready = false;
+    const char *where = ov->cfg->ext_pdf_printer_dir[0]
+                      ? ov->cfg->ext_pdf_printer_dir
+                      : NULL;
+    SDL_ShowOpenFolderDialog(overlay_file_callback, ov, NULL, where, false);
 }
 
 static void eject_disk(Overlay *ov, int drive) {
@@ -326,6 +350,14 @@ static void activate(Overlay *ov) {
                     }
                     break;
                 case EXT_PRINTER:
+                    if (c->ext_pdf_printer) {
+                        c->ext_pdf_printer = false;
+                        apply_pdf_printer(ov);
+                        ov->dirty = true;
+                    } else {
+                        open_printer_dir_dialog(ov);
+                    }
+                    break;
                 case EXT_NONE:
                 default:
                     break;
@@ -360,8 +392,9 @@ static void activate(Overlay *ov) {
                         ov->dirty = true;
                     }
                     break;
-                case 8: ov->dialog_kind = DIALOG_SNAPSHOT_LOAD; break;
-                case 9: break;
+                case 8: ov->state = OV_STATE_KEYS; break;
+                case 9: ov->dialog_kind = DIALOG_SNAPSHOT_LOAD; break;
+                case 10: break;
             }
             break;
         default: break;
@@ -389,6 +422,7 @@ static void close_overlay(Overlay *ov, bool save) {
         config_save(ov->cfg);
         ov->dirty = false;
         if (need_cold_boot && ov->pcw) {
+            printer_shutdown(&ov->pcw->printer);
             pcw_cold_boot(ov->pcw, ov->cfg->model, ov->cfg->memory_kb);
             /* pcw_init zeroed the FDC — re-mount the disk images so
              * the machine boots from them just like at first launch. */
@@ -406,9 +440,11 @@ static void close_overlay(Overlay *ov, bool save) {
 
             bool dk_on = ov->cfg->ext_sanpollo_backplane && ov->cfg->ext_dktronics;
             aysound_init(&ov->pcw->ay, dk_on);
+            apply_pdf_printer(ov);
         }
     } else if (!save) {
         *ov->cfg = ov->saved;
+        apply_pdf_printer(ov);
     }
     ov->visible = false;
     ov->state   = OV_STATE_MENU;
@@ -434,6 +470,12 @@ bool overlay_handle_event(Overlay *ov, SDL_Event *ev) {
     if (ev->type == SDL_EVENT_QUIT) return false;
 
     if (ev->type != SDL_EVENT_KEY_DOWN) return true;
+
+    if (ov->state == OV_STATE_KEYS) {
+        /* Any key dismisses the help panel. */
+        ov->state = OV_STATE_MENU;
+        return true;
+    }
 
     if (ov->state == OV_STATE_CONFIRM) {
         if (ev->key.key == SDLK_RETURN || ev->key.key == SDLK_KP_ENTER
@@ -513,7 +555,7 @@ void overlay_render(Overlay *ov, SDL_Renderer *r) {
     int tx = ORIGIN_X;
     for (int s = 0; s < OV_SEC_COUNT; s++) {
         if (row_count(ov, (OvSection)s) == 0) continue;
-        bool active = (ov->section == s);
+        bool active = (ov->section == (OvSection)s);
         draw_text(r, tx, 12, section_title((OvSection)s),
                   active ? 255 : 180, active ? 255 : 180, active ? 0 : 180);
         tx += (int)strlen(section_title((OvSection)s)) * 8 + 16;
@@ -538,6 +580,59 @@ void overlay_render(Overlay *ov, SDL_Renderer *r) {
     if (ov->section == OV_MEDIA) {
         draw_text(r, ORIGIN_X, ORIGIN_Y + 4 * LINE_H,
                   "Enter: select DSK   Del: eject", 160, 160, 160);
+    }
+
+    /* Keyboard help — opened from Advanced ▸ "Show keyboard layout".
+     * Drawn on top of the dimmed window; any key returns to the menu. */
+    if (ov->state == OV_STATE_KEYS) {
+        static const struct { const char *pcw, *host; } rows[] = {
+            { "f1 .. f8",          "Shift + F1 .. F8" },
+            { "EXIT",              "Esc" },
+            { "STOP",              "`" },
+            { "EXTRA",             "Ctrl" },
+            { "ALT",               "Alt" },
+            { "COPY",              "Home" },
+            { "CUT",               "Insert" },
+            { "PASTE",             "PageUp" },
+            { "DOC / PAGE",        "PageDown" },
+            { "CAN",               "End  /  Keypad ." },
+            { "DEL\x1A",           "Delete" },
+            { "LINE / EOL",        "Keypad 7" },
+            { "WORD / CHAR",       "Keypad 9" },
+            { "FIND / EXCH",       "Keypad 1" },
+            { "UNIT / PARA",       "Keypad 3" },
+            { "RELAY",             "Keypad 0" },
+            { "[+]   (Set)",       "Keypad +" },
+            { "[-]   (Clear)",     "Keypad -" },
+            { "PTR",               "PrintScreen  /  Keypad *" },
+            { "Return",            "Enter  /  Keypad Enter" },
+        };
+        int n = (int)(sizeof(rows) / sizeof(rows[0]));
+
+        int ww = DISPLAY_LOGICAL_W;
+        int wh = DISPLAY_LOGICAL_H;
+        const int FONT_H = 8;
+        int box_w = 520;
+        int box_h = FONT_H + 12 + n * (FONT_H + 4) + 20;
+        float bx = (ww - box_w) / 2.0f;
+        float by = (wh - box_h) / 2.0f;
+
+        fill_rect(r, 0, 0, (float)ww, (float)wh, 0, 0, 0, 160);
+        fill_rect(r, bx, by, (float)box_w, (float)box_h, 20, 20, 50, 255);
+        draw_rect_outline(r, bx, by, (float)box_w, (float)box_h, 70, 90, 200);
+
+        const char *title = "PCW key                 Host key";
+        draw_text(r, (int)(bx + 16), (int)(by + 8), title, 255, 255, 100);
+
+        int row_y = (int)(by + 8 + FONT_H + 8);
+        for (int i = 0; i < n; i++) {
+            draw_text(r, (int)(bx + 16),  row_y, rows[i].pcw,  220, 220, 220);
+            draw_text(r, (int)(bx + 216), row_y, rows[i].host, 200, 200, 255);
+            row_y += FONT_H + 4;
+        }
+        draw_text(r, (int)(bx + 16), (int)(by + box_h - FONT_H - 6),
+                  "Press any key to return.", 140, 140, 140);
+        return;
     }
 
     /* Centered confirm dialog (matches 1984's modal). Drawn on top of
@@ -585,6 +680,13 @@ void overlay_tick(Overlay *ov) {
         }
         case DIALOG_SNAPSHOT_LOAD: snapshot_load(ov->pcw, ov->dialog_path); break;
         case DIALOG_SNAPSHOT_SAVE: snapshot_save(ov->pcw, ov->dialog_path); break;
+        case DIALOG_PRINT_DIR:
+            snprintf(ov->cfg->ext_pdf_printer_dir,
+                     sizeof(ov->cfg->ext_pdf_printer_dir), "%s", ov->dialog_path);
+            ov->cfg->ext_pdf_printer = true;
+            apply_pdf_printer(ov);
+            ov->dirty = true;
+            break;
         default: break;
     }
     ov->dialog_kind = DIALOG_NONE;
