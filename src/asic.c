@@ -112,8 +112,20 @@ void asic_write(Asic *a, u8 port, u8 val) {
                      * read from RAM. */
                     if (a->bootstrap) bootstrap_finish(a->bootstrap);
                     break;
-                case 0x02: a->fdc_irq_mode = 1; break;
-                case 0x03: a->fdc_irq_mode = 2; break;
+                case 0x02:
+                    /* Route FDC INTRQ to /NMI. On real hardware this
+                     * is a level-triggered routing -- if INTRQ is
+                     * currently high, /NMI fires immediately. Force
+                     * prev_fdc_irq=false so the next asic_poll sees
+                     * a rising edge if irq is high. */
+                    a->fdc_irq_mode = 1;
+                    a->prev_fdc_irq = false;
+                    break;
+                case 0x03:
+                    /* Route FDC INTRQ to /INT (maskable). Level. */
+                    a->fdc_irq_mode = 2;
+                    a->prev_fdc_irq = false;
+                    break;
                 case 0x04: a->fdc_irq_mode = 0; break;
                 case 0x05: fdc_set_terminal_count(a->fdc, true);  break;
                 case 0x06: fdc_set_terminal_count(a->fdc, false); break;

@@ -64,11 +64,17 @@ static void enter_command(Fdc *f) {
 static void enter_exec_read(Fdc *f) {
     f->phase = FDC_PHASE_EXEC_READ;
     f->msr   = MSR_RQM | MSR_DIO | MSR_NDM | MSR_BUSY;
+    /* uPD765A non-DMA mode (NDM=1, set by SPECIFY): INTRQ is asserted
+     * when each byte is ready for the host to read. The PCW BIOS uses
+     * NMI mode to handle these per-byte interrupts -- without per-byte
+     * INTRQ, BIOS hangs waiting for the NMI to fire. */
+    f->irq = true;
 }
 
 static void enter_exec_write(Fdc *f) {
     f->phase = FDC_PHASE_EXEC_WRITE;
     f->msr   = MSR_RQM | MSR_NDM | MSR_BUSY;
+    f->irq = true;
 }
 
 static void trace_result(Fdc *f);
@@ -494,7 +500,11 @@ u8 fdc_read(Fdc *f, u8 port) {
             u8 b = (f->exec_pos < f->exec_len) ? f->exec_buf[f->exec_pos++] : 0xFF;
             if (f->trace)
                 fprintf(stderr, "fdc data phase=EXEC_READ -> %02X\n", b);
+            /* Drop INTRQ on read; re-assert if more bytes pending.
+             * In non-DMA mode the FDC raises INTRQ for each byte. */
+            f->irq = false;
             if (f->exec_pos >= f->exec_len) finish_execution(f);
+            else f->irq = true;
             return b;
         }
         default:
@@ -536,8 +546,10 @@ void fdc_write(Fdc *f, u8 port, u8 val) {
         case FDC_PHASE_EXEC_WRITE: {
             if (f->exec_pos < FDC_EXEC_BUF_LEN)
                 f->exec_buf[f->exec_pos++] = val;
+            f->irq = false;
             if (f->exec_pos >= f->exec_len)
                 finish_execution(f);
+            else f->irq = true;
             break;
         }
         default:
