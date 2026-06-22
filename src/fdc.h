@@ -51,6 +51,11 @@ typedef struct Fdc {
                              * the ASIC can detect per-byte EXEC pulses
                              * that happen within a single z80_step (drop
                              * then re-assert in the same fdc_read call). */
+    int  irq_arm_ticks;     /* If >0, asic_poll decrements; when reaches
+                             * 0 we set irq=true + bump pulse_count.
+                             * Models lib765's SHORT_TIMEOUT delay (1000
+                             * cycles) so the host has time to set up
+                             * NMI/wait before IRQ fires. */
 
     FdcPhase phase;
     u8       msr;           /* main status register, recomputed per phase */

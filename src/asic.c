@@ -59,6 +59,15 @@ int asic_poll_fdc_irq(Asic *a) {
      *   bumped on each rising edge so per-byte EXEC pulses (drop +
      *   re-assert in the same z80_step) are still detectable.
      */
+    /* Decrement FDC's irq arm timer. When it reaches 0, raise INTRQ
+     * and bump pulse_count. This models the real FDC's command-to-
+     * IRQ delay so the host has time to arm its NMI/wait. */
+    if (a->fdc && a->fdc->irq_arm_ticks > 0) {
+        if (--a->fdc->irq_arm_ticks == 0) {
+            a->fdc->irq = true;
+            a->fdc->irq_pulse_count++;
+        }
+    }
     bool now = a->fdc && a->fdc->irq;
     u32 pulse = a->fdc ? a->fdc->irq_pulse_count : 0;
     int  req = 0;

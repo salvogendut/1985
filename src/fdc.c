@@ -61,22 +61,26 @@ static void enter_command(Fdc *f) {
     f->msr   = MSR_RQM | MSR_BUSY;
 }
 
+/* Approximate lib765 SHORT_TIMEOUT — host should have time to arm its
+ * NMI wait before IRQ fires. Counted in asic_poll calls, which run
+ * once per z80_step (~ one Z80 instruction). 100 polls ≈ 100 insts ≈
+ * 400 cycles ≈ 100us at 4 MHz; lib765 uses 1000 machine cycles which
+ * corresponds to ~250 our polls if z80 avgs ~4 cycles per inst. */
+#define FDC_IRQ_ARM_DELAY  64
+
 static void enter_exec_read(Fdc *f) {
     f->phase = FDC_PHASE_EXEC_READ;
     f->msr   = MSR_RQM | MSR_DIO | MSR_NDM | MSR_BUSY;
-    /* uPD765A non-DMA mode (NDM=1, set by SPECIFY): INTRQ is asserted
-     * when each byte is ready for the host to read. The PCW BIOS uses
-     * NMI mode to handle these per-byte interrupts -- without per-byte
-     * INTRQ, BIOS hangs waiting for the NMI to fire. */
-    f->irq = true;
-    f->irq_pulse_count++;
+    /* INTRQ rises after a short delay so the host has time to set
+     * up its NMI/wait. asic_poll decrements irq_arm_ticks and sets
+     * irq=true + bumps pulse_count when it reaches 0. */
+    f->irq_arm_ticks = FDC_IRQ_ARM_DELAY;
 }
 
 static void enter_exec_write(Fdc *f) {
     f->phase = FDC_PHASE_EXEC_WRITE;
     f->msr   = MSR_RQM | MSR_NDM | MSR_BUSY;
-    f->irq = true;
-    f->irq_pulse_count++;
+    f->irq_arm_ticks = FDC_IRQ_ARM_DELAY;
 }
 
 static void trace_result(Fdc *f);
@@ -85,13 +89,14 @@ static void enter_result(Fdc *f) {
     f->phase = FDC_PHASE_RESULT;
     f->msr   = MSR_RQM | MSR_DIO | MSR_BUSY;
     f->result_pos = 0;
-    /* Keep f->irq HIGH (it should already be true from EXEC entry).
-     * Don't bump pulse_count here -- if we enter RESULT from inside
-     * an NMI ISR that was draining the EXEC buffer, bumping would
-     * cause re-entrant NMI inside the ISR. Real FDC INTRQ stays
-     * asserted through the EXEC->RESULT transition and only drops
-     * when the host reads the first RESULT byte. */
-    f->irq = true;
+    /* If we came from EXEC (where irq was already armed/asserted) the
+     * line stays high through the transition; the host drops it on
+     * first RESULT byte read. If we came directly (e.g. simple
+     * commands like SENSE INT), arm the delay so the host has time to
+     * set up its wait. */
+    if (!f->irq && f->irq_arm_ticks == 0) {
+        f->irq_arm_ticks = FDC_IRQ_ARM_DELAY;
+    }
     trace_result(f);
 }
 
@@ -144,8 +149,10 @@ static void cmd_recalibrate(Fdc *f) {
     f->st0 = (u8)(ST0_IC_NORMAL | ST0_SE | (f->cur_unit & ST0_US_MASK));
     if (!f->drive[f->cur_unit].inserted) f->st0 |= ST0_NR;
     f->int_pending = true;
-    f->irq = true;
-    f->irq_pulse_count++;
+    /* SEEK end interrupt fires after a delay (real seek takes time).
+     * lib765 uses LONGER_TIMEOUT here, but SHORT works for our 0-step
+     * disk model. */
+    f->irq_arm_ticks = FDC_IRQ_ARM_DELAY;
     enter_idle(f);
 }
 
@@ -163,8 +170,7 @@ static void cmd_seek(Fdc *f) {
                | (f->cur_unit & ST0_US_MASK));
     if (!f->drive[f->cur_unit].inserted) f->st0 |= ST0_NR;
     f->int_pending = true;
-    f->irq = true;
-    f->irq_pulse_count++;
+    f->irq_arm_ticks = FDC_IRQ_ARM_DELAY;
     enter_idle(f);
 }
 
