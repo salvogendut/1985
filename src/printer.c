@@ -288,13 +288,22 @@ u8 printer_read(Printer *p, u8 port) {
 
     if (port == 0xFC) return 0xF8;     /* no controller error */
 
-    /* Return just 0x40 (READY) like ZEsarUX. The richer Joyce-style
-     * 0xCC (READY|FEEDER|PAPER|BAIL) causes 1-01 to hang in our
-     * emulator -- something about how BDOS interprets the bail/paper
-     * bits triggers a path we don't fully model. Until we model the
-     * printer MCU more accurately, the minimal 0x40 unblocks the
-     * disks that work in ZEsarUX. */
-    return 0x40;
+    /* Port 0xFDh status bits (Joyce JoyceMatrix.hxx):
+     *   0x80 BAIL  bail bar in
+     *   0x40 READY controller ready
+     *   0x20 NOPRINTER
+     *   0x10 LCOL  head past left column
+     *   0x08 FEEDER  sheet feeder present
+     *   0x04 PAPER   paper present
+     *   0x02 BUSY
+     *   0x01 FAILED
+     * CP/M+'s LST: handler reports "LPT not ready" when PAPER is
+     * clear, so a bare 0x40 wasn't enough — BIOS thinks the printer
+     * is out of paper. We need at minimum READY|FEEDER|PAPER. */
+    u8 v = 0x40 | 0x08 | 0x04;          /* READY | FEEDER | PAPER */
+    if (p->bail_in)          v |= 0x80; /* BAIL */
+    if (p->x > 0.0f)         v |= 0x10; /* LCOL */
+    return v;
 }
 
 void printer_write(Printer *p, u8 port, u8 val) {
