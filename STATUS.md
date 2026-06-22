@@ -1,6 +1,62 @@
 # PCW Boot Investigation Status (issue #12 — `ccp-load` branch)
 
-## Latest Handoff Notes — 2026-06-22
+## ZEsarUX REFERENCE BOOT CONFIRMED — 2026-06-22 morning
+
+ZEsarUX 13.0 (built from /var/home/salvogendut/Dev/zesarux-ZEsarUX-13.0) boots
+`CPM3 1-01.dsk` to `A>` AND runs PROFILE.SUB successfully (which PIPs basic.com,
+dir.com, erase.com, paper.com, pip.com, rename.com, show.com, submit.com, type.com
+to drive M:). Visible in the X11 window. So:
+- Disk image is sane.
+- PCW8256 emulation IS feasible.
+- Our hang on the same image is a real emulator bug.
+
+Reference materials saved:
+- `tools/zesarux_phys_booted.bin` — 256K physical RAM dump of ZEsarUX at A> after
+  PROFILE.SUB completed.
+- `tools/extract_iotrace.awk` — awk extractor for ZEsarUX cpu-transaction-log to
+  reduce to port-IO sequence for diffing against ours.
+
+### How to launch ZEsarUX for differential debugging
+```
+cd /var/home/salvogendut/Dev/zesarux-ZEsarUX-13.0/src
+DISPLAY=:0 ./zesarux --noconfigfile --machine PCW8256 --vo xwindows --ao null \
+    --enable-dsk --dsk-file '/var/home/salvogendut/Downloads/CPM Boot/CPM3 1-01.dsk' \
+    --enable-remoteprotocol --remoteprotocol-port 10000 --quickexit &
+
+# Drive via ZRCP:
+echo "get-registers" | ncat localhost 10000
+echo "get-io-ports" | ncat localhost 10000           # PD765 FDC state + last cmd
+echo "save-binary /tmp/x.bin 0 262144" | ncat ...    # full 256K RAM
+echo "cpu-transaction-log enabled yes / logfile /tmp/zsx_full.log" | ...
+```
+
+### Cold-boot I/O counts from ZEsarUX (20s trace, opcode-level)
+- OUT F0 (slot 0 bank): **6220** writes (vs ours: ~48)
+- OUT F1: 27641
+- OUT F2: 28595
+- OUT F3: 2
+- OUT F7: 234
+- OUT F8: 1158
+- OUT 01 (FDC data): 2484
+- IN port 00 (FDC MSR): 127512 polls
+- IN port 01 (FDC data): 3282 reads
+- IN F4: 7137
+- IN F8: 21804
+- IN FD: 13543
+
+The F0 ratio is the most telling: ZEsarUX does **~130x more** slot-0 bank switches
+than we do. That's because the BIOS does CALL-into-TPA-bank / RETURN trampolines
+constantly for CCP execution. We never get past the first few because BDOS f=0F
+hangs.
+
+### Strategy for the next session
+1. Capture ZEsarUX cpu-transaction-log with registers (logfile /tmp/zsx_full.log).
+2. Find the BDOS f=0F (OPEN PROFILE.SUB) call site in the trace.
+3. Extract the SEQUENCE of FDC commands and bank switches around that call.
+4. Reproduce the same instrumented run in our emulator and diff event-by-event.
+5. First divergent event = the bug location.
+
+## Latest Handoff Notes — 2026-06-22 (early morning, other AI)
 
 This section supersedes several older/conflicting notes below.
 
