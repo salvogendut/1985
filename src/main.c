@@ -394,7 +394,7 @@ int main(int argc, char **argv) {
         save_sna_frame = parse_n_path(cli.save_sna_arg, save_sna_path, sizeof(save_sna_path));
 
     if (cfg.debug_traces) {
-        printf("1985 — Amstrad PCW 8256 emulator (git %s)\n", PROG_GIT_COMMIT);
+        printf("1985 — Amstrad PCW 8256 / 8512 / 9512 emulator (git %s)\n", PROG_GIT_COMMIT);
         printf("config: %s\n", cfg.path);
         printf("F9 = options, F11 = fullscreen, F12 = quit\n");
     }

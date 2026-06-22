@@ -167,7 +167,7 @@ int config_save(const Config *c) {
     FILE *f = fopen(c->path, "w");
     if (!f) { perror("config_save"); return -1; }
 
-    fprintf(f, "# 1985 — Amstrad PCW 8256 emulator\n");
+    fprintf(f, "# 1985 — Amstrad PCW 8256 / 8512 / 9512 emulator\n");
     fprintf(f, "# Edited automatically by the F9 overlay.\n\n");
 
     fprintf(f, "[machine]\n");

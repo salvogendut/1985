@@ -47,7 +47,12 @@ int display_init(Display *d, const Config *cfg) {
     SDL_WindowFlags wf = SDL_WINDOW_RESIZABLE;
     if (d->fullscreen) wf |= SDL_WINDOW_FULLSCREEN;
 
-    d->win = SDL_CreateWindow("1985 — Amstrad PCW 8256", win_w, win_h, wf);
+    /* Title reflects the active model — 1985 supports 8256/8512/9512. */
+    const char *title =
+        (cfg->model == PCW_MODEL_8512) ? "1985 — Amstrad PCW 8512"
+      : (cfg->model == PCW_MODEL_9512) ? "1985 — Amstrad PCW 9512"
+      : "1985 — Amstrad PCW 8256";
+    d->win = SDL_CreateWindow(title, win_w, win_h, wf);
     if (!d->win) {
         fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
         return -1;

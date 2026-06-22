@@ -1,4 +1,4 @@
-# 1985 — Amstrad PCW 8256 emulator
+# 1985 — Amstrad PCW 8256 / 8512 / 9512 emulator
 
 ![1985](1985.png)
 
