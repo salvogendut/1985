@@ -18,6 +18,7 @@
 typedef enum {
     LED_FDC_A = 0,
     LED_FDC_B,
+    LED_SERIAL,     /* Split LED: left half = RX (red), right half = TX (green). */
     LED_COUNT
 } LedId;
 
@@ -26,6 +27,9 @@ void leds_set_enabled(LedId id, bool enabled);
 
 /* Signal one frame of activity for the given LED. */
 void leds_ping(LedId id);
+
+/* Signal RX (tx=false) or TX (tx=true) activity on a split LED. */
+void leds_ping_split(LedId id, bool tx);
 
 /* Render the LED bar across (x,y,w,h). */
 void leds_render(SDL_Renderer *r, int x, int y, int w, int h);

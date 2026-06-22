@@ -6,6 +6,7 @@ dist_man1_MANS = 1985.1
 	src/asic.c \
 	src/bootstrap.c \
 	src/config.c \
+	src/cps.c \
 	src/crtc.c \
 	src/disk.c \
 	src/display.c \
@@ -31,6 +32,7 @@ noinst_HEADERS = \
 	src/bootstrap.h \
 	src/compat_win.h \
 	src/config.h \
+	src/cps.h \
 	src/crtc.h \
 	src/disk.h \
 	src/display.h \

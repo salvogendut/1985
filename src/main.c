@@ -332,13 +332,18 @@ int main(int argc, char **argv) {
     if (cfg.drive_b[0]) disk_load(&pcw.fdc.drive[1], cfg.drive_b);
 
     /* Serial port — opens a PTY or TCP listener when ext_serial is on
-     * AND the model / backplane state actually exposes it. */
+     * AND the model / backplane state actually exposes it. The CPS8256
+     * I/O port window (0xE0-0xE8) is hooked on the same gate; the
+     * split-LED in the bar tracks live RX/TX traffic. */
     {
         bool serial_avail = (cfg.model == PCW_MODEL_9512) || cfg.ext_sanpollo_backplane;
+        bool serial_on    = cfg.ext_serial && serial_avail;
         serial_init(&pcw.serial,
-                    cfg.ext_serial && serial_avail,
+                    serial_on,
                     cfg.ext_serial_backend,
                     cfg.ext_serial_tcp_port);
+        cps_set_present(&pcw.cps, serial_on);
+        leds_set_enabled(LED_SERIAL, serial_on);
     }
 
     if (cli.load_sna) snapshot_load(&pcw, cli.load_sna);

@@ -9,6 +9,7 @@
 #include "crtc.h"
 #include "printer.h"
 #include "serial.h"
+#include "cps.h"
 
 /*
  * Top-level Amstrad PCW machine. Owns the Z80, all peripherals, and
@@ -29,6 +30,7 @@ typedef struct PCW {
     Crtc       crtc;
     Printer    printer;
     Serial     serial;
+    Cps        cps;
 
     PcwModel   model;
     int        memory_kb;

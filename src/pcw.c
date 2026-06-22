@@ -97,14 +97,23 @@ static u8 bus_io_read(void *ctx, u16 port) {
         return v;
     }
 
+    /* CPS8256 SIO/Centronics add-on: DART A/B (E0-E3), 8253 (E4-E7),
+     * Centronics data (E8). Active only when the user has plugged in
+     * the backplane (or on the 9512 where it's built in). */
+    if (lo >= 0xE0 && lo <= 0xE8 && pcw->cps.present) {
+        u8 v = cps_read(&pcw->cps, lo);
+        if (pcw->trace_io)
+            fprintf(stderr, "        -> %02X (cps)\n", v);
+        return v;
+    }
+
     /* Expansion port range 0x080-0x0EF. MAME pcw.cpp:580-625 returns
      * specific values for a few ports the firmware probes:
      *   0x85 -> 0xFE   0x87 -> 0xFF
      *   0xE1, 0xE3 -> 0x7F   (bit 7 clear => no expansion present)
      * Other ports in this range default to 0xFF (floating bus / no
-     * peripheral). PCW BIOS reads E1/E3 during expansion-device probe;
-     * returning 0xFF (bit 7 set) was making the firmware think an
-     * expansion device WAS present and triggering its init path. */
+     * peripheral). When the CPS8256 isn't present, returning 0x7F on
+     * E1/E3 tells the firmware's probe "no expansion here". */
     if (lo >= 0x80 && lo <= 0xEF) {
         u8 v;
         switch (lo) {
@@ -151,6 +160,10 @@ static void bus_io_write(void *ctx, u16 port, u8 val) {
         printer_write(&pcw->printer, lo, val);
         return;
     }
+    if (lo >= 0xE0 && lo <= 0xE8 && pcw->cps.present) {
+        cps_write(&pcw->cps, lo, val);
+        return;
+    }
 }
 
 void pcw_init(PCW *pcw, PcwModel model, int memory_kb) {
@@ -175,6 +188,11 @@ void pcw_init(PCW *pcw, PcwModel model, int memory_kb) {
     pcw->serial.pty_master = -1;
     pcw->serial.tcp_listen = -1;
     pcw->serial.tcp_client = -1;
+
+    /* CPS8256 SIO/Centronics. Present-state is set by main/overlay
+     * after init based on model + backplane. Channel A reads/writes
+     * route through pcw->serial. */
+    cps_init(&pcw->cps, false, &pcw->serial);
 
     pcw->bus.mem_read  = bus_mem_read;
     pcw->bus.mem_write = bus_mem_write;
