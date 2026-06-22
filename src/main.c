@@ -331,6 +331,16 @@ int main(int argc, char **argv) {
     if (cfg.drive_a[0]) disk_load(&pcw.fdc.drive[0], cfg.drive_a);
     if (cfg.drive_b[0]) disk_load(&pcw.fdc.drive[1], cfg.drive_b);
 
+    /* Serial port — opens a PTY or TCP listener when ext_serial is on
+     * AND the model / backplane state actually exposes it. */
+    {
+        bool serial_avail = (cfg.model == PCW_MODEL_9512) || cfg.ext_sanpollo_backplane;
+        serial_init(&pcw.serial,
+                    cfg.ext_serial && serial_avail,
+                    cfg.ext_serial_backend,
+                    cfg.ext_serial_tcp_port);
+    }
+
     if (cli.load_sna) snapshot_load(&pcw, cli.load_sna);
     if (cli.boot_ems && load_raw_image(&pcw, cli.boot_ems, 0) < 0) return 1;
 

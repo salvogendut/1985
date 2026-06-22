@@ -170,6 +170,11 @@ void pcw_init(PCW *pcw, PcwModel model, int memory_kb) {
     crtc_init   (&pcw->crtc);
     printer_init(&pcw->printer);
     asic_init   (&pcw->asic, &pcw->boot, &pcw->fdc);
+    /* Backend lifecycle is unconditional; the actual pty/tcp setup
+     * is wired by main/overlay based on the live config. */
+    pcw->serial.pty_master = -1;
+    pcw->serial.tcp_listen = -1;
+    pcw->serial.tcp_client = -1;
 
     pcw->bus.mem_read  = bus_mem_read;
     pcw->bus.mem_write = bus_mem_write;
@@ -209,6 +214,10 @@ void pcw_reset(PCW *pcw) {
 #define CYCLES_PER_TICK   (CYCLES_PER_FRAME / 6)
 
 void pcw_frame(PCW *pcw) {
+    /* Drain the serial backend(s) once per emulated frame — same
+     * cadence 1984 uses for USIfAC. */
+    serial_poll(&pcw->serial);
+
     int cycles = 0;
     int next_tick = CYCLES_PER_TICK;
 
