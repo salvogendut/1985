@@ -167,7 +167,11 @@ static void printer_check_end_form(Printer *p) {
 }
 
 static void printer_dot(Printer *p, float xf, float yf) {
-    if (xf < 0.0f || xf >= PAGE_W_360 || yf < 0.0f || yf >= MAX_FORM_H_360)
+    /* PDF surface is PAGE_W_360 × PAGE_H_360; Cairo silently clips
+     * anything outside, so skip dots in the bottom margin between
+     * PAGE_H_360 and MAX_FORM_H_360 (the head can move that low but
+     * the form feeds before those dots would actually mark paper). */
+    if (xf < 0.0f || xf >= PAGE_W_360 || yf < 0.0f || yf >= PAGE_H_360)
         return;
     if (!printer_pdf_ensure_page(p)) return;
 
@@ -240,6 +244,12 @@ static void printer_obey_matrix_command(Printer *p, u8 port) {
             if ((port & 0xFF) == 0xFC)
                 return;
             break;
+        case 0xC0:
+            /* End-of-sequence sentinel — no-op in NORMAL mode. Joyce
+             * logs it as "unknown" but real ROM code emits 0xC0 0x00
+             * as the trailer after every print burst, so swallow it
+             * silently to keep diagnostic builds quiet. */
+            return;
         case 0xA4:
             p->y += cmd1;
             printer_check_end_form(p);
