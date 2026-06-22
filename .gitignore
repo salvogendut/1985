@@ -26,9 +26,10 @@ roms/*
 /1985
 /autom4te.cache/
 
-# Runtime screenshots
+# Runtime screenshots and F6 captures
 1985_*.ppm
 1985-*.ppm
+1985-*.gif
 
 # Flatpak build output
 /flatpak-repo/

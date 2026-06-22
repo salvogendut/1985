@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "config.h"
 #include "display.h"
@@ -347,9 +348,12 @@ int main(int argc, char **argv) {
     bool auto_space_down = false;
 
     GifCap *gc = NULL;
+    int gc_skip = 0;   /* halve to 25 fps for F6-triggered captures */
     if (cli.gif_out) {
+        /* PCW framebuffer is 720x256 non-square pixels; stretch to
+         * 720x540 for a 4:3 GIF, matching 1984's output. */
         gc = gifcap_open(cli.gif_out, DISPLAY_W, DISPLAY_H,
-                         DISPLAY_W, DISPLAY_H, 2);
+                         DISPLAY_W, DISPLAY_W * 3 / 4, 4);
         if (!gc) fprintf(stderr, "gif-out: failed to open %s\n", cli.gif_out);
     }
 
@@ -390,6 +394,37 @@ int main(int argc, char **argv) {
                             break;
                         }
                         case SDLK_F5: pcw_reset(&pcw); break;
+                        case SDLK_F6: {
+                            /* Toggle GIF capture. Auto-name in CWD on start;
+                             * finalise and report frame count on stop. */
+                            if (gc) {
+                                int n = gifcap_frame_count(gc);
+                                gifcap_close(gc);
+                                gc = NULL;
+                                if (cfg.debug_traces)
+                                    fprintf(stderr, "[videocap] GIF stopped (%d frames)\n", n);
+                            } else {
+                                char path[256];
+                                time_t t = time(NULL);
+                                struct tm *lt = localtime(&t);
+                                if (lt)
+                                    strftime(path, sizeof(path),
+                                             "1985-%Y%m%d-%H%M%S.gif", lt);
+                                else
+                                    snprintf(path, sizeof(path), "1985-capture.gif");
+                                /* 4 cs = 25 fps; halve frame rate to keep size manageable. */
+                                gc = gifcap_open(path, DISPLAY_W, DISPLAY_H,
+                                                 DISPLAY_W, DISPLAY_W * 3 / 4, 4);
+                                if (!gc) {
+                                    fprintf(stderr, "[videocap] GIF open failed for '%s'\n", path);
+                                } else {
+                                    gc_skip = 0;
+                                    if (cfg.debug_traces)
+                                        fprintf(stderr, "[videocap] recording to %s\n", path);
+                                }
+                            }
+                            break;
+                        }
                         case SDLK_F11: display_toggle_fullscreen(&disp); break;
                         case SDLK_F12: running = false; break;
                         default:
@@ -498,7 +533,10 @@ int main(int argc, char **argv) {
 
         overlay_render(&ov, disp.renderer);
 
-        if (gc) gifcap_frame(gc, disp.fb);
+        if (gc) {
+            if ((gc_skip ^= 1) == 0)
+                gifcap_frame(gc, disp.fb);
+        }
 
         if (frame == screenshot_frame) {
             display_save_ppm(&disp, screenshot_path);
