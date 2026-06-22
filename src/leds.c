@@ -11,9 +11,10 @@ typedef struct {
  * FDC LEDs and gives a clear bright/dim contrast. Serial uses a split
  * RX(red) / TX(green) palette; see palette_serial_{rx,tx} below. */
 static const LedPalette palette[LED_COUNT] = {
-    [LED_FDC_A]  = { 18, 70, 18,   80, 255,  80 },
-    [LED_FDC_B]  = { 18, 70, 18,   80, 255,  80 },
-    [LED_SERIAL] = { 0 },   /* split — entries below */
+    [LED_FDC_A]   = { 18, 70, 18,   80, 255,  80 },
+    [LED_FDC_B]   = { 18, 70, 18,   80, 255,  80 },
+    [LED_PRINTER] = { 60, 30,  0,  255, 140,  0 },
+    [LED_SERIAL]  = { 0 },   /* split — entries below */
 };
 
 static const LedPalette palette_serial_rx = { 70, 18, 18,  255,  80,  80 };

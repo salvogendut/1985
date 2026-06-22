@@ -1,4 +1,5 @@
 #include "printer.h"
+#include "leds.h"
 
 #include <cairo.h>
 #include <cairo-pdf.h>
@@ -189,6 +190,7 @@ static void printer_check_end_form(Printer *p) {
 
 static void printer_mark_active(Printer *p) {
     p->idle_countdown = IDLE_FRAMES_TO_FINALISE;
+    leds_ping(LED_PRINTER);
 }
 
 void printer_tick(Printer *p) {
@@ -347,6 +349,11 @@ u8 printer_read(Printer *p, u8 port) {
 void printer_write(Printer *p, u8 port, u8 val) {
     if (!p->connected) return;
 
+    /* Every byte the guest writes counts as activity for the front-
+     * panel LED, even if PDF capture is off and the command goes
+     * through the decoder without drawing anything. */
+    leds_ping(LED_PRINTER);
+
     p->cmd[p->cmd_pos++] = val;
     if (p->cmd_pos < 2) return;
     p->cmd_pos = 0;
@@ -364,7 +371,9 @@ static void printer_text_linefeed(Printer *p) {
 }
 
 void printer_write_centronics(Printer *p, u8 val) {
-    if (!p || !p->pdf_enabled) return;
+    if (!p) return;
+    leds_ping(LED_PRINTER);
+    if (!p->pdf_enabled) return;
 
     if (p->text_esc_skip > 0) {
         p->text_esc_skip--;
