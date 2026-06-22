@@ -19,11 +19,9 @@
  *                             bits 3-0 = block to WRITE to.
  *                             Only blocks 0-15 (first 128 KB) reachable.
  *
- * Port 0xF4 (write) is a per-slot lock register (Seasip Joyce hardware
- * PDF §3.2): bit (slot+4) high means reads from that slot come from
- * the write-bank instead of the read-bank. (In extended mode this is
- * a no-op because read-bank == write-bank, but firmware sets it
- * defensively.)
+ * Port 0xF4 (write) is the bank-force register: bits 4-7 select which
+ * 16 KB slots should force their read bank to match the write bank when
+ * a bank register is programmed in CPC-style mode.
  *
  * At reset, before the boot program has finished, mem_read() returns
  * bytes from the bootstrap stream (see bootstrap.c) regardless of
@@ -51,7 +49,7 @@ typedef struct Mem {
     u8  ram[MEM_SIZE];
     u8  read_bank [4];                   /* block selected for reads in each slot */
     u8  write_bank[4];                   /* block selected for writes in each slot */
-    u8  lock;                            /* port F4 bits 4-7 = lock per slot 0..3 */
+    u8  bank_force;                      /* port F4 bits 4-7 = force read bank == write bank */
     struct Bootstrap *bootstrap;         /* non-NULL while reset stream is active */
     struct Keyboard  *kbd;               /* live matrix overlay for block 3 reads */
 } Mem;
@@ -62,7 +60,7 @@ void mem_reset(Mem *m);
 /* Bank select via OUT (port), val for port in 0xF0..0xF3. */
 void mem_bank_write(Mem *m, u8 port, u8 val);
 
-/* Per-slot read/write lock register, written via OUT (F4), val. */
+/* Bank-force register, written via OUT (F4), val. */
 void mem_set_lock(Mem *m, u8 val);
 
 u8   mem_read (Mem *m, u16 addr);

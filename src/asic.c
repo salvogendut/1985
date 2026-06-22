@@ -47,18 +47,48 @@ bool asic_timer_tick(Asic *a) {
 }
 
 int asic_poll_fdc_irq(Asic *a) {
+    /* Two delivery modes:
+     * - IRQ mode (fdc_irq_mode == 2): LEVEL-triggered. Re-assert
+     *   pending_irq every step while fdc->irq is high. Z80 accepts
+     *   only when iff1 == 1. Matches MAME pcw.cpp:153-176 and the
+     *   FD84/FDA8 coroutine yield pattern.
+     * - NMI mode (fdc_irq_mode == 1): EDGE-triggered via the FDC's
+     *   irq_pulse_count counter. NMI accept is unconditional (not
+     *   gated on iff1), so a level-triggered NMI would re-fire on
+     *   every instruction inside the NMI handler. We use a counter
+     *   bumped on each rising edge so per-byte EXEC pulses (drop +
+     *   re-assert in the same z80_step) are still detectable.
+     */
+    /* Decrement FDC's irq arm timer. When it reaches 0, raise INTRQ
+     * and bump pulse_count. This models the real FDC's command-to-
+     * IRQ delay so the host has time to arm its NMI/wait. */
+    if (a->fdc && a->fdc->irq_arm_ticks > 0) {
+        if (--a->fdc->irq_arm_ticks == 0) {
+            a->fdc->irq = true;
+            a->fdc->irq_pulse_count++;
+        }
+    }
     bool now = a->fdc && a->fdc->irq;
+    u32 pulse = a->fdc ? a->fdc->irq_pulse_count : 0;
     int  req = 0;
-    if (now && !a->prev_fdc_irq && a->fdc_irq_mode != 0)
-        req = a->fdc_irq_mode;          /* 1 = NMI, 2 = IRQ */
+    if (a->fdc_irq_mode == 2 && now) {
+        req = 2;                               /* IRQ: level */
+    } else if (a->fdc_irq_mode == 1 && pulse != a->last_irq_pulse) {
+        req = 1;                               /* NMI: per-pulse edge */
+    }
     a->prev_fdc_irq = now;
+    a->last_irq_pulse = pulse;
     return req;
 }
 
 static u8 sys_status(const Asic *a) {
-    u8 v = a->interrupt_counter & 0x0F;
-    if (a->flyback)            v |= 0x40;
-    if (a->fdc && a->fdc->irq) v |= 0x20;
+    /* MAME pcw.cpp:196-206 + Joyce JoyceAsic.cxx:89-93: bit 5 is a LIVE
+     * mirror of the FDC INTRQ line, NOT a sticky latch. The host clears
+     * it implicitly by draining the FDC result phase (which causes the
+     * FDC to drop its IRQ line). */
+    u8 v = (a->interrupt_counter & 0x0F);
+    if (a->flyback)                       v |= 0x40;
+    if (a->fdc && a->fdc->irq)            v |= 0x20;
     return v;
 }
 
@@ -95,8 +125,20 @@ void asic_write(Asic *a, u8 port, u8 val) {
                      * read from RAM. */
                     if (a->bootstrap) bootstrap_finish(a->bootstrap);
                     break;
-                case 0x02: a->fdc_irq_mode = 1; break;
-                case 0x03: a->fdc_irq_mode = 2; break;
+                case 0x02:
+                    /* Route FDC INTRQ to /NMI. On real hardware this
+                     * is a level-triggered routing -- if INTRQ is
+                     * currently high, /NMI fires immediately. Force
+                     * prev_fdc_irq=false so the next asic_poll sees
+                     * a rising edge if irq is high. */
+                    a->fdc_irq_mode = 1;
+                    a->prev_fdc_irq = false;
+                    break;
+                case 0x03:
+                    /* Route FDC INTRQ to /INT (maskable). Level. */
+                    a->fdc_irq_mode = 2;
+                    a->prev_fdc_irq = false;
+                    break;
                 case 0x04: a->fdc_irq_mode = 0; break;
                 case 0x05: fdc_set_terminal_count(a->fdc, true);  break;
                 case 0x06: fdc_set_terminal_count(a->fdc, false); break;

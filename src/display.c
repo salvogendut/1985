@@ -116,13 +116,22 @@ void display_toggle_fullscreen(Display *d) {
 }
 
 int display_save_ppm(Display *d, const char *path) {
+    /* PCW framebuffer is 720x256 (W:H = 2.81:1) but the real PCW monitor
+     * is 4:3, so each pixel is roughly twice as tall as wide. Stretch
+     * the saved PPM to 720x540 (4:3) using nearest-neighbour line
+     * replication so the screenshot has the correct aspect ratio. */
+    enum { OUT_W = DISPLAY_W, OUT_H = (DISPLAY_W * 3) / 4 };  /* 720x540 */
     FILE *f = fopen(path, "wb");
     if (!f) { perror("display_save_ppm"); return -1; }
-    fprintf(f, "P6\n%d %d\n255\n", DISPLAY_W, DISPLAY_H);
-    for (int i = 0; i < DISPLAY_W * DISPLAY_H; i++) {
-        u32 px = d->fb[i];
-        u8 rgb[3] = { (u8)(px >> 16), (u8)(px >> 8), (u8)px };
-        fwrite(rgb, 1, 3, f);
+    fprintf(f, "P6\n%d %d\n255\n", OUT_W, OUT_H);
+    for (int y = 0; y < OUT_H; y++) {
+        int src_y = (y * DISPLAY_H) / OUT_H;
+        const u32 *row = &d->fb[src_y * DISPLAY_W];
+        for (int x = 0; x < OUT_W; x++) {
+            u32 px = row[x];
+            u8 rgb[3] = { (u8)(px >> 16), (u8)(px >> 8), (u8)px };
+            fwrite(rgb, 1, 3, f);
+        }
     }
     fclose(f);
     return 0;

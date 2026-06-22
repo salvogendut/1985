@@ -40,6 +40,13 @@ static const u8 bytes_in_cmd[32] = {
     [0x1D] = 9,   /* SCAN HIGH-OR-EQUAL */
 };
 
+/* PCW 8256-era firmware probes drive 2/3 as aliases of 0/1. We only
+ * model two physical drives, so decode to the low bit before touching
+ * the drive array. */
+static int decode_unit(u8 raw_unit) {
+    return raw_unit & 0x01;
+}
+
 /* MSR per phase. */
 static void enter_idle(Fdc *f) {
     f->phase = FDC_PHASE_IDLE;
@@ -54,14 +61,26 @@ static void enter_command(Fdc *f) {
     f->msr   = MSR_RQM | MSR_BUSY;
 }
 
+/* Approximate lib765 SHORT_TIMEOUT — host should have time to arm its
+ * NMI wait before IRQ fires. Counted in asic_poll calls, which run
+ * once per z80_step (~ one Z80 instruction). 100 polls ≈ 100 insts ≈
+ * 400 cycles ≈ 100us at 4 MHz; lib765 uses 1000 machine cycles which
+ * corresponds to ~250 our polls if z80 avgs ~4 cycles per inst. */
+#define FDC_IRQ_ARM_DELAY  64
+
 static void enter_exec_read(Fdc *f) {
     f->phase = FDC_PHASE_EXEC_READ;
     f->msr   = MSR_RQM | MSR_DIO | MSR_NDM | MSR_BUSY;
+    /* INTRQ rises after a short delay so the host has time to set
+     * up its NMI/wait. asic_poll decrements irq_arm_ticks and sets
+     * irq=true + bumps pulse_count when it reaches 0. */
+    f->irq_arm_ticks = FDC_IRQ_ARM_DELAY;
 }
 
 static void enter_exec_write(Fdc *f) {
     f->phase = FDC_PHASE_EXEC_WRITE;
     f->msr   = MSR_RQM | MSR_NDM | MSR_BUSY;
+    f->irq_arm_ticks = FDC_IRQ_ARM_DELAY;
 }
 
 static void trace_result(Fdc *f);
@@ -70,7 +89,14 @@ static void enter_result(Fdc *f) {
     f->phase = FDC_PHASE_RESULT;
     f->msr   = MSR_RQM | MSR_DIO | MSR_BUSY;
     f->result_pos = 0;
-    f->irq = true;
+    /* If we came from EXEC (where irq was already armed/asserted) the
+     * line stays high through the transition; the host drops it on
+     * first RESULT byte read. If we came directly (e.g. simple
+     * commands like SENSE INT), arm the delay so the host has time to
+     * set up its wait. */
+    if (!f->irq && f->irq_arm_ticks == 0) {
+        f->irq_arm_ticks = FDC_IRQ_ARM_DELAY;
+    }
     trace_result(f);
 }
 
@@ -97,16 +123,17 @@ static void cmd_specify(Fdc *f) {
 
 /* SENSE DRIVE STATUS: 1-byte result (ST3). */
 static void cmd_sense_drive_status(Fdc *f) {
-    f->cur_unit = f->cmd_buf[1] & 0x03;
+    f->cur_unit = decode_unit(f->cmd_buf[1]);
     f->cur_head = (f->cmd_buf[1] >> 2) & 0x01;
     leds_ping(f->cur_unit ? LED_FDC_B : LED_FDC_A);
     const Disk *d = &f->drive[f->cur_unit];
+    bool ready = d->inserted && f->motor_on;
 
     u8 st3 = (u8)((f->cur_unit & 0x03)
                 | (f->cur_head ? 0x04 : 0)
                 | (d->sides > 1 ? 0x08 : 0)
                 | (f->cur_cyl[f->cur_unit] == 0 ? 0x10 : 0)
-                | (d->inserted ? 0x20 : 0)
+                | (ready ? 0x20 : 0)
                 | (d->write_protected ? 0x40 : 0));
     f->result_len = 0;
     result_push(f, st3);
@@ -115,20 +142,23 @@ static void cmd_sense_drive_status(Fdc *f) {
 
 /* RECALIBRATE: seek head to track 0, raise seek-end interrupt. No result. */
 static void cmd_recalibrate(Fdc *f) {
-    f->cur_unit = f->cmd_buf[1] & 0x03;
+    f->cur_unit = decode_unit(f->cmd_buf[1]);
     f->cur_cyl[f->cur_unit] = 0;
     f->drive[f->cur_unit].cur_track = 0;
     leds_ping(f->cur_unit ? LED_FDC_B : LED_FDC_A);
     f->st0 = (u8)(ST0_IC_NORMAL | ST0_SE | (f->cur_unit & ST0_US_MASK));
     if (!f->drive[f->cur_unit].inserted) f->st0 |= ST0_NR;
     f->int_pending = true;
-    f->irq = true;
+    /* SEEK end interrupt fires after a delay (real seek takes time).
+     * lib765 uses LONGER_TIMEOUT here, but SHORT works for our 0-step
+     * disk model. */
+    f->irq_arm_ticks = FDC_IRQ_ARM_DELAY;
     enter_idle(f);
 }
 
 /* SEEK: move head to NCN, raise seek-end interrupt. No result. */
 static void cmd_seek(Fdc *f) {
-    f->cur_unit = f->cmd_buf[1] & 0x03;
+    f->cur_unit = decode_unit(f->cmd_buf[1]);
     f->cur_head = (f->cmd_buf[1] >> 2) & 0x01;
     int ncn = f->cmd_buf[2];
     if (ncn >= DISK_MAX_TRACKS) ncn = DISK_MAX_TRACKS - 1;
@@ -140,18 +170,25 @@ static void cmd_seek(Fdc *f) {
                | (f->cur_unit & ST0_US_MASK));
     if (!f->drive[f->cur_unit].inserted) f->st0 |= ST0_NR;
     f->int_pending = true;
-    f->irq = true;
+    f->irq_arm_ticks = FDC_IRQ_ARM_DELAY;
     enter_idle(f);
 }
 
 /* SENSE INTERRUPT STATUS: consumes a pending seek-end interrupt and
  * returns ST0 + PCN. If no interrupt is pending, returns ST0 = 0x80
- * (invalid command) per the datasheet. */
+ * (invalid command) per the datasheet — and does NOT raise INTRQ. */
 static void cmd_sense_interrupt(Fdc *f) {
     f->result_len = 0;
     if (!f->int_pending) {
+        /* Invalid SENSE INT (no pending IRQ): per uPD765A datasheet,
+         * return ST0=0x80 via the data register but do NOT assert
+         * INTRQ. We must not go through enter_result() because that
+         * raises f->irq, which would spuriously re-trigger the BIOS
+         * IRQ handler when there's nothing to handle. */
         result_push(f, ST0_IC_INVALID);
-        enter_result(f);
+        f->phase = FDC_PHASE_RESULT;
+        f->msr   = MSR_RQM | MSR_DIO | MSR_BUSY;
+        f->result_pos = 0;
         return;
     }
     f->int_pending = false;
@@ -176,7 +213,7 @@ static void push_rw_result(Fdc *f, u8 st0, u8 st1, u8 st2,
 /* READ ID: return the next sector's CHRN from the current track.
  * Rotates through the track's sector table on successive calls. */
 static void cmd_read_id(Fdc *f) {
-    f->cur_unit = f->cmd_buf[1] & 0x03;
+    f->cur_unit = decode_unit(f->cmd_buf[1]);
     f->cur_head = (f->cmd_buf[1] >> 2) & 0x01;
     Disk *d = &f->drive[f->cur_unit];
 
@@ -212,7 +249,7 @@ static void cmd_read_id(Fdc *f) {
  * Multi-sector and multi-track are deferred — we stop after the first
  * matched sector or when TC is asserted. */
 static void cmd_read_data(Fdc *f) {
-    f->cur_unit = f->cmd_buf[1] & 0x03;
+    f->cur_unit = decode_unit(f->cmd_buf[1]);
     f->cur_head = (f->cmd_buf[1] >> 2) & 0x01;
     u8 C = f->cmd_buf[2];
     u8 H = f->cmd_buf[3];
@@ -245,6 +282,15 @@ static void cmd_read_data(Fdc *f) {
     f->exec_len = size;
     f->exec_pos = 0;
 
+    /* DIAG: dump first 16 bytes of sector data we're about to deliver. */
+    if (f->trace) {
+        fprintf(stderr, "fdc read C%02X H%X R%X size=%d data:",
+                C, H, R, size);
+        for (int i = 0; i < 16 && i < size; i++)
+            fprintf(stderr, " %02X", f->exec_buf[i]);
+        fputc('\n', stderr);
+    }
+
     /* Stash the CHRN we'll echo in the result so the result phase has it. */
     f->cmd_buf[2] = s->C; f->cmd_buf[3] = s->H;
     f->cmd_buf[4] = s->R; f->cmd_buf[5] = s->N;
@@ -252,18 +298,36 @@ static void cmd_read_data(Fdc *f) {
     enter_exec_read(f);
 }
 
-/* When EXEC_READ drains (or TC fires), assemble the standard read result. */
+/* When EXEC_READ drains (or TC fires), assemble the standard read result.
+ *
+ * Per uPD765A datasheet AND MAME upd765.cpp:2039-2076, the result phase
+ * returns CHRN pointing to the NEXT sector after the one just read --
+ * NOT the sector that was read. After delivering one sector with TC:
+ *   - If R < EOT: R becomes R+1
+ *   - If R == EOT: end-of-track: R = 1, C++
+ * CP/M+ BIOS relies on this to track its multi-sector read progress;
+ * if we echo the original R, BIOS thinks no progress was made and
+ * loops forever processing the same sector. */
 static void finish_read_data(Fdc *f) {
-    push_rw_result(f, build_st0(f, ST0_IC_NORMAL), 0, 0,
-                   f->cmd_buf[2], f->cmd_buf[3],
-                   f->cmd_buf[4], f->cmd_buf[5]);
+    u8 C   = f->cmd_buf[2];
+    u8 H   = f->cmd_buf[3];
+    u8 R   = f->cmd_buf[4];
+    u8 N   = f->cmd_buf[5];
+    u8 EOT = f->cmd_buf[6];
+    if (R == EOT) {
+        R = 1;
+        C++;
+    } else {
+        R++;
+    }
+    push_rw_result(f, build_st0(f, ST0_IC_NORMAL), 0, 0, C, H, R, N);
 }
 
 /* WRITE DATA: same parameter layout as READ DATA. Host streams one
  * sector's worth of bytes into exec_buf; on completion we copy them
  * into the disk image and mark it dirty. */
 static void cmd_write_data(Fdc *f) {
-    f->cur_unit = f->cmd_buf[1] & 0x03;
+    f->cur_unit = decode_unit(f->cmd_buf[1]);
     f->cur_head = (f->cmd_buf[1] >> 2) & 0x01;
     u8 C = f->cmd_buf[2];
     u8 H = f->cmd_buf[3];
@@ -322,9 +386,11 @@ static void finish_write_data(Fdc *f) {
         memcpy(&tr->data[s->offset], f->exec_buf, (size_t)n);
         d->dirty = true;
     }
-    push_rw_result(f, build_st0(f, ST0_IC_NORMAL), 0, 0,
-                   f->cmd_buf[2], f->cmd_buf[3],
-                   f->cmd_buf[4], f->cmd_buf[5]);
+    /* Same R-increment semantics as finish_read_data — see comment there. */
+    u8 C = f->cmd_buf[2], H = f->cmd_buf[3];
+    u8 R = f->cmd_buf[4], N = f->cmd_buf[5], EOT = f->cmd_buf[6];
+    if (R == EOT) { R = 1; C++; } else { R++; }
+    push_rw_result(f, build_st0(f, ST0_IC_NORMAL), 0, 0, C, H, R, N);
 }
 
 static void cmd_invalid(Fdc *f) {
@@ -355,16 +421,28 @@ static const char *opcode_name(u8 op) {
     }
 }
 
+static const char *phase_name(FdcPhase p) {
+    switch (p) {
+        case FDC_PHASE_IDLE:       return "IDLE";
+        case FDC_PHASE_COMMAND:    return "COMMAND";
+        case FDC_PHASE_EXEC_READ:  return "EXEC_READ";
+        case FDC_PHASE_EXEC_WRITE: return "EXEC_WRITE";
+        case FDC_PHASE_RESULT:     return "RESULT";
+        default:                   return "?";
+    }
+}
+
 static void trace_cmd(Fdc *f) {
     if (!f->trace) return;
-    fprintf(stderr, "fdc cmd %02X (%s)", f->cmd_buf[0], opcode_name(f->cmd_buf[0]));
+    fprintf(stderr, "fdc cmd %02X (%s) phase=%s", f->cmd_buf[0], opcode_name(f->cmd_buf[0]),
+            phase_name(f->phase));
     for (int i = 1; i < f->cmd_len; i++) fprintf(stderr, " %02X", f->cmd_buf[i]);
     fputc('\n', stderr);
 }
 
 static void trace_result(Fdc *f) {
     if (!f->trace || f->result_len == 0) return;
-    fprintf(stderr, "fdc res");
+    fprintf(stderr, "fdc res phase=%s", phase_name(f->phase));
     for (int i = 0; i < f->result_len; i++) fprintf(stderr, " %02X", f->result_buf[i]);
     fputc('\n', stderr);
 }
@@ -418,22 +496,37 @@ static void finish_execution(Fdc *f) {
 }
 
 u8 fdc_read(Fdc *f, u8 port) {
-    if (port == 0) return f->msr;
+    if (port == 0) {
+        if (f->trace)
+            fprintf(stderr, "fdc msr phase=%s -> %02X\n", phase_name(f->phase), f->msr);
+        return f->msr;
+    }
 
     /* Data register read. */
     switch (f->phase) {
         case FDC_PHASE_RESULT: {
             u8 b = (f->result_pos < f->result_len) ? f->result_buf[f->result_pos++] : 0xFF;
+            if (f->trace)
+                fprintf(stderr, "fdc data phase=RESULT -> %02X\n", b);
             f->irq = false;   /* first result byte read drops the IRQ line */
             if (f->result_pos >= f->result_len) enter_idle(f);
             return b;
         }
         case FDC_PHASE_EXEC_READ: {
             u8 b = (f->exec_pos < f->exec_len) ? f->exec_buf[f->exec_pos++] : 0xFF;
+            if (f->trace)
+                fprintf(stderr, "fdc data phase=EXEC_READ -> %02X\n", b);
+            /* INTRQ stays HIGH throughout EXEC -- the PCW BIOS NMI
+             * handler drains the whole sector in a tight loop on RQM
+             * after the single NMI that fired at EXEC entry. Real
+             * uPD765A behavior in non-DMA mode: INTRQ stays high
+             * until the host reads the first RESULT byte. */
             if (f->exec_pos >= f->exec_len) finish_execution(f);
             return b;
         }
         default:
+            if (f->trace)
+                fprintf(stderr, "fdc data phase=%s -> FF\n", phase_name(f->phase));
             return 0xFF;
     }
 }
@@ -470,8 +563,8 @@ void fdc_write(Fdc *f, u8 port, u8 val) {
         case FDC_PHASE_EXEC_WRITE: {
             if (f->exec_pos < FDC_EXEC_BUF_LEN)
                 f->exec_buf[f->exec_pos++] = val;
-            if (f->exec_pos >= f->exec_len)
-                finish_execution(f);
+            /* INTRQ stays HIGH throughout EXEC, same as EXEC_READ. */
+            if (f->exec_pos >= f->exec_len) finish_execution(f);
             break;
         }
         default:

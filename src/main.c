@@ -14,6 +14,10 @@
 #include "snapshot.h"
 #include "gifcap.h"
 #include "leds.h"
+#include "z80dis.h"
+#include "mem.h"
+#include "fdc.h"
+#include "asic.h"
 
 #ifndef PROG_GIT_COMMIT
 #define PROG_GIT_COMMIT "unknown"
@@ -32,6 +36,8 @@ static const char *USAGE =
 "  --memory KB                 RAM size: 256, 512 or 2048\n"
 "  --disk-a PATH               mount .dsk in drive A\n"
 "  --disk-b PATH               mount .dsk in drive B\n"
+"  --boot-ems PATH             load raw EMS/EMT image at 0000h\n"
+"  --auto-space                send SPACE once after boot image appears\n"
 "  --paste TEXT                type TEXT after boot (\\n = Enter)\n"
 "  --load-sna PATH             load .sna at init (stub)\n"
 "  --save-sna-at N:PATH        save .sna at frame N (stub)\n"
@@ -45,13 +51,156 @@ typedef struct {
     const char *paste_text;
     const char *disk_a;
     const char *disk_b;
+    const char *boot_ems;
     const char *load_sna;
     const char *save_sna_arg;     /* "N:PATH" */
     const char *screenshot_arg;   /* "N:PATH" */
     const char *gif_out;
+    bool        auto_space;
     int         memory_kb;        /* 0 = leave config alone */
     int         exit_after;       /* -1 = run forever */
+    int         dump_at;          /* -1 = no dump */
 } Cli;
+
+static void dump_state(PCW *pcw, int frame) {
+    Z80 *c = &pcw->cpu;
+    fprintf(stderr, "\n==== DUMP frame=%d ====\n", frame);
+    fprintf(stderr, "PC=%04X SP=%04X AF=%04X BC=%04X DE=%04X HL=%04X IX=%04X IY=%04X\n",
+            c->pc, c->sp, c->af, c->bc, c->de, c->hl, c->ix, c->iy);
+    fprintf(stderr, "AF'=%04X BC'=%04X DE'=%04X HL'=%04X I=%02X R=%02X IM=%d iff1=%d iff2=%d halted=%d\n",
+            c->af_, c->bc_, c->de_, c->hl_, c->i, c->r, c->im, c->iff1, c->iff2, c->halted);
+    fprintf(stderr, "bank R[%02X %02X %02X %02X] W[%02X %02X %02X %02X] force=%02X\n",
+            pcw->mem.read_bank[0], pcw->mem.read_bank[1], pcw->mem.read_bank[2], pcw->mem.read_bank[3],
+            pcw->mem.write_bank[0], pcw->mem.write_bank[1], pcw->mem.write_bank[2], pcw->mem.write_bank[3],
+            pcw->mem.bank_force);
+    fprintf(stderr, "asic ic=%X fdc_irq_mode=%d prev_fdc_irq=%d flyback=%d\n",
+            pcw->asic.interrupt_counter, pcw->asic.fdc_irq_mode, pcw->asic.prev_fdc_irq, pcw->asic.flyback);
+    fprintf(stderr, "fdc  phase=%d irq=%d tc=%d motor=%d cur_cyl=[%d %d]\n",
+            pcw->fdc.phase, pcw->fdc.irq, pcw->fdc.tc, pcw->fdc.motor_on,
+            pcw->fdc.cur_cyl[0], pcw->fdc.cur_cyl[1]);
+
+    /* Disassemble 24 instructions around PC. */
+    static u8 snap[65536];
+    for (int a = 0; a < 65536; a++) snap[a] = mem_read(&pcw->mem, (u16)a);
+    fprintf(stderr, "--- disasm @ PC ---\n");
+    u16 dp = c->pc;
+    for (int i = 0; i < 24; i++) {
+        char buf[64];
+        int n = z80dis(snap, dp, buf, sizeof(buf));
+        fprintf(stderr, "  %04X: %s\n", dp, buf);
+        dp = (u16)(dp + n);
+    }
+
+    /* Also disassemble at known dispatcher entry/timer-handler points. */
+    const u16 dump_dis[] = {
+        0x0770, 0x077B, 0x078B, 0x07A4, 0x07C3, 0x07E6, 0x0853, 0x0880, 0x08A0, 0x08AB, 0x08E9,
+        0x0D43, 0x0AD0, 0x0A98, 0x07D4, 0x0030,
+        0x0B6A, 0x4734, 0x4E84,
+        0x0F50, 0x0F5A, 0x1D40,
+        /* BIOS common-area jumpblock and SELDSK chain */
+        0xFC00, 0xFC1B, 0xFC42, 0xFC4B, 0xFC51, 0xFC5A,
+        0xFD2C, 0xFD2D, 0xFD64, 0xFD70, 0xFD84, 0xFDA8,
+        0xFE3A, 0xFE3E,
+    };
+    for (size_t k = 0; k < sizeof(dump_dis)/sizeof(dump_dis[0]); k++) {
+        u16 dpp = dump_dis[k];
+        fprintf(stderr, "--- disasm @ %04X ---\n", dpp);
+        for (int i = 0; i < 20; i++) {
+            char buf[64];
+            int n = z80dis(snap, dpp, buf, sizeof(buf));
+            fprintf(stderr, "  %04X: %s\n", dpp, buf);
+            dpp = (u16)(dpp + n);
+        }
+    }
+    /* Follow the (0x10A0) callback pointer. */
+    u16 cb = mem_read(&pcw->mem, 0x10A0) | (mem_read(&pcw->mem, 0x10A1) << 8);
+    fprintf(stderr, "--- disasm @ (0x10A0)=%04X ---\n", cb);
+    u16 dpp = cb;
+    for (int i = 0; i < 16; i++) {
+        char buf[64];
+        int n = z80dis(snap, dpp, buf, sizeof(buf));
+        fprintf(stderr, "  %04X: %s\n", dpp, buf);
+        dpp = (u16)(dpp + n);
+    }
+
+    /* Disassemble bank 8 (CCP) directly: the BIOS inter-bank trampoline
+     * maps bank 8 to slot 1 starting at 0x4000, so bank-8 offset 0x1D80
+     * corresponds to CPU PC 0x5D80 when bank 8 is mapped. We've seen
+     * pc=5D9D loop hot in the trace — dump the surrounding code. */
+    {
+        static u8 b8snap[65536];
+        memset(b8snap, 0, sizeof(b8snap));
+        memcpy(b8snap + 0x4000, &pcw->mem.ram[8 * MEM_BLOCK_SIZE], MEM_BLOCK_SIZE);
+        /* Also dump helpers at 4D3C/48DC and a few other histogram-hit
+         * addresses that called from the hot loop at 5180. */
+        const u16 b8_help[] = { 0x4D3C, 0x48DC, 0x4A00, 0x4992, 0x499F, 0x49A0, 0x49A4, 0x47C0 };
+        for (size_t i = 0; i < sizeof(b8_help)/sizeof(b8_help[0]); i++) {
+            u16 a = b8_help[i];
+            fprintf(stderr, "--- disasm bank8 helper @ %04X ---\n", a);
+            for (int j = 0; j < 12; j++) {
+                char buf[64];
+                int n = z80dis(b8snap, a, buf, sizeof(buf));
+                fprintf(stderr, "  %04X: %s\n", a, buf);
+                a = (u16)(a + n);
+            }
+        }
+        /* Also disassemble the foreground hot-loop region 0x5180-0x51A8
+         * identified by the fg_hist PC sampler. That's bank-8 offset
+         * 0x1180. */
+        fprintf(stderr, "--- disasm bank8@4000+1180 (i.e. pc=5180) ---\n");
+        u16 b8h = 0x5180;
+        for (int i = 0; i < 50; i++) {
+            char buf[64];
+            int n = z80dis(b8snap, b8h, buf, sizeof(buf));
+            fprintf(stderr, "  %04X: %s\n", b8h, buf);
+            b8h = (u16)(b8h + n);
+        }
+        fprintf(stderr, "--- disasm bank8@4000+1D80 (i.e. pc=5D80) ---\n");
+        u16 bp = 0x5D80;
+        for (int i = 0; i < 32; i++) {
+            char buf[64];
+            int n = z80dis(b8snap, bp, buf, sizeof(buf));
+            fprintf(stderr, "  %04X: %s\n", bp, buf);
+            bp = (u16)(bp + n);
+        }
+        fprintf(stderr, "raw blk8@1D80:");
+        for (int i = 0; i < 64; i++)
+            fprintf(stderr, " %02X", pcw->mem.ram[8 * MEM_BLOCK_SIZE + 0x1D80 + i]);
+        fprintf(stderr, "\n");
+    }
+
+    /* Memory dump of likely work-queue heads. */
+    static const u16 mem_pts[] = { 0x0000, 0x0021, 0x0030, 0x0038, 0x0040, 0x0060, 0x0100, 0x0D00, 0x1010, 0x10A0, 0x0E80, 0x4720, 0xBFF0, 0xFC00, 0xFE70, 0xFE77, 0xFFF0 };
+    /* Follow (0xFE77) — BIOS-installed custom-ISR pointer. */
+    u16 fe77 = mem_read(&pcw->mem, 0xFE77) | (mem_read(&pcw->mem, 0xFE78) << 8);
+    fprintf(stderr, "--- disasm @ (0xFE77)=%04X ---\n", fe77);
+    u16 fp = fe77;
+    for (int i = 0; i < 24; i++) {
+        char buf[64];
+        int n = z80dis(snap, fp, buf, sizeof(buf));
+        fprintf(stderr, "  %04X: %s\n", fp, buf);
+        fp = (u16)(fp + n);
+    }
+    /* Also dump raw block 3 at offset 0x3FF0 (where keyboard window
+     * physically lives, independent of which slot maps it). */
+    fprintf(stderr, "raw blk3@3FF0:");
+    for (int i = 0; i < 16; i++)
+        fprintf(stderr, " %02X", pcw->mem.ram[3 * MEM_BLOCK_SIZE + 0x3FF0 + i]);
+    fprintf(stderr, "\n");
+    for (size_t k = 0; k < sizeof(mem_pts)/sizeof(mem_pts[0]); k++) {
+        u16 base = mem_pts[k];
+        fprintf(stderr, "mem %04X:", base);
+        for (int i = 0; i < 32; i++)
+            fprintf(stderr, " %02X", mem_read(&pcw->mem, (u16)(base + i)));
+        fprintf(stderr, "\n");
+    }
+    /* Stack peek (SP..SP+16) */
+    fprintf(stderr, "stk %04X:", c->sp);
+    for (int i = 0; i < 16; i++)
+        fprintf(stderr, " %02X", mem_read(&pcw->mem, (u16)(c->sp + i)));
+    fprintf(stderr, "\n==== END DUMP ====\n");
+    fflush(stderr);
+}
 
 static int parse_n_path(const char *arg, char *path_out, size_t path_size) {
     const char *colon = strchr(arg, ':');
@@ -78,6 +227,7 @@ static const char *eq_value(const char *s, const char *flag) {
 static int parse_cli(int argc, char **argv, Cli *cli) {
     memset(cli, 0, sizeof(*cli));
     cli->exit_after = -1;
+    cli->dump_at    = -1;
 
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
@@ -91,24 +241,30 @@ static int parse_cli(int argc, char **argv, Cli *cli) {
         if ((v = eq_value(a, "--memory"))      && *v) { cli->memory_kb   = atoi(v); continue; }
         if ((v = eq_value(a, "--disk-a"))      && *v) { cli->disk_a      = v; continue; }
         if ((v = eq_value(a, "--disk-b"))      && *v) { cli->disk_b      = v; continue; }
+        if ((v = eq_value(a, "--boot-ems"))    && *v) { cli->boot_ems    = v; continue; }
         if ((v = eq_value(a, "--paste"))       && *v) { cli->paste_text  = v; continue; }
         if ((v = eq_value(a, "--load-sna"))    && *v) { cli->load_sna    = v; continue; }
         if ((v = eq_value(a, "--save-sna-at")) && *v) { cli->save_sna_arg = v; continue; }
         if ((v = eq_value(a, "--screenshot-at")) && *v) { cli->screenshot_arg = v; continue; }
         if ((v = eq_value(a, "--gif-out"))     && *v) { cli->gif_out     = v; continue; }
         if ((v = eq_value(a, "--exit-after"))  && *v) { cli->exit_after  = atoi(v); continue; }
+        if ((v = eq_value(a, "--dump-at"))     && *v) { cli->dump_at     = atoi(v); continue; }
+        if (strcmp(a, "--auto-space") == 0) { cli->auto_space = true; continue; }
 
         /* Two-token form: --flag VALUE */
         if (strcmp(a, "--config")        == 0 && i+1 < argc) { cli->config_path = argv[++i]; continue; }
         if (strcmp(a, "--memory")        == 0 && i+1 < argc) { cli->memory_kb   = atoi(argv[++i]); continue; }
         if (strcmp(a, "--disk-a")        == 0 && i+1 < argc) { cli->disk_a      = argv[++i]; continue; }
         if (strcmp(a, "--disk-b")        == 0 && i+1 < argc) { cli->disk_b      = argv[++i]; continue; }
+        if (strcmp(a, "--boot-ems")      == 0 && i+1 < argc) { cli->boot_ems    = argv[++i]; continue; }
         if (strcmp(a, "--paste")         == 0 && i+1 < argc) { cli->paste_text  = argv[++i]; continue; }
         if (strcmp(a, "--load-sna")      == 0 && i+1 < argc) { cli->load_sna    = argv[++i]; continue; }
         if (strcmp(a, "--save-sna-at")   == 0 && i+1 < argc) { cli->save_sna_arg = argv[++i]; continue; }
         if (strcmp(a, "--screenshot-at") == 0 && i+1 < argc) { cli->screenshot_arg = argv[++i]; continue; }
         if (strcmp(a, "--gif-out")       == 0 && i+1 < argc) { cli->gif_out     = argv[++i]; continue; }
         if (strcmp(a, "--exit-after")    == 0 && i+1 < argc) { cli->exit_after  = atoi(argv[++i]); continue; }
+        if (strcmp(a, "--dump-at")       == 0 && i+1 < argc) { cli->dump_at     = atoi(argv[++i]); continue; }
+        if (strcmp(a, "--auto-space")    == 0) { cli->auto_space = true; continue; }
 
         if (starts_with(a, "--")) {
             fprintf(stderr, "unknown option: %s\n%s", a, USAGE);
@@ -117,6 +273,37 @@ static int parse_cli(int argc, char **argv, Cli *cli) {
         fprintf(stderr, "unexpected positional argument: %s\n%s", a, USAGE);
         return -1;
     }
+    return 0;
+}
+
+static int load_raw_image(PCW *pcw, const char *path, u16 base) {
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        perror(path);
+        return -1;
+    }
+
+    if (fseek(f, 0, SEEK_END) != 0) {
+        fclose(f);
+        return -1;
+    }
+    long size = ftell(f);
+    if (size < 0 || size > (long)(MEM_SIZE - base)) {
+        fclose(f);
+        fprintf(stderr, "boot image too large: %s\n", path);
+        return -1;
+    }
+    if (fseek(f, 0, SEEK_SET) != 0) {
+        fclose(f);
+        return -1;
+    }
+
+    if (fread(&pcw->mem.ram[base], 1, (size_t)size, f) != (size_t)size) {
+        fclose(f);
+        fprintf(stderr, "boot image read failed: %s\n", path);
+        return -1;
+    }
+    fclose(f);
     return 0;
 }
 
@@ -143,6 +330,7 @@ int main(int argc, char **argv) {
     if (cfg.drive_b[0]) disk_load(&pcw.fdc.drive[1], cfg.drive_b);
 
     if (cli.load_sna) snapshot_load(&pcw, cli.load_sna);
+    if (cli.boot_ems && load_raw_image(&pcw, cli.boot_ems, 0) < 0) return 1;
 
     Overlay ov;
     overlay_init(&ov, &cfg, &pcw);
@@ -153,6 +341,9 @@ int main(int argc, char **argv) {
     Paste paste;
     paste_init(&paste);
     if (cli.paste_text) paste_text(&paste, cli.paste_text);
+    bool auto_space_pending = cli.auto_space && cli.boot_ems;
+    int  auto_space_frame = 120;
+    bool auto_space_down = false;
 
     GifCap *gc = NULL;
     if (cli.gif_out) {
@@ -211,6 +402,16 @@ int main(int argc, char **argv) {
         }
 
         paste_tick(&paste, &pcw.kbd);
+
+        if (auto_space_pending && frame == auto_space_frame) {
+            kbd_press(&pcw.kbd, 5, 7);
+            auto_space_down = true;
+        }
+        if (auto_space_down && frame == auto_space_frame + 4) {
+            kbd_release(&pcw.kbd, 5, 7);
+            auto_space_down = false;
+            auto_space_pending = false;
+        }
         overlay_tick(&ov);
         pcw_frame(&pcw);
         roller_render(&pcw.mem, &pcw.asic, &disp);
@@ -225,6 +426,7 @@ int main(int argc, char **argv) {
             running = false;
         }
         if (frame == save_sna_frame) snapshot_save(&pcw, save_sna_path);
+        if (cli.dump_at >= 0 && frame == cli.dump_at) dump_state(&pcw, frame);
         if (cli.exit_after >= 0 && frame >= cli.exit_after) running = false;
 
         display_present(&disp);
