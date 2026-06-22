@@ -33,7 +33,17 @@ typedef struct {
     MonoMode monochrome;     /* default MONO_GREEN */
 
     /* [extensions] — model-specific add-ons. */
-    bool     ext_second_drive;   /* PCW 8256 only: bolt-on drive B */
+    bool     ext_second_drive;          /* PCW 8256 only: bolt-on drive B */
+    bool     ext_sanpollo_backplane;    /* 50-pin edge-connector hub at the
+                                         * back of the monitor. The hub
+                                         * itself is inert — it only
+                                         * enables other expansions to be
+                                         * plugged in below. */
+    bool     ext_serial;                /* 8251 USART. 9512 had it built in;
+                                         * 8256/8512 need the SanPollo
+                                         * backplane to expose it. */
+    char     ext_serial_backend[8];     /* "pty" or "tcp" */
+    int      ext_serial_tcp_port;       /* default 4002 */
 
     /* [advanced] */
     bool     tinker;

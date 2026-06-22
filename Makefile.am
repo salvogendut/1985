@@ -20,6 +20,7 @@ dist_man1_MANS = 1985.1
 	src/pcw.c \
 	src/printer.c \
 	src/roller.c \
+	src/serial.c \
 	src/snapshot.c \
 	src/symbols.c \
 	src/z80.c \
@@ -43,6 +44,7 @@ noinst_HEADERS = \
 	src/pcw.h \
 	src/printer.h \
 	src/roller.h \
+	src/serial.h \
 	src/snapshot.h \
 	src/startup_debug.h \
 	src/symbols.h \

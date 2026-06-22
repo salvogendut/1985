@@ -15,7 +15,35 @@
 #define LINE_H   16
 #define ORIGIN_X 24
 #define ORIGIN_Y 28
-#define VAL_X    136
+#define VAL_X    144
+
+/* Semantic identity of a row in the Extensions section. The display
+ * order shifts when an 8256-only row is hidden, so we route navigation
+ * by kind, not by displayed index. */
+typedef enum {
+    EXT_NONE = 0,
+    EXT_PRINTER,
+    EXT_SECOND_DRIVE,
+    EXT_SANPOLLO,
+    EXT_SERIAL,
+} ExtRow;
+
+static ExtRow ext_row_at(const Config *cfg, int row) {
+    int r = 0;
+    if (row == r++) return EXT_PRINTER;
+    if (cfg->model == PCW_MODEL_8256) {
+        if (row == r++) return EXT_SECOND_DRIVE;
+    }
+    if (row == r++) return EXT_SANPOLLO;
+    if (row == r++) return EXT_SERIAL;
+    return EXT_NONE;
+}
+
+/* The serial port is built into the 9512; on the 8256/8512 it only
+ * appears once the SanPollo backplane is plugged in. */
+static bool ext_serial_available(const Config *cfg) {
+    return cfg->model == PCW_MODEL_9512 || cfg->ext_sanpollo_backplane;
+}
 
 static const char *section_title(OvSection s) {
     switch (s) {
@@ -37,11 +65,20 @@ static int row_count(const Overlay *ov, OvSection s) {
             if (ov->cfg->model == PCW_MODEL_8256)
                 return ov->cfg->ext_second_drive ? 2 : 1;
             return 2;
-        case OV_EXTENSIONS:
-            /* "Second drive" toggle only applies to the 8256. Printer
-             * placeholder is always shown. */
-            return (ov->cfg->model == PCW_MODEL_8256) ? 2 : 1;
-        case OV_TINKER:     return ov->cfg->tinker ? 9 : 0;
+        case OV_EXTENSIONS: {
+            /* Layout (rows shift when an 8256-only row is hidden):
+             *   Printer
+             *   Second drive       (8256 only)
+             *   PCW Backplane
+             *   Serial port
+             *
+             * The Serial backend toggle (pty/tcp) lives under Advanced —
+             * it's a developer convenience, not a hardware option. */
+            int n = 3;
+            if (ov->cfg->model == PCW_MODEL_8256) n++;
+            return n;
+        }
+        case OV_TINKER:     return ov->cfg->tinker ? 10 : 0;
         default:            return 0;
     }
 }
@@ -85,13 +122,29 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
             }
             break;
         case OV_EXTENSIONS:
-            switch (row) {
-                case 0: snprintf(label, lsz, "Printer"); snprintf(val, vsz, "(not implemented)"); break;
-                case 1:
-                    /* Only reachable when model == 8256 (row_count gates it). */
+            switch (ext_row_at(cfg, row)) {
+                case EXT_PRINTER:
+                    snprintf(label, lsz, "Printer");
+                    snprintf(val,   vsz, "(not implemented)");
+                    break;
+                case EXT_SECOND_DRIVE:
                     snprintf(label, lsz, "Second drive");
                     snprintf(val,   vsz, "%s", bool_str(cfg->ext_second_drive));
                     break;
+                case EXT_SANPOLLO:
+                    /* User-facing label is "PCW Backplane"; SanPollo is the
+                     * manufacturer and stays in field / code names only. */
+                    snprintf(label, lsz, "PCW Backplane");
+                    snprintf(val,   vsz, "%s", bool_str(cfg->ext_sanpollo_backplane));
+                    break;
+                case EXT_SERIAL:
+                    snprintf(label, lsz, "Serial port");
+                    if (!ext_serial_available(cfg))
+                        snprintf(val, vsz, "[needs PCW Backplane]");
+                    else
+                        snprintf(val, vsz, "%s", bool_str(cfg->ext_serial));
+                    break;
+                default: break;
             }
             break;
         case OV_TINKER:
@@ -103,8 +156,21 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                 case 4: snprintf(label, lsz, "Trace IO");       snprintf(val, vsz, "%s", bool_str(cfg->trace_io));             break;
                 case 5: snprintf(label, lsz, "Trace FDC");      snprintf(val, vsz, "%s", bool_str(cfg->trace_fdc));            break;
                 case 6: snprintf(label, lsz, "Trace Input");    snprintf(val, vsz, "%s", bool_str(cfg->trace_input));          break;
-                case 7: snprintf(label, lsz, "Load snapshot");  snprintf(val, vsz, "...");                                     break;
-                case 8: snprintf(label, lsz, "Version");        snprintf(val, vsz, "1985 v" "0.1.0");                          break;
+                case 7:
+                    snprintf(label, lsz, "Serial mode");
+                    if (!ext_serial_available(cfg))
+                        snprintf(val, vsz, "[needs PCW Backplane]");
+                    else if (!cfg->ext_serial)
+                        snprintf(val, vsz, "[Serial port disabled]");
+                    else if (!strcmp(cfg->ext_serial_backend, "tcp"))
+                        snprintf(val, vsz, "TCP:%d", cfg->ext_serial_tcp_port);
+                    else if (ov->pcw && ov->pcw->serial.pty_slave[0])
+                        snprintf(val, vsz, "PTY:%s", ov->pcw->serial.pty_slave);
+                    else
+                        snprintf(val, vsz, "PTY");
+                    break;
+                case 8: snprintf(label, lsz, "Load snapshot");  snprintf(val, vsz, "...");                                     break;
+                case 9: snprintf(label, lsz, "Version");        snprintf(val, vsz, "1985 v" "0.1.0");                          break;
             }
             break;
         default: break;
@@ -187,9 +253,38 @@ static void activate(Overlay *ov) {
             open_disk_dialog(ov, ov->row);
             break;
         case OV_EXTENSIONS:
-            if (ov->row == 1 && c->model == PCW_MODEL_8256) {
-                c->ext_second_drive = !c->ext_second_drive;
-                ov->dirty = true;
+            switch (ext_row_at(c, ov->row)) {
+                case EXT_SECOND_DRIVE:
+                    c->ext_second_drive = !c->ext_second_drive;
+                    ov->dirty = true;
+                    break;
+                case EXT_SANPOLLO:
+                    c->ext_sanpollo_backplane = !c->ext_sanpollo_backplane;
+                    /* Pulling the backplane disables everything that
+                     * was plugged into it. */
+                    if (!c->ext_sanpollo_backplane && c->model != PCW_MODEL_9512) {
+                        c->ext_serial = false;
+                        if (ov->pcw) serial_shutdown(&ov->pcw->serial);
+                    }
+                    ov->dirty = true;
+                    break;
+                case EXT_SERIAL:
+                    if (ext_serial_available(c)) {
+                        c->ext_serial = !c->ext_serial;
+                        if (ov->pcw) {
+                            serial_shutdown(&ov->pcw->serial);
+                            serial_init(&ov->pcw->serial,
+                                        c->ext_serial,
+                                        c->ext_serial_backend,
+                                        c->ext_serial_tcp_port);
+                        }
+                        ov->dirty = true;
+                    }
+                    break;
+                case EXT_PRINTER:
+                case EXT_NONE:
+                default:
+                    break;
             }
             break;
         case OV_TINKER:
@@ -201,8 +296,28 @@ static void activate(Overlay *ov) {
                 case 4: c->trace_io     = !c->trace_io;     ov->dirty = true; break;
                 case 5: c->trace_fdc    = !c->trace_fdc;    ov->dirty = true; break;
                 case 6: c->trace_input  = !c->trace_input;  ov->dirty = true; break;
-                case 7: ov->dialog_kind = DIALOG_SNAPSHOT_LOAD; break;
-                case 8: break;
+                case 7:
+                    /* Serial mode — flip pty ↔ tcp and re-initialise the
+                     * backend so the row value updates immediately. */
+                    if (ext_serial_available(c) && c->ext_serial) {
+                        if (!strcmp(c->ext_serial_backend, "tcp"))
+                            snprintf(c->ext_serial_backend,
+                                     sizeof(c->ext_serial_backend), "pty");
+                        else
+                            snprintf(c->ext_serial_backend,
+                                     sizeof(c->ext_serial_backend), "tcp");
+                        if (ov->pcw) {
+                            serial_shutdown(&ov->pcw->serial);
+                            serial_init(&ov->pcw->serial,
+                                        c->ext_serial,
+                                        c->ext_serial_backend,
+                                        c->ext_serial_tcp_port);
+                        }
+                        ov->dirty = true;
+                    }
+                    break;
+                case 8: ov->dialog_kind = DIALOG_SNAPSHOT_LOAD; break;
+                case 9: break;
             }
             break;
         default: break;
@@ -230,6 +345,11 @@ static void close_overlay(Overlay *ov, bool save) {
              * the machine boots from them just like at first launch. */
             if (ov->cfg->drive_a[0]) disk_load(&ov->pcw->fdc.drive[0], ov->cfg->drive_a);
             if (ov->cfg->drive_b[0]) disk_load(&ov->pcw->fdc.drive[1], ov->cfg->drive_b);
+            bool savail = (ov->cfg->model == PCW_MODEL_9512) || ov->cfg->ext_sanpollo_backplane;
+            serial_init(&ov->pcw->serial,
+                        ov->cfg->ext_serial && savail,
+                        ov->cfg->ext_serial_backend,
+                        ov->cfg->ext_serial_tcp_port);
         }
     } else if (!save) {
         *ov->cfg = ov->saved;

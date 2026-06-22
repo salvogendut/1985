@@ -95,6 +95,8 @@ void config_defaults(Config *c) {
     c->monochrome           = MONO_GREEN;
     c->tinker               = false;
     c->debug                = false;
+    snprintf(c->ext_serial_backend, sizeof(c->ext_serial_backend), "pty");
+    c->ext_serial_tcp_port  = 4002;
 }
 
 void config_load(Config *c, const char *path) {
@@ -134,7 +136,17 @@ void config_load(Config *c, const char *path) {
         else if (strcmp(k, "fullscreen")           == 0) c->fullscreen = parse_bool(v, c->fullscreen);
         else if (strcmp(k, "fullscreen_smoothing") == 0) c->fullscreen_smoothing = parse_bool(v, c->fullscreen_smoothing);
         else if (strcmp(k, "monochrome")           == 0) c->monochrome = parse_mono(v, c->monochrome);
-        else if (strcmp(k, "ext_second_drive")     == 0) c->ext_second_drive = parse_bool(v, c->ext_second_drive);
+        else if (strcmp(k, "ext_second_drive")        == 0) c->ext_second_drive        = parse_bool(v, c->ext_second_drive);
+        else if (strcmp(k, "ext_sanpollo_backplane")  == 0) c->ext_sanpollo_backplane  = parse_bool(v, c->ext_sanpollo_backplane);
+        else if (strcmp(k, "ext_serial")              == 0) c->ext_serial              = parse_bool(v, c->ext_serial);
+        else if (strcmp(k, "ext_serial_backend")      == 0) {
+            if (!strcmp(v, "pty") || !strcmp(v, "tcp"))
+                snprintf(c->ext_serial_backend, sizeof(c->ext_serial_backend), "%s", v);
+        }
+        else if (strcmp(k, "ext_serial_tcp_port")     == 0) {
+            int p = atoi(v);
+            if (p > 0 && p < 65536) c->ext_serial_tcp_port = p;
+        }
         else if (strcmp(k, "tinker")               == 0) c->tinker = parse_bool(v, c->tinker);
         else if (strcmp(k, "debug")                == 0) c->debug  = parse_bool(v, c->debug);
         else if (strcmp(k, "debug_traces")         == 0) c->debug_traces = parse_bool(v, c->debug_traces);
@@ -172,7 +184,11 @@ int config_save(const Config *c) {
     fprintf(f, "monochrome = %s\n\n", mono_to_str(c->monochrome));
 
     fprintf(f, "[extensions]\n");
-    fprintf(f, "ext_second_drive = %s\n\n", bool_to_str(c->ext_second_drive));
+    fprintf(f, "ext_second_drive        = %s\n",   bool_to_str(c->ext_second_drive));
+    fprintf(f, "ext_sanpollo_backplane  = %s\n",   bool_to_str(c->ext_sanpollo_backplane));
+    fprintf(f, "ext_serial              = %s\n",   bool_to_str(c->ext_serial));
+    fprintf(f, "ext_serial_backend      = %s\n",   c->ext_serial_backend);
+    fprintf(f, "ext_serial_tcp_port     = %d\n\n", c->ext_serial_tcp_port);
 
     fprintf(f, "[advanced]\n");
     fprintf(f, "tinker = %s\n", bool_to_str(c->tinker));
