@@ -1,5 +1,80 @@
 # PCW Boot Investigation Status (issue #12 — `ccp-load` branch)
 
+## 🎉 BOOTS TO A> on `CPM3 1-01.dsk` — 2026-06-22
+
+Branch `ccp-load` at commit `533f4f4` now boots `CPM3 1-01.dsk` all the way to
+the `A>` prompt, runs PROFILE.SUB (SETDEF + PIP copies of basic.com, dir.com,
+erase.com, paper.com, pip.com, rename.com, show.com, submit.com, type.com to
+drive M:), and accepts keyboard input (user typed `dir` and got the directory
+listing). Same end-state as ZEsarUX.
+
+### The final fix: per-byte FDC INTRQ in non-DMA EXEC phase
+
+The uPD765A in non-DMA mode (NDM=1, set by SPECIFY at boot) must assert INTRQ
+on each byte ready during EXEC phase. The PCW BIOS uses NMI to drive each byte
+transfer in/out of the FDC; with INTRQ asserted only at the end of EXEC (the
+way our model worked), the BIOS hung at the first sector read of the directory.
+
+Fix in `src/fdc.c`:
+```c
+static void enter_exec_read(Fdc *f) {
+    f->phase = FDC_PHASE_EXEC_READ;
+    f->msr   = MSR_RQM | MSR_DIO | MSR_NDM | MSR_BUSY;
+    f->irq = true;          /* <-- per-byte INTRQ */
+}
+// fdc_read EXEC_READ branch:
+f->irq = false;             /* drop on read */
+if (f->exec_pos >= f->exec_len) finish_execution(f);
+else f->irq = true;         /* <-- re-assert if more bytes pending */
+```
+
+Companion fix in `src/asic.c`: when the BIOS writes `F8=02` (route FDC INTRQ
+to /NMI) or `F8=03` (route to /INT), reset `prev_fdc_irq` so the next poll
+sees a rising edge if the FDC line is already high. BIOS may set up the mode
+before issuing the command, but the FDC IRQ could already be raised from a
+previous command's result phase.
+
+### Companion fixes that landed during the investigation
+
+1. **Real PCW boot ROM** (275 bytes from ZEsarUX's `pcw_boot.rom`) replaces
+   our hand-crafted Z80 stub. The bootstrap now lives in RAM at bank 0 offset
+   0, not as a read overlay — matches the real PCW behavior where the boot
+   ROM writes `D3 F8` (OUT (F8),A) to RAM[0,1] and JP 0000 relying on the
+   just-written instruction to be fetched and executed.
+2. **F4 lock-bit ordering** per slot fixed (slot 0→b6, 1→b4, 2→b5, 3→b7,
+   matching MAME pcw.cpp:295-318).
+3. **READ/WRITE DATA result phase R-increment** per uPD765A datasheet
+   (R+1 when R<EOT, C+1 with R=1 when R==EOT).
+4. **Spurious IRQ on invalid SENSE INTERRUPT** removed — the FDC now
+   correctly returns ST0=0x80 via the data register without asserting INTRQ
+   when SENSE INT is called with no pending interrupt.
+5. **NMI edge-triggered / IRQ level-triggered** routing — NMI accept is
+   unconditional (not gated on iff1), so a level-triggered NMI would re-fire
+   inside the NMI handler. IRQ stays level-triggered to match MAME.
+6. **Expansion port range 0x80-0xEF** returns specific values matching MAME
+   (E1, E3 → 0x7F instead of 0xFF).
+7. **Printer port FDh** returns 0x40 matching ZEsarUX (just the "finished" bit).
+8. **PPM screenshots stretched to 4:3** (720x540) for correct display ratio.
+
+## Still broken: `CPM3 1-07.dsk`
+
+The 1-07 disk uses `J17CPM3.EMS` (a different/newer OS image) than 1-01's
+`J11CPM3.EMS`. With the same fixes, 1-07 still hangs at the CP/M banner.
+
+Symptoms:
+- BDOS f=0F OPEN PROFILE.SUB called as call#10, never returns.
+- 129 FDC commands completed cleanly during boot (similar to 1-01's 124).
+- At frame 7000, foreground PC = 0x0860 (BIOS dispatcher idle), iff1=1,
+  fdc_irq_mode=2 (IRQ), FDC phase=IDLE.
+- The disk 1-07 has PROFILE.ENG (not PROFILE.SUB), so OPEN FILE should
+  return "not found" (0xFF) — but our BDOS doesn't return at all.
+
+Hypothesis: the not-found path in J17CPM3 takes a different code path than
+J11CPM3 (which finds and opens PROFILE.SUB cleanly). There's some additional
+hardware behavior we're not modelling that the not-found path triggers.
+
+
+
 ## ZEsarUX REFERENCE BOOT CONFIRMED — 2026-06-22 morning
 
 ZEsarUX 13.0 (built from /var/home/salvogendut/Dev/zesarux-ZEsarUX-13.0) boots
