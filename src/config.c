@@ -136,6 +136,7 @@ void config_load(Config *c, const char *path) {
         else if (strcmp(k, "monochrome")           == 0) c->monochrome = parse_mono(v, c->monochrome);
         else if (strcmp(k, "tinker")               == 0) c->tinker = parse_bool(v, c->tinker);
         else if (strcmp(k, "debug")                == 0) c->debug  = parse_bool(v, c->debug);
+        else if (strcmp(k, "debug_traces")         == 0) c->debug_traces = parse_bool(v, c->debug_traces);
         else if (strcmp(k, "trace_io")             == 0) c->trace_io    = parse_bool(v, c->trace_io);
         else if (strcmp(k, "trace_fdc")            == 0) c->trace_fdc   = parse_bool(v, c->trace_fdc);
         else if (strcmp(k, "trace_input")          == 0) c->trace_input = parse_bool(v, c->trace_input);
@@ -172,6 +173,7 @@ int config_save(const Config *c) {
     fprintf(f, "[advanced]\n");
     fprintf(f, "tinker = %s\n", bool_to_str(c->tinker));
     fprintf(f, "debug = %s\n", bool_to_str(c->debug));
+    fprintf(f, "debug_traces = %s\n", bool_to_str(c->debug_traces));
     fprintf(f, "trace_io = %s\n", bool_to_str(c->trace_io));
     fprintf(f, "trace_fdc = %s\n", bool_to_str(c->trace_fdc));
     fprintf(f, "trace_input = %s\n", bool_to_str(c->trace_input));

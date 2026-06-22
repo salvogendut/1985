@@ -323,8 +323,9 @@ int main(int argc, char **argv) {
 
     PCW pcw;
     pcw_init(&pcw, cfg.model);
-    pcw.trace_io  = cfg.trace_io;
-    pcw.fdc.trace = cfg.trace_fdc;
+    pcw.debug_traces = cfg.debug_traces;
+    pcw.trace_io  = cfg.debug_traces && cfg.trace_io;
+    pcw.fdc.trace = cfg.debug_traces && cfg.trace_fdc;
 
     if (cfg.drive_a[0]) disk_load(&pcw.fdc.drive[0], cfg.drive_a);
     if (cfg.drive_b[0]) disk_load(&pcw.fdc.drive[1], cfg.drive_b);
@@ -413,9 +414,42 @@ int main(int argc, char **argv) {
             auto_space_pending = false;
         }
         overlay_tick(&ov);
+        /* Live-propagate trace flags from cfg in case the overlay toggled them. */
+        pcw.debug_traces = cfg.debug_traces;
+        pcw.trace_io  = cfg.debug_traces && cfg.trace_io;
+        pcw.fdc.trace = cfg.debug_traces && cfg.trace_fdc;
         pcw_frame(&pcw);
         roller_render(&pcw.mem, &pcw.asic, &disp);
         display_draw_framebuffer(&disp);
+
+        /* Debug-mode FPS overlay (bottom-left). Visible marker that
+         * debug machinery is live. Matches 1984's overlay. */
+        if (cfg.debug) {
+            static Uint64 last_ns = 0;
+            static int    samples = 0;
+            static float  fps_smooth = 0.0f;
+            Uint64 now = SDL_GetTicksNS();
+            if (last_ns) {
+                float dt_s = (now - last_ns) / 1.0e9f;
+                if (dt_s > 0.0f) {
+                    float fps_inst = 1.0f / dt_s;
+                    if (samples == 0) fps_smooth = fps_inst;
+                    else              fps_smooth = fps_smooth * 0.95f + fps_inst * 0.05f;
+                    samples++;
+                }
+            }
+            last_ns = now;
+            int ww, wh;
+            SDL_GetWindowSize(disp.win, &ww, &wh);
+            char buf[64];
+            snprintf(buf, sizeof(buf), "DBG  %.1f fps", (double)fps_smooth);
+            SDL_SetRenderDrawColor(disp.renderer, 0, 0, 0, 255);
+            SDL_RenderDebugText(disp.renderer, 7.0f, (float)(wh - 12), buf);
+            SDL_SetRenderDrawColor(disp.renderer, 0xFF, 0xC0, 0x40, 255);
+            SDL_RenderDebugText(disp.renderer, 6.0f, (float)(wh - 13), buf);
+            (void)ww;
+        }
+
         overlay_render(&ov, disp.renderer);
 
         if (gc) gifcap_frame(gc, disp.fb);
