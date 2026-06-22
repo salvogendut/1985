@@ -35,7 +35,12 @@
  */
 
 #define MEM_BLOCK_SIZE   0x4000          /* 16 KB */
-#define MEM_BLOCK_COUNT  16              /* 256 KB total */
+/* The PCW paging hardware can address up to 128 × 16 KB = 2048 KB in
+ * extended mode (bit 7 set, bits 6-0 = block). We always allocate the
+ * full 2 MB and gate runtime access via Mem.ram_blocks so the same
+ * struct supports every model from a stock 8256 (256 KB) up to a
+ * fully expanded 9512 (2048 KB) without re-allocating. */
+#define MEM_BLOCK_COUNT  128
 #define MEM_SIZE         (MEM_BLOCK_SIZE * MEM_BLOCK_COUNT)
 
 #define MEM_KBD_BLOCK    3               /* block holding keyboard scan rows */
@@ -54,6 +59,7 @@ typedef struct Mem {
     u8  read_bank [4];                   /* block selected for reads in each slot */
     u8  write_bank[4];                   /* block selected for writes in each slot */
     u8  bank_force;                      /* port F4 bits 4-7 = force read bank == write bank */
+    int ram_blocks;                      /* live 16 KB block count: 16=256KB, 32=512KB, 128=2048KB */
     struct Bootstrap *bootstrap;         /* non-NULL while reset stream is active */
     struct Keyboard  *kbd;               /* live matrix overlay for block 3 reads */
 } Mem;
@@ -65,6 +71,13 @@ static inline bool mem_byte_written(const Mem *m, int abs_addr) {
 
 void mem_init(Mem *m);
 void mem_reset(Mem *m);
+
+/* Set the active RAM size in KB. Rounded down to a multiple of 16 KB
+ * and clamped to [256, MEM_BLOCK_COUNT*16] = [256, 2048]. Reads of a
+ * block beyond this size return 0xFF and writes are dropped — the
+ * firmware's RAM probe sees a real end-of-memory and reports the right
+ * M: drive size. */
+void mem_set_size_kb(Mem *m, int kb);
 
 /* Bank select via OUT (port), val for port in 0xF0..0xF3. */
 void mem_bank_write(Mem *m, u8 port, u8 val);

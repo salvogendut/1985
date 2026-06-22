@@ -29,6 +29,7 @@ typedef struct PCW {
     Printer    printer;
 
     PcwModel   model;
+    int        memory_kb;
 
     /* Master gate for ALL debug stderr output, populated from
      * cfg.debug_traces. When false, none of the dev traces print
@@ -39,8 +40,14 @@ typedef struct PCW {
     bool       trace_io;
 } PCW;
 
-void pcw_init (PCW *pcw, PcwModel model);
+void pcw_init (PCW *pcw, PcwModel model, int memory_kb);
 void pcw_reset(PCW *pcw);
+
+/* Full cold boot: re-runs pcw_init with the given model and RAM size.
+ * Use this when the user changes model or memory_kb from the overlay
+ * — F5 (warm reset) only re-runs pcw_reset and would leave stale
+ * paging / fdc / asic state from the previous configuration. */
+void pcw_cold_boot(PCW *pcw, PcwModel model, int memory_kb);
 
 /* Run one emulated frame's worth of cycles. */
 void pcw_frame(PCW *pcw);

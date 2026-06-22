@@ -32,6 +32,9 @@ typedef struct {
     bool     fullscreen_smoothing;
     MonoMode monochrome;     /* default MONO_GREEN */
 
+    /* [extensions] — model-specific add-ons. */
+    bool     ext_second_drive;   /* PCW 8256 only: bolt-on drive B */
+
     /* [advanced] */
     bool     tinker;
     bool     debug;

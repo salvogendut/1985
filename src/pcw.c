@@ -153,13 +153,15 @@ static void bus_io_write(void *ctx, u16 port, u8 val) {
     }
 }
 
-void pcw_init(PCW *pcw, PcwModel model) {
+void pcw_init(PCW *pcw, PcwModel model, int memory_kb) {
     memset(pcw, 0, sizeof(*pcw));
 
-    pcw->model = model;
+    pcw->model     = model;
+    pcw->memory_kb = memory_kb;
 
     bootstrap_init(&pcw->boot);
     mem_init(&pcw->mem);
+    mem_set_size_kb(&pcw->mem, memory_kb);
     pcw->mem.bootstrap = &pcw->boot;
     pcw->mem.kbd       = &pcw->kbd;
 
@@ -178,6 +180,10 @@ void pcw_init(PCW *pcw, PcwModel model) {
 
     z80_init(&pcw->cpu);
     pcw_reset(pcw);
+}
+
+void pcw_cold_boot(PCW *pcw, PcwModel model, int memory_kb) {
+    pcw_init(pcw, model, memory_kb);
 }
 
 void pcw_reset(PCW *pcw) {
