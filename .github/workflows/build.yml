@@ -1,0 +1,116 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags:     ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  linux:
+    name: Linux (Fedora)
+    runs-on: ubuntu-latest
+    container: fedora:41
+    steps:
+      - name: Install build deps
+        run: |
+          dnf install -y --setopt=install_weak_deps=False \
+            gcc make autoconf automake pkgconf-pkg-config \
+            SDL3-devel cairo-devel git
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: |
+          autoreconf -iv
+          ./configure
+      - name: Build
+        run: make -j$(nproc)
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: 1985-linux-x86_64
+          path: 1985
+
+  windows:
+    name: Windows (MinGW)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up MSYS2 + MinGW + SDL3
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          cache: true
+          install: >-
+            base-devel
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-sdl3
+            autoconf
+            automake
+      - name: Configure
+        # The Cairo PDF-printer backend pulls in a large stack of
+        # transitive DLLs on MinGW (pixman, freetype, fontconfig,
+        # libpng, harfbuzz, ...) which inflates the Windows bundle a
+        # lot. Build without it for the binary release; the printer
+        # ports still report "ready" to the guest and the LED still
+        # blinks, but bytes don't get captured to a host PDF.
+        run: |
+          autoreconf -iv
+          ./configure --without-cairo
+      - name: Build
+        run: make -j$(nproc)
+      - name: Stage binary + DLLs
+        run: |
+          mkdir dist
+          cp 1985.exe dist/
+          # Bundle the MinGW runtime + SDL3 DLLs the .exe needs
+          # to run on a stock Windows host.
+          for dll in $(ldd dist/1985.exe | awk '/mingw64/ {print $3}'); do
+            cp "$dll" dist/
+          done
+          cp -r roms dist/
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: 1985-windows-x86_64
+          path: dist/
+
+  release:
+    name: Publish GitHub Release
+    needs: [linux, windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Package release assets
+        run: |
+          set -e
+          tag="${GITHUB_REF_NAME}"
+          mkdir -p assets
+
+          # Linux: rename the bare ELF so it does not collide with the tag name
+          cp artifacts/1985-linux-x86_64/1985 "assets/1985-${tag}-linux-x86_64"
+          chmod +x "assets/1985-${tag}-linux-x86_64"
+
+          # Windows: zip the full bundle (exe + DLLs + roms)
+          (cd artifacts/1985-windows-x86_64 && zip -r "../../assets/1985-${tag}-windows-x86_64.zip" .)
+
+          ls -la assets/
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: assets/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false

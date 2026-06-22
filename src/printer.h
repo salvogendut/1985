@@ -6,6 +6,9 @@
 #define PATH_MAX 4096
 #endif
 
+/* Opaque-pointer forward declarations so consumers don't need <cairo.h>
+ * to include this header. When built without Cairo the fields below
+ * just hold NULL. */
 typedef struct _cairo cairo_t;
 typedef struct _cairo_surface cairo_surface_t;
 
