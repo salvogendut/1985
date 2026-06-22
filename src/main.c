@@ -422,8 +422,51 @@ int main(int argc, char **argv) {
         roller_render(&pcw.mem, &pcw.asic, &disp);
         display_draw_framebuffer(&disp);
 
-        /* Debug-mode FPS overlay (bottom-left). Visible marker that
-         * debug machinery is live. Matches 1984's overlay. */
+        /* Bottom status strip: model name in red + F-key hints in
+         * grey. Drawn in WINDOW pixels (logical presentation disabled
+         * for this block) so the SDL debug font stays at its native
+         * 8x8 size like in 1984, instead of being scaled up by the
+         * renderer's logical->window mapping. The strip sits just
+         * above the LED bar area. */
+        {
+            const char *model_str =
+                (cfg.model == PCW_MODEL_8512) ? "PCW 8512"
+              : (cfg.model == PCW_MODEL_9512) ? "PCW 9512"
+              : "PCW 8256";
+            const char *keys =
+                "  F4=screenshot  F5=reset  F6=capture  F8=monitor  "
+                "F9=options  F11=fullscreen  F12=quit";
+
+            SDL_SetRenderLogicalPresentation(disp.renderer, 0, 0,
+                                             SDL_LOGICAL_PRESENTATION_DISABLED);
+            int ww, wh;
+            SDL_GetWindowSize(disp.win, &ww, &wh);
+            const float strip_h = 16.0f;
+            const float led_bar = (float)DISPLAY_LED_BAR_H;
+            float strip_y = (float)wh - led_bar - strip_h;
+            float text_y  = strip_y + 4.0f;
+            SDL_FRect strip = { 0.0f, strip_y, (float)ww, strip_h };
+            SDL_SetRenderDrawBlendMode(disp.renderer, SDL_BLENDMODE_NONE);
+            SDL_SetRenderDrawColor(disp.renderer, 0x10, 0x10, 0x14, 255);
+            SDL_RenderFillRect(disp.renderer, &strip);
+
+            float text_w = (float)(strlen(model_str) + strlen(keys)) * 8.0f;
+            float model_x = ((float)ww - text_w) * 0.5f;
+            if (model_x < 0.0f) model_x = 0.0f;
+            float keys_x  = model_x + (float)strlen(model_str) * 8.0f;
+
+            SDL_SetRenderDrawColor(disp.renderer, 0xFF, 0x40, 0x40, 255);
+            SDL_RenderDebugText(disp.renderer, model_x,        text_y, model_str);
+            SDL_RenderDebugText(disp.renderer, model_x + 1.0f, text_y, model_str);
+            SDL_SetRenderDrawColor(disp.renderer, 0xE0, 0xE0, 0xE0, 255);
+            SDL_RenderDebugText(disp.renderer, keys_x, text_y, keys);
+
+            SDL_SetRenderLogicalPresentation(disp.renderer,
+                                             DISPLAY_LOGICAL_W, DISPLAY_LOGICAL_H,
+                                             SDL_LOGICAL_PRESENTATION_LETTERBOX);
+        }
+
+        /* Debug-mode FPS overlay (bottom-left, above the status strip). */
         if (cfg.debug) {
             static Uint64 last_ns = 0;
             static int    samples = 0;
@@ -439,15 +482,16 @@ int main(int argc, char **argv) {
                 }
             }
             last_ns = now;
-            int ww, wh;
-            SDL_GetWindowSize(disp.win, &ww, &wh);
             char buf[64];
             snprintf(buf, sizeof(buf), "DBG  %.1f fps", (double)fps_smooth);
+            /* Sit just above the bottom status strip (16 px), in
+             * logical coords (renderer uses LogicalPresentation). */
+            const float lh = (float)DISPLAY_LOGICAL_H;
+            const float strip_h = 16.0f;
             SDL_SetRenderDrawColor(disp.renderer, 0, 0, 0, 255);
-            SDL_RenderDebugText(disp.renderer, 7.0f, (float)(wh - 12), buf);
+            SDL_RenderDebugText(disp.renderer, 7.0f, lh - strip_h - 12.0f, buf);
             SDL_SetRenderDrawColor(disp.renderer, 0xFF, 0xC0, 0x40, 255);
-            SDL_RenderDebugText(disp.renderer, 6.0f, (float)(wh - 13), buf);
-            (void)ww;
+            SDL_RenderDebugText(disp.renderer, 6.0f, lh - strip_h - 13.0f, buf);
         }
 
         overlay_render(&ov, disp.renderer);
