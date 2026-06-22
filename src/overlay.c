@@ -3,6 +3,7 @@
 #include "pcw.h"
 #include "disk.h"
 #include "snapshot.h"
+#include "leds.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -264,7 +265,11 @@ static void activate(Overlay *ov) {
                      * was plugged into it. */
                     if (!c->ext_sanpollo_backplane && c->model != PCW_MODEL_9512) {
                         c->ext_serial = false;
-                        if (ov->pcw) serial_shutdown(&ov->pcw->serial);
+                        if (ov->pcw) {
+                            serial_shutdown(&ov->pcw->serial);
+                            cps_set_present(&ov->pcw->cps, false);
+                        }
+                        leds_set_enabled(LED_SERIAL, false);
                     }
                     ov->dirty = true;
                     break;
@@ -277,7 +282,9 @@ static void activate(Overlay *ov) {
                                         c->ext_serial,
                                         c->ext_serial_backend,
                                         c->ext_serial_tcp_port);
+                            cps_set_present(&ov->pcw->cps, c->ext_serial);
                         }
+                        leds_set_enabled(LED_SERIAL, c->ext_serial);
                         ov->dirty = true;
                     }
                     break;
@@ -335,8 +342,11 @@ static void close_overlay(Overlay *ov, bool save) {
         /* Spot model / RAM changes before persisting and trigger a
          * full power-cycle so the new hardware actually takes effect
          * (warm reset would leave stale paging, FDC and ASIC state). */
-        bool need_cold_boot = (ov->cfg->model     != ov->saved.model)
-                           || (ov->cfg->memory_kb != ov->saved.memory_kb);
+        bool need_cold_boot = (ov->cfg->model                != ov->saved.model)
+                           || (ov->cfg->memory_kb            != ov->saved.memory_kb)
+                           || (ov->cfg->ext_second_drive     != ov->saved.ext_second_drive)
+                           || (ov->cfg->ext_sanpollo_backplane != ov->saved.ext_sanpollo_backplane)
+                           || (ov->cfg->ext_serial           != ov->saved.ext_serial);
         config_save(ov->cfg);
         ov->dirty = false;
         if (need_cold_boot && ov->pcw) {
@@ -346,10 +356,12 @@ static void close_overlay(Overlay *ov, bool save) {
             if (ov->cfg->drive_a[0]) disk_load(&ov->pcw->fdc.drive[0], ov->cfg->drive_a);
             if (ov->cfg->drive_b[0]) disk_load(&ov->pcw->fdc.drive[1], ov->cfg->drive_b);
             bool savail = (ov->cfg->model == PCW_MODEL_9512) || ov->cfg->ext_sanpollo_backplane;
-            serial_init(&ov->pcw->serial,
-                        ov->cfg->ext_serial && savail,
+            bool s_on   = ov->cfg->ext_serial && savail;
+            serial_init(&ov->pcw->serial, s_on,
                         ov->cfg->ext_serial_backend,
                         ov->cfg->ext_serial_tcp_port);
+            cps_set_present(&ov->pcw->cps, s_on);
+            leds_set_enabled(LED_SERIAL, s_on);
         }
     } else if (!save) {
         *ov->cfg = ov->saved;

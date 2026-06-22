@@ -22,7 +22,7 @@ typedef enum {
     SERIAL_BACKEND_TCP = 1,
 } SerialBackend;
 
-typedef struct {
+typedef struct Serial {
     bool present;             /* mirror of cfg->ext_serial at init time */
     SerialBackend backend;
 
