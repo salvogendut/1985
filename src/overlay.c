@@ -28,6 +28,7 @@ typedef enum {
     EXT_SANPOLLO,
     EXT_SERIAL,
     EXT_PERRYFI,
+    EXT_DKTRONICS,
 } ExtRow;
 
 static ExtRow ext_row_at(const Config *cfg, int row) {
@@ -39,6 +40,7 @@ static ExtRow ext_row_at(const Config *cfg, int row) {
     if (row == r++) return EXT_SANPOLLO;
     if (row == r++) return EXT_SERIAL;
     if (row == r++) return EXT_PERRYFI;
+    if (row == r++) return EXT_DKTRONICS;
     return EXT_NONE;
 }
 
@@ -71,14 +73,15 @@ static int row_count(const Overlay *ov, OvSection s) {
         case OV_EXTENSIONS: {
             /* Layout (rows shift when an 8256-only row is hidden):
              *   Printer
-             *   Second drive       (8256 only)
+             *   Second drive            (8256 only)
              *   PCW Backplane
              *   Serial port
-             *   PerryFi            (AT-modem; lives on the serial line)
+             *   PerryFi                 (AT-modem; lives on the serial line)
+             *   DK'TRONICS Sound & Joystick
              *
              * The Serial backend toggle (pty/tcp) lives under Advanced —
              * it's a developer convenience, not a hardware option. */
-            int n = 4;
+            int n = 5;
             if (ov->cfg->model == PCW_MODEL_8256) n++;
             return n;
         }
@@ -156,6 +159,16 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                         snprintf(val, vsz, "[needs Serial port]");
                     else
                         snprintf(val, vsz, "%s", bool_str(cfg->ext_perryfi));
+                    break;
+                case EXT_DKTRONICS:
+                    /* User-facing label kept short so the value column
+                     * doesn't overlap. Full name (DK'TRONICS Sound +
+                     * Joystick) lives in code comments and the README. */
+                    snprintf(label, lsz, "DK'sound");
+                    if (!cfg->ext_sanpollo_backplane)
+                        snprintf(val, vsz, "[needs PCW Backplane]");
+                    else
+                        snprintf(val, vsz, "%s", bool_str(cfg->ext_dktronics));
                     break;
                 default: break;
             }
@@ -306,6 +319,12 @@ static void activate(Overlay *ov) {
                         ov->dirty = true;
                     }
                     break;
+                case EXT_DKTRONICS:
+                    if (c->ext_sanpollo_backplane) {
+                        c->ext_dktronics = !c->ext_dktronics;
+                        ov->dirty = true;
+                    }
+                    break;
                 case EXT_PRINTER:
                 case EXT_NONE:
                 default:
@@ -365,7 +384,8 @@ static void close_overlay(Overlay *ov, bool save) {
                            || (ov->cfg->ext_second_drive     != ov->saved.ext_second_drive)
                            || (ov->cfg->ext_sanpollo_backplane != ov->saved.ext_sanpollo_backplane)
                            || (ov->cfg->ext_serial           != ov->saved.ext_serial)
-                           || (ov->cfg->ext_perryfi          != ov->saved.ext_perryfi);
+                           || (ov->cfg->ext_perryfi          != ov->saved.ext_perryfi)
+                           || (ov->cfg->ext_dktronics        != ov->saved.ext_dktronics);
         config_save(ov->cfg);
         ov->dirty = false;
         if (need_cold_boot && ov->pcw) {
@@ -383,6 +403,9 @@ static void close_overlay(Overlay *ov, bool save) {
             perryfi_init(&ov->pcw->perryfi, p_on);
             cps_set_present(&ov->pcw->cps, s_on);
             leds_set_enabled(LED_SERIAL, s_on);
+
+            bool dk_on = ov->cfg->ext_sanpollo_backplane && ov->cfg->ext_dktronics;
+            aysound_init(&ov->pcw->ay, dk_on);
         }
     } else if (!save) {
         *ov->cfg = ov->saved;

@@ -34,7 +34,17 @@ Extensions available (Extensions tab):
 - **PerryFi** — SanPollo's Wemos D1 (ESP8266) AT modem that plugs onto
   the serial line. 1985 implements the AT command set in software
   (`AT`, `ATDT host:port`, `+++ATH`, `AT&W`, `AT$SSID=`, …) and
-  forwards dial-out to a real host TCP socket — no WiFi needed.
+  forwards dial-out to a real host TCP socket. Because the host's
+  network is already there, **WiFi configuration is unnecessary** —
+  just enable PerryFi in the Extensions menu, fire up any CP/M
+  terminal program (QTERM, KERMIT, …) at 9600 bps on the serial
+  port, type `ATDT bbs.example.com:23` and you're telnetted in.
+- **DK'TRONICS Sound & Joystick** — AY-3-8912 PSG + DB9 joystick port
+  at I/O `0xA9-0xAB`. 1985 ships a register-accurate AY model with
+  tone/noise/envelope, mixed to mono 16-bit and routed through SDL3's
+  default audio device. Port A reads come from the first SDL gamepad
+  the host enumerates (Atari-style: up/down/left/right + two fire
+  buttons mapped to South/East).
 
 Still stubbed: internal dot-matrix printer, RAM-disc M:, snapshot
 save, and most game-side hardware extensions.
@@ -106,9 +116,14 @@ to cross-check against:
   — the AT-modem command set and the dial-out semantics used by 1985's
   PerryFi extension. The firmware itself is derived from
   [mecparts/RetroWiFiModem](https://github.com/mecparts/RetroWiFiModem).
+- **[DK'TRONICS Sound & Joystick (habisoft PCW wiki)](https://www.habisoft.com/pcwwiki/doku.php?id=es:hardware:perifericos:dksound)**
+  — schematic / clone documentation for the AY-3-8912 + DB9 board. The
+  AY model itself is ported from 1984's `src/psg.c`.
 
 Additional documentation:
 
 - [PCW hardware reference](https://www.seasip.info/AmstradXT/index.html)
 - [systemed.net PCW pages](https://www.systemed.net/pcw/hardware.html)
 - [chiark PCW I/O ports](https://www.chiark.greenend.org.uk/~jacobn/cpm/pcwports.html)
+- [readerrorb.ro PCW I/O ports](https://wiki.readerrorb.ro/doku.php?id=tech:amstrad:pcw:ioports)
+  — authoritative DK'tronics / AMX-mouse port table.

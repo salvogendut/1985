@@ -20,6 +20,14 @@
 #include "fdc.h"
 #include "asic.h"
 #include "monitor.h"
+#include "aysound.h"
+
+/* PCW DK'tronics AY clock — same 1 MHz the CPC sibling uses for its
+ * AY-3-8912. Real DK'tronics divides off the PCW system clock; 1 MHz
+ * is the conventional rate for the audible bandwidth modelled here. */
+#define AY_AUDIO_RATE         44100
+#define AY_SAMPLES_FRAME      (AY_AUDIO_RATE / 50)
+#define AY_CLOCK_HZ           1000000
 
 #ifndef PROG_GIT_COMMIT
 #define PROG_GIT_COMMIT "unknown"
@@ -349,6 +357,9 @@ int main(int argc, char **argv) {
         perryfi_init(&pcw.perryfi, perryfi_on);
         cps_set_present(&pcw.cps, serial_on);
         leds_set_enabled(LED_SERIAL, serial_on);
+
+        bool dk_on = cfg.ext_sanpollo_backplane && cfg.ext_dktronics;
+        aysound_init(&pcw.ay, dk_on);
     }
 
     if (cli.load_sna) snapshot_load(&pcw, cli.load_sna);
@@ -362,6 +373,34 @@ int main(int argc, char **argv) {
      * the emulator. */
     Monitor *mon = monitor_create(&pcw);
     if (!mon) fprintf(stderr, "warning: monitor_create failed\n");
+
+    /* SDL audio for the DK'tronics AY chip. Stream stays open for the
+     * lifetime of the run; render_silence when ay isn't present. */
+    SDL_AudioSpec ayspec = { SDL_AUDIO_S16, 1, AY_AUDIO_RATE };
+    SDL_AudioStream *ay_stream =
+        SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
+                                  &ayspec, NULL, NULL);
+    if (!ay_stream) {
+        fprintf(stderr, "audio: SDL_OpenAudioDeviceStream failed: %s\n",
+                SDL_GetError());
+    } else if (!SDL_ResumeAudioStreamDevice(ay_stream)) {
+        fprintf(stderr, "audio: SDL_ResumeAudioStreamDevice failed: %s\n",
+                SDL_GetError());
+    } else if (cfg.debug_traces) {
+        fprintf(stderr, "audio: S16 mono %d Hz playback stream opened\n",
+                AY_AUDIO_RATE);
+    }
+
+    /* SDL gamepad for the DK'tronics joystick. Pick the first one that
+     * shows up; hot-plug handled below via SDL_EVENT_GAMEPAD_ADDED. */
+    SDL_InitSubSystem(SDL_INIT_GAMEPAD);
+    SDL_Gamepad *gamepad = NULL;
+    {
+        int count = 0;
+        SDL_JoystickID *ids = SDL_GetGamepads(&count);
+        if (ids && count > 0) gamepad = SDL_OpenGamepad(ids[0]);
+        if (ids) SDL_free(ids);
+    }
 
     leds_set_enabled(LED_FDC_A, true);
     leds_set_enabled(LED_FDC_B, true);
@@ -411,6 +450,16 @@ int main(int argc, char **argv) {
             switch (ev.type) {
                 case SDL_EVENT_QUIT:
                     running = false; break;
+                case SDL_EVENT_GAMEPAD_ADDED:
+                    if (!gamepad) gamepad = SDL_OpenGamepad(ev.gdevice.which);
+                    break;
+                case SDL_EVENT_GAMEPAD_REMOVED:
+                    if (gamepad &&
+                        SDL_GetGamepadID(gamepad) == ev.gdevice.which) {
+                        SDL_CloseGamepad(gamepad);
+                        gamepad = NULL;
+                    }
+                    break;
                 case SDL_EVENT_KEY_DOWN:
                     switch (ev.key.key) {
                         case SDLK_F4: {
@@ -507,7 +556,39 @@ int main(int argc, char **argv) {
         pcw.fdc.trace = cfg.debug_traces && cfg.trace_fdc;
         bool was_paused   = pcw.paused;
         bool was_stepping = pcw.step_once;
+
+        /* DK'tronics: poll the host gamepad and pack the AY's Port A
+         * byte (Atari-style, active-low). Reads from the AY when the
+         * guest selects R14 latch the current snapshot. */
+        if (pcw.ay.present && gamepad) {
+            u8 js = 0xFF;
+            if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_UP)    ||
+                SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTY) < -16000)
+                js &= ~(1 << 0);
+            if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN)  ||
+                SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTY) >  16000)
+                js &= ~(1 << 1);
+            if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT)  ||
+                SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTX) < -16000)
+                js &= ~(1 << 2);
+            if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) ||
+                SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTX) >  16000)
+                js &= ~(1 << 3);
+            if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_SOUTH))    js &= ~(1 << 4);
+            if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_EAST))     js &= ~(1 << 5);
+            aysound_set_joystick(&pcw.ay, js);
+        }
+
         pcw_frame(&pcw);
+
+        /* Render one frame of AY audio (clears to silence when AY is
+         * absent — keeps the SDL stream pacing steady). */
+        if (ay_stream) {
+            s16 abuf[AY_SAMPLES_FRAME];
+            aysound_render(&pcw.ay, abuf, AY_SAMPLES_FRAME,
+                           AY_CLOCK_HZ, AY_AUDIO_RATE);
+            SDL_PutAudioStreamData(ay_stream, abuf, sizeof(abuf));
+        }
         /* Auto-open the monitor on a breakpoint hit and refresh the
          * disasm pane after a single-step. */
         if (!was_paused && pcw.paused) {
@@ -621,6 +702,8 @@ int main(int argc, char **argv) {
 
     if (gc) gifcap_close(gc);
     monitor_destroy(mon);
+    if (gamepad)   SDL_CloseGamepad(gamepad);
+    if (ay_stream) SDL_DestroyAudioStream(ay_stream);
     paste_free(&paste);
     display_quit(&disp);
     return 0;
