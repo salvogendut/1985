@@ -49,12 +49,61 @@ than we do. That's because the BIOS does CALL-into-TPA-bank / RETURN trampolines
 constantly for CCP execution. We never get past the first few because BDOS f=0F
 hangs.
 
+### CRITICAL FDC-PATTERN DIVERGENCE FOUND
+
+Captured ZEsarUX's first 500 FDC command bytes (cpu-transaction-log with registers,
+extracted A-register at each `OUT (01),A` site). Compared against our 124 FDC
+commands (with `trace_fdc=true` config).
+
+**ZEsarUX READ_DATA pattern**:
+- EOT == R for EVERY read (single sector per command).
+- Each read preceded by `SENSE_INT`.
+- Tracks read are NON-SEQUENTIAL: track 1 sectors 1-4, then track 0x23-0x25, then
+  back to track 1, then tracks 0x1A/0x1C/0x1F/0x20. The loader is reading specific
+  sectors as it parses them.
+- Total ~500 bytes in 15 sec capture (boot + much of PROFILE.SUB).
+
+**OUR READ_DATA pattern**:
+- EOT == 9 for almost ALL reads (84 of 86; only the very first and very last use
+  EOT=1).
+- NO `SENSE_INT` between sequential reads of the same track.
+- Tracks read SEQUENTIALLY: 1, 2, 3, 4, 5, 6, 7, 8, 9, 0xA, all sectors of each.
+  Then a directory probe of track 9 (already loaded once), 0xA, 0x27 (= track 39).
+- After 124 commands, FDC issues `READ ID; READ DATA C=0 R=1 EOT=1` — looks like
+  a **re-boot attempt** (re-reading the boot sector from track 0).
+
+This is a fundamental divergence. ZEsarUX is following a NORMAL boot path
+(boot ROM smart loader → loaded BIOS → CCP). Our trace shows a SEQUENTIAL bulk
+load (probably from the simple disk-boot-sector code), then a re-boot attempt
+suggesting our LOADED BIOS hit an unrecoverable state.
+
+**Hypothesis**: Our hand-crafted bootstrap (1 sector load + jump to F010) leaves
+the system in a state different from what the real PCW boot ROM produces.
+Specifically:
+- Real PCW boot ROM reads MULTIPLE sectors before handoff (with SENSE_INT between
+  each), maintaining FDC state in a particular way.
+- Our boot reads 1 sector via a different command sequence, leaving FDC state
+  differently.
+- The LOADED BIOS depends on this initial state and gets confused.
+
+Even more specifically: the read-track-0 + READ ID + read-sector-1 at the END of
+our trace suggests the CP/M+ BIOS is performing its OWN re-init when it can't
+make sense of what it sees. That re-init reaches the disk again, then probably
+fails/loops.
+
 ### Strategy for the next session
-1. Capture ZEsarUX cpu-transaction-log with registers (logfile /tmp/zsx_full.log).
-2. Find the BDOS f=0F (OPEN PROFILE.SUB) call site in the trace.
-3. Extract the SEQUENCE of FDC commands and bank switches around that call.
-4. Reproduce the same instrumented run in our emulator and diff event-by-event.
-5. First divergent event = the bug location.
+1. **Read ZEsarUX `pd765.c` and `pcw.c` source** to understand how it models the
+   PCW boot ROM and FDC. Specifically: does it emulate the 256-byte MAME printer-
+   MCU ROM, or use its own hand-crafted bootstrap like we do?
+2. **Replace our hand-crafted bootstrap** with one that more faithfully emulates
+   the real PCW boot ROM behavior: multi-sector load with SENSE_INT between, or
+   use the actual 256-byte MAME boot ROM bytes if available.
+3. **Investigate the "re-boot attempt" at end of our trace**: PC at that moment,
+   what triggered it, what error condition it's responding to.
+4. **Diff** the disassembled LOADED BIOS code between our emulator and ZEsarUX
+   to confirm they're identical (since loaded from same disk).
+5. If everything else matches, the bug is in our FDC's response to specific
+   commands (READ ID, SENSE DRIVE B, etc.). Compare result bytes byte-for-byte.
 
 ## Latest Handoff Notes — 2026-06-22 (early morning, other AI)
 
