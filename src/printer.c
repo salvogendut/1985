@@ -20,6 +20,17 @@
 #define K_ADJUST             9.0f
 #define L_ADJUST            11.0f
 
+/* The PCW print head normally homes to x=0 and the firmware then
+ * issues a leftward 0xAA cmd[1]=0 (= 256 units - L_ADJUST) at the
+ * start of each line. That puts the head briefly at negative x
+ * before drawing-command spacing carries it back across the page,
+ * so the leftmost ~1 character of every line gets clipped against
+ * the page edge. Joyce draws onto an unbounded canvas and crops
+ * later; we render straight to a fixed-size Cairo PDF surface, so
+ * shift everything right by a small margin to give that left-side
+ * excursion somewhere to land. */
+#define LEFT_BLEED_360     320.0f
+
 #define TEXT_MARGIN_PT      36.0f
 #define TEXT_TOP_PT         54.0f
 #define TEXT_FONT_PT        10.0f
@@ -170,12 +181,15 @@ static void printer_dot(Printer *p, float xf, float yf) {
     /* PDF surface is PAGE_W_360 × PAGE_H_360; Cairo silently clips
      * anything outside, so skip dots in the bottom margin between
      * PAGE_H_360 and MAX_FORM_H_360 (the head can move that low but
-     * the form feeds before those dots would actually mark paper). */
-    if (xf < 0.0f || xf >= PAGE_W_360 || yf < 0.0f || yf >= PAGE_H_360)
+     * the form feeds before those dots would actually mark paper).
+     * Shift x by LEFT_BLEED_360 so the firmware's brief negative-x
+     * excursion at the start of each line still lands on paper. */
+    float xs = xf + LEFT_BLEED_360;
+    if (xs < 0.0f || xs >= PAGE_W_360 || yf < 0.0f || yf >= PAGE_H_360)
         return;
     if (!printer_pdf_ensure_page(p)) return;
 
-    double xp = xf / PDF_SCALE;
+    double xp = xs / PDF_SCALE;
     double yp = yf / PDF_SCALE;
     cairo_rectangle(p->pdf_cr, xp - 0.5, yp - 0.5, 1.0, 1.0);
     cairo_fill(p->pdf_cr);
