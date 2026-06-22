@@ -29,18 +29,28 @@ src/
   snapshot.c                 .sna stub
 ```
 
-## Reference
+## References
 
-`/var/home/salvogendut/Dev/joyce-custom/` — John Elliott's Joyce, used
-as a reference (not vendored). Most useful files:
+Two existing PCW emulators were read alongside this codebase as
+hardware references. Neither is vendored; only their public source is
+consulted.
+
+**Joyce** — John Elliott's PCW emulator (`joyce-custom/` next to this
+checkout). Best for ASIC and FDC shape:
 
 - `Docs/hardware.txt` — authoritative port and memory map
 - `bin/JoyceMemory.cxx` — 16 KB bank paging
 - `bin/JoycePcwTerm.cxx` — roller-RAM decode (`do_roller`)
 - `bin/JoyceAsic.cxx` — port 0xF8 system control
 - `bin/JoycePcwKeyboard.cxx` — keyboard matrix at 0x3FF0-0x3FFF
-- `bin/JoyceFdc.cxx` + `765/lib765.c` — uPD765A core
+- `bin/JoyceFdc.cxx` + `765/lib765.c` — uPD765A core (the FDC IRQ
+  arm-delay logic that unblocked CP/M+ 1-07 boot came from here)
 - `bin/JoyceZ80.cxx` — port I/O dispatch reference
+
+**ZEsarUX** — César Hernández Bañó's multi-machine Z80 emulator
+(`zesarux-ZEsarUX-13.0/`). Cross-checked against for FDC IRQ delivery,
+printer port 0xFD return value, F4 lock bits, and expansion-port
+behaviour.
 
 ## Build inside the container
 
