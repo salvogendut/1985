@@ -32,15 +32,20 @@ static int roller_base_addr(u8 v) {
 }
 
 void roller_render(struct Mem *m, struct Asic *a, struct Display *d) {
-    /* Display-enable gate: F8 cmds 7/8 only. F7 bit 6 turns out to be
-     * something else on this firmware (Loco/CP/M+ writes F7=0 early
-     * and never re-asserts bit 6, but expects the display to stay on),
-     * so we don't gate on it. */
-    /* Display off (firmware hasn't sent F8 cmd 7 yet) or roller base
-     * not yet pointed at meaningful RAM: real HW shows a solid green
-     * phosphor field — mimic that instead of decoding garbage. */
+    /* Before the roller table exists, real hardware shows a solid
+     * green phosphor field. Keep that power-on look instead of
+     * decoding RAM address zero as a roller table. */
     if (!a->display_enabled || !a->roller_programmed) {
         display_fill_lit(d);
+        return;
+    }
+
+    /* F7 bit 6 is the firmware-controlled screen gate. The CP/M boot
+     * path drops it after the stripe loader while the old roller table
+     * still names loaded program/data bytes, then raises it again once
+     * the real screen table and bitmap area have been initialized. */
+    if (!a->screen_enabled) {
+        display_clear(d);
         return;
     }
 
