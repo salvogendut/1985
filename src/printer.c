@@ -1,8 +1,10 @@
 #include "printer.h"
 #include "leds.h"
 
+#if HAVE_CAIRO
 #include <cairo.h>
 #include <cairo-pdf.h>
+#endif
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -102,6 +104,7 @@ static void printer_make_pdf_path(Printer *p) {
     snprintf(p->pdf_path, sizeof(p->pdf_path), "%s%s%s-last.pdf", dir, sep, base);
 }
 
+#if HAVE_CAIRO
 static bool printer_pdf_open(Printer *p) {
     if (!p->pdf_enabled) return false;
     if (p->pdf_cr) return true;
@@ -165,6 +168,15 @@ void printer_shutdown(Printer *p) {
     p->pdf_page_open = false;
     p->pdf_path[0] = 0;
 }
+#else  /* !HAVE_CAIRO */
+static bool printer_pdf_ensure_page(Printer *p) { (void)p; return false; }
+static void printer_pdf_show_page(Printer *p)   { (void)p; }
+void printer_shutdown(Printer *p) {
+    /* No Cairo, no surface, nothing to flush. */
+    p->pdf_page_open = false;
+    p->pdf_path[0] = 0;
+}
+#endif
 
 void printer_set_pdf_output_dir(Printer *p, const char *dir) {
     char next[PATH_MAX];
@@ -198,8 +210,10 @@ void printer_tick(Printer *p) {
     if (--p->idle_countdown > 0) return;
     /* Finalise the in-progress PDF so the file becomes openable. The
      * next print byte will lazily create a fresh, timestamped file. */
+#if HAVE_CAIRO
     if (p->pdf_cr || p->pdf_surface)
         printer_shutdown(p);
+#endif
 }
 
 static void printer_dot(Printer *p, float xf, float yf) {
@@ -215,10 +229,12 @@ static void printer_dot(Printer *p, float xf, float yf) {
     if (!printer_pdf_ensure_page(p)) return;
     printer_mark_active(p);
 
+#if HAVE_CAIRO
     double xp = xs / PDF_SCALE;
     double yp = yf / PDF_SCALE;
     cairo_rectangle(p->pdf_cr, xp - 0.5, yp - 0.5, 1.0, 1.0);
     cairo_fill(p->pdf_cr);
+#endif
 }
 
 static void printer_dots(Printer *p, u8 cmd0, u8 cmd1) {
@@ -406,6 +422,7 @@ void printer_write_centronics(Printer *p, u8 val) {
     if (val < 0x20 || val == 0x7F) return;
     if (!printer_pdf_ensure_page(p)) return;
 
+#if HAVE_CAIRO
     cairo_select_font_face(p->pdf_cr, "monospace",
                            CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
     cairo_set_font_size(p->pdf_cr, TEXT_FONT_PT);
@@ -413,6 +430,7 @@ void printer_write_centronics(Printer *p, u8 val) {
     char s[2] = { (char)val, 0 };
     cairo_show_text(p->pdf_cr, s);
     printer_mark_active(p);
+#endif
 
     p->text_x += TEXT_CHAR_PT;
     if (p->text_x > page_w_pt() - TEXT_MARGIN_PT)

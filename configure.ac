@@ -25,7 +25,24 @@ esac
 PKG_PROG_PKG_CONFIG
 
 PKG_CHECK_MODULES([SDL3], [sdl3], [], [AC_MSG_ERROR([SDL3 not found])])
-PKG_CHECK_MODULES([CAIRO], [cairo], [], [AC_MSG_ERROR([cairo not found])])
+
+# Cairo is optional: it backs the host-side PDF printer sink. Without
+# it, the printer compiles to a no-op (port FCh/FDh still produce the
+# guest-visible "printer present" status but nothing is captured to
+# disk). Pass --without-cairo to skip detection (e.g. on platforms
+# where shipping the full Cairo stack is impractical).
+AC_ARG_WITH([cairo],
+  [AS_HELP_STRING([--without-cairo],
+                  [build without the PDF printer backend])],
+  [], [with_cairo=yes])
+if test "x$with_cairo" != "xno"; then
+  PKG_CHECK_MODULES([CAIRO], [cairo], [],
+    [AC_MSG_WARN([cairo not found — building without PDF printer])
+     with_cairo=no])
+fi
+AM_CONDITIONAL([WITH_CAIRO], [test "x$with_cairo" = "xyes"])
+AC_MSG_NOTICE([PDF printer backend: $with_cairo])
+
 AC_CHECK_LIB([m], [sqrt], [], [AC_MSG_ERROR([libm not found])])
 
 case $host_os in
