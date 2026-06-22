@@ -18,13 +18,12 @@ u8 printer_read(Printer *p, u8 port) {
 
     if (port == 0xFC) return 0xF8;     /* no controller error */
 
-    u8 v = 0x00;
-    if (p->bail_in)      v |= 0x80;
-    v |= 0x40;                       /* ready */
-    if (!p->head_at_left) v |= 0x10;
-    if (p->feeder_present) v |= 0x08;
-    if (p->paper_present)  v |= 0x04;
-    return v;
+    /* Match ZEsarUX (machines/pcw.c:pcw_in_port_fd): return just 0x40
+     * (bit 6 = "printer has finished"). Returning the full status set
+     * (BAIL | FINISHED | FEEDER | PAPER | READY = 0xCC) might be
+     * triggering an unwanted code path in BDOS. */
+    return 0x40;
+    (void)p;
 }
 
 void printer_write(Printer *p, u8 port, u8 val) {

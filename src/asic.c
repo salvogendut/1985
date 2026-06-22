@@ -47,16 +47,23 @@ bool asic_timer_tick(Asic *a) {
 }
 
 int asic_poll_fdc_irq(Asic *a) {
-    /* Level-triggered IRQ delivery, matching MAME pcw.cpp:153-176 and
-     * Joyce JoyceAsic.cxx:122-140. While the FDC INTRQ line is high
-     * AND routing is IRQ, keep presenting the request so the Z80 will
-     * accept it as soon as iff1 becomes 1.
-     *
-     * This matters for the FD84/FDA8 coroutine path: the firmware does
-     * an EI/RET yield and expects the pending FDC interrupt to still be
-     * visible after the return, not just as a one-shot edge. */
+    /* Two delivery modes:
+     * - IRQ mode (fdc_irq_mode == 2): LEVEL-triggered. Re-assert
+     *   pending_irq every step while fdc->irq is high. Z80 accepts
+     *   only when iff1 == 1. Matches MAME pcw.cpp:153-176 and the
+     *   FD84/FDA8 coroutine yield pattern.
+     * - NMI mode (fdc_irq_mode == 1): EDGE-triggered. NMI accept is
+     *   unconditional (not gated on iff1), so a level-triggered NMI
+     *   would re-fire on every instruction inside the NMI handler,
+     *   producing infinite stack pushes. Only fire on the rising
+     *   edge of fdc->irq. */
     bool now = a->fdc && a->fdc->irq;
-    int  req = (now && a->fdc_irq_mode != 0) ? a->fdc_irq_mode : 0;
+    int  req = 0;
+    if (a->fdc_irq_mode == 2 && now) {
+        req = 2;                               /* IRQ: level */
+    } else if (a->fdc_irq_mode == 1 && now && !a->prev_fdc_irq) {
+        req = 1;                               /* NMI: edge */
+    }
     a->prev_fdc_irq = now;
     return req;
 }
