@@ -63,11 +63,13 @@ typedef struct Cps {
      * raw `serial` (pty/tcp) backend. */
     struct Serial  *serial;
     struct Perryfi *perryfi;
+    struct Printer *printer;
 } Cps;
 
 /* Borrowed pointers — lifetimes managed by the caller. Pass NULL to
  * leave the dart-A side unwired (smoke tests). */
-void cps_init(Cps *c, bool present, struct Serial *serial, struct Perryfi *perryfi);
+void cps_init(Cps *c, bool present, struct Serial *serial,
+              struct Perryfi *perryfi, struct Printer *printer);
 void cps_reset(Cps *c);
 void cps_set_present(Cps *c, bool present);
 

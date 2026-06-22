@@ -50,6 +50,14 @@ static bool ext_serial_available(const Config *cfg) {
     return cfg->model == PCW_MODEL_9512 || cfg->ext_sanpollo_backplane;
 }
 
+static void apply_pdf_printer(Overlay *ov) {
+    if (!ov->pcw) return;
+    printer_set_pdf_output_dir(&ov->pcw->printer, ov->cfg->ext_pdf_printer_dir);
+    printer_set_pdf_enabled(&ov->pcw->printer,
+                            ov->cfg->ext_pdf_printer
+                            && ov->cfg->ext_pdf_printer_dir[0]);
+}
+
 static const char *section_title(OvSection s) {
     switch (s) {
         case OV_GENERAL:    return "General";
@@ -131,8 +139,13 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
         case OV_EXTENSIONS:
             switch (ext_row_at(cfg, row)) {
                 case EXT_PRINTER:
-                    snprintf(label, lsz, "Printer");
-                    snprintf(val,   vsz, "(not implemented)");
+                    snprintf(label, lsz, "PDF printer");
+                    if (!cfg->ext_pdf_printer)
+                        snprintf(val, vsz, "no");
+                    else if (cfg->ext_pdf_printer_dir[0])
+                        snprintf(val, vsz, "yes: %s", cfg->ext_pdf_printer_dir);
+                    else
+                        snprintf(val, vsz, "yes: [choose folder]");
                     break;
                 case EXT_SECOND_DRIVE:
                     snprintf(label, lsz, "Second drive");
@@ -233,6 +246,16 @@ static void open_disk_dialog(Overlay *ov, int drive) {
                            filters, 2, NULL, false);
 }
 
+static void open_printer_dir_dialog(Overlay *ov) {
+    ov->dialog_kind  = DIALOG_PRINT_DIR;
+    ov->dialog_drive = -1;
+    ov->dialog_ready = false;
+    const char *where = ov->cfg->ext_pdf_printer_dir[0]
+                      ? ov->cfg->ext_pdf_printer_dir
+                      : NULL;
+    SDL_ShowOpenFolderDialog(overlay_file_callback, ov, NULL, where, false);
+}
+
 static void eject_disk(Overlay *ov, int drive) {
     Config *c = ov->cfg;
     char *slot = (drive == 0) ? c->drive_a : c->drive_b;
@@ -326,6 +349,14 @@ static void activate(Overlay *ov) {
                     }
                     break;
                 case EXT_PRINTER:
+                    if (c->ext_pdf_printer) {
+                        c->ext_pdf_printer = false;
+                        apply_pdf_printer(ov);
+                        ov->dirty = true;
+                    } else {
+                        open_printer_dir_dialog(ov);
+                    }
+                    break;
                 case EXT_NONE:
                 default:
                     break;
@@ -389,6 +420,7 @@ static void close_overlay(Overlay *ov, bool save) {
         config_save(ov->cfg);
         ov->dirty = false;
         if (need_cold_boot && ov->pcw) {
+            printer_shutdown(&ov->pcw->printer);
             pcw_cold_boot(ov->pcw, ov->cfg->model, ov->cfg->memory_kb);
             /* pcw_init zeroed the FDC — re-mount the disk images so
              * the machine boots from them just like at first launch. */
@@ -406,9 +438,11 @@ static void close_overlay(Overlay *ov, bool save) {
 
             bool dk_on = ov->cfg->ext_sanpollo_backplane && ov->cfg->ext_dktronics;
             aysound_init(&ov->pcw->ay, dk_on);
+            apply_pdf_printer(ov);
         }
     } else if (!save) {
         *ov->cfg = ov->saved;
+        apply_pdf_printer(ov);
     }
     ov->visible = false;
     ov->state   = OV_STATE_MENU;
@@ -513,7 +547,7 @@ void overlay_render(Overlay *ov, SDL_Renderer *r) {
     int tx = ORIGIN_X;
     for (int s = 0; s < OV_SEC_COUNT; s++) {
         if (row_count(ov, (OvSection)s) == 0) continue;
-        bool active = (ov->section == s);
+        bool active = (ov->section == (OvSection)s);
         draw_text(r, tx, 12, section_title((OvSection)s),
                   active ? 255 : 180, active ? 255 : 180, active ? 0 : 180);
         tx += (int)strlen(section_title((OvSection)s)) * 8 + 16;
@@ -585,6 +619,13 @@ void overlay_tick(Overlay *ov) {
         }
         case DIALOG_SNAPSHOT_LOAD: snapshot_load(ov->pcw, ov->dialog_path); break;
         case DIALOG_SNAPSHOT_SAVE: snapshot_save(ov->pcw, ov->dialog_path); break;
+        case DIALOG_PRINT_DIR:
+            snprintf(ov->cfg->ext_pdf_printer_dir,
+                     sizeof(ov->cfg->ext_pdf_printer_dir), "%s", ov->dialog_path);
+            ov->cfg->ext_pdf_printer = true;
+            apply_pdf_printer(ov);
+            ov->dirty = true;
+            break;
         default: break;
     }
     ov->dialog_kind = DIALOG_NONE;

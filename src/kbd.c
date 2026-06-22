@@ -98,16 +98,47 @@ static MatrixPos sdl_to_matrix(SDL_Scancode s) {
         case SDL_SCANCODE_LALT:
         case SDL_SCANCODE_RALT:         return (MatrixPos){10, 7};
 
-        /* PCW function-key block (F1=f1, F3=f3, F5=f5, F7=f7;
-         * F2/F4/F6/F8 are SHIFT+Fn on the real keyboard).
-         * F9..F12 are reserved for the host overlay/quit (handled in main.c). */
-        case SDL_SCANCODE_F1: return (MatrixPos){0, 2};
-        case SDL_SCANCODE_F3: return (MatrixPos){0, 0};
-        case SDL_SCANCODE_F5: return (MatrixPos){10, 0};
-        case SDL_SCANCODE_F7: return (MatrixPos){10, 4};
+        /* PCW function-key block. F2/F4/F6/F8 use the same matrix
+         * positions as F1/F3/F5/F7 plus synthetic Shift below, matching
+         * Joyce's m_autoShift handling. F9/F10 have no PCW matrix key. */
+        case SDL_SCANCODE_F1:
+        case SDL_SCANCODE_F2:  return (MatrixPos){0, 2};
+        case SDL_SCANCODE_F3:
+        case SDL_SCANCODE_F4:  return (MatrixPos){0, 0};
+        case SDL_SCANCODE_F5:
+        case SDL_SCANCODE_F6:  return (MatrixPos){10, 0};
+        case SDL_SCANCODE_F7:
+        case SDL_SCANCODE_F8:  return (MatrixPos){10, 4};
+        case SDL_SCANCODE_F11: return (MatrixPos){2, 7};
+        case SDL_SCANCODE_F12: return (MatrixPos){10, 3};
 
         default: return (MatrixPos){-1, -1};
     }
+}
+
+static int shift_bit_for_scancode(SDL_Scancode s) {
+    switch (s) {
+        case SDL_SCANCODE_LSHIFT: return 0;
+        case SDL_SCANCODE_RSHIFT: return 1;
+        default: return -1;
+    }
+}
+
+static int auto_shift_bit_for_scancode(SDL_Scancode s) {
+    switch (s) {
+        case SDL_SCANCODE_F2: return 0;
+        case SDL_SCANCODE_F4: return 1;
+        case SDL_SCANCODE_F6: return 2;
+        case SDL_SCANCODE_F8: return 3;
+        default: return -1;
+    }
+}
+
+static void kbd_update_shift(Keyboard *k) {
+    if (k->shift_held || k->auto_shift_held)
+        k->row[2] |= (u8)(1 << 5);
+    else
+        k->row[2] &= (u8)~(1 << 5);
 }
 
 void kbd_init(Keyboard *k) {
@@ -150,6 +181,21 @@ void kbd_release(Keyboard *k, int row, int bit) {
 }
 
 void kbd_handle(Keyboard *k, const SDL_KeyboardEvent *e) {
+    int sb = shift_bit_for_scancode(e->scancode);
+    if (sb >= 0) {
+        if (e->down) k->shift_held |=  (u8)(1 << sb);
+        else         k->shift_held &= (u8)~(1 << sb);
+        kbd_update_shift(k);
+        return;
+    }
+
+    int ab = auto_shift_bit_for_scancode(e->scancode);
+    if (ab >= 0) {
+        if (e->down) k->auto_shift_held |=  (u8)(1 << ab);
+        else         k->auto_shift_held &= (u8)~(1 << ab);
+        kbd_update_shift(k);
+    }
+
     MatrixPos p = sdl_to_matrix(e->scancode);
     if (p.row < 0) return;
     if (e->down) kbd_press  (k, p.row, p.bit);

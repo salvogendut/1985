@@ -6,6 +6,7 @@
 #include "cps.h"
 #include "serial.h"
 #include "perryfi.h"
+#include "printer.h"
 #include "leds.h"
 
 #include <stdio.h>
@@ -188,11 +189,7 @@ static void dartB_out_ctrl(Cps *c, u8 val) {
     dart_out_ctrl(&c->dartB, val);
     u8 curr_wr5_dtr = c->dartB.reg[5] & WR5_DTR;
     if (prev_wr5_dtr && !curr_wr5_dtr) {
-        /* /STROBE fell — flush c->parallel_data to the host. We don't
-         * have a Centronics sink wired yet, so just drop the byte
-         * here. (Joyce calls dropStrobe() → writeChar() into a
-         * printer text file.) */
-        (void)c->parallel_data;
+        printer_write_centronics(c->printer, c->parallel_data);
     }
     c->parallel_strobe = (curr_wr5_dtr != 0);
 }
@@ -232,11 +229,13 @@ static void pit_write_ctrl(Cps *c, u8 val) {
 /* ---------------------------------------------------------------- */
 /* Public API.                                                      */
 
-void cps_init(Cps *c, bool present, struct Serial *serial, struct Perryfi *perryfi) {
+void cps_init(Cps *c, bool present, struct Serial *serial,
+              struct Perryfi *perryfi, struct Printer *printer) {
     memset(c, 0, sizeof(*c));
     c->present = present;
     c->serial  = serial;
     c->perryfi = perryfi;
+    c->printer = printer;
     cps_reset(c);
 }
 

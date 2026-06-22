@@ -206,7 +206,7 @@ void pcw_init(PCW *pcw, PcwModel model, int memory_kb) {
      * after init based on model + backplane. Channel A reads/writes
      * route through pcw->serial (or through pcw->perryfi when the
      * PerryFi extension is plugged in). */
-    cps_init(&pcw->cps, false, &pcw->serial, &pcw->perryfi);
+    cps_init(&pcw->cps, false, &pcw->serial, &pcw->perryfi, &pcw->printer);
     perryfi_init(&pcw->perryfi, false);
     /* DK'tronics PCW Sound + Joystick — present-state set by main/
      * overlay after init based on cfg + backplane gating. */

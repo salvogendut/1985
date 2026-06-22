@@ -12,6 +12,7 @@ BuildRequires:  make
 BuildRequires:  autoconf
 BuildRequires:  automake
 BuildRequires:  pkgconfig(sdl3)
+BuildRequires:  pkgconfig(cairo)
 BuildRequires:  desktop-file-utils
 BuildRequires:  libappstream-glib
 

@@ -3,7 +3,7 @@
 ## Fedora / RHEL
 
 ```bash
-sudo dnf install gcc make autoconf automake pkgconf-pkg-config sdl3-devel
+sudo dnf install gcc make autoconf automake pkgconf-pkg-config sdl3-devel cairo-devel
 autoreconf -fiv
 ./configure
 make
@@ -13,7 +13,7 @@ sudo make install
 ## Debian / Ubuntu
 
 ```bash
-sudo apt install build-essential autoconf automake pkg-config libsdl3-dev
+sudo apt install build-essential autoconf automake pkg-config libsdl3-dev libcairo2-dev
 autoreconf -fiv
 ./configure
 make
@@ -26,7 +26,7 @@ If SDL3 is not yet packaged, build it from source first
 ## macOS
 
 ```bash
-brew install autoconf automake pkg-config sdl3
+brew install autoconf automake pkg-config sdl3 cairo
 autoreconf -fiv
 ./configure
 make

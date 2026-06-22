@@ -26,6 +26,8 @@
 typedef struct Keyboard {
     u8 row[KBD_ROWS];
     u8 ticker;          /* serial-protocol heartbeat — bits 7,6 of byte 0xFFFF */
+    u8 shift_held;      /* host L/R shift bits */
+    u8 auto_shift_held; /* synthetic shift for host F2/F4/F6/F8 */
 } Keyboard;
 
 void kbd_init(Keyboard *k);
