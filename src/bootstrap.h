@@ -4,11 +4,14 @@
 /*
  * PCW reset-time bootstrap.
  *
- * The PCW has no boot ROM. At reset the address decoder overlays a
- * canned byte sequence onto low memory so the Z80, starting at PC=0,
- * fetches our boot loader instead of RAM. The loader uses the FDC
- * to copy the first sector of drive A into RAM at 0xF000, then
- * issues OUT (0xF8), 0 to disable the overlay and JP 0xF000.
+ * On real hardware the printer-controller MCU (an 8041AH) shifts 275
+ * bytes of mask-programmed boot code into low RAM through the parallel
+ * port. We model that by loading the same 275-byte image from
+ * `roms/pcw_boot.rom` (with an embedded fallback in bootstrap.c) and
+ * overlaying it onto low memory so the Z80, starting at PC=0, fetches
+ * the loader instead of RAM. The loader uses the FDC to copy the first
+ * sector of drive A into RAM at 0xF000, then issues OUT (0xF8), 0 to
+ * disable the overlay and JP 0xF000.
  *
  * Reads are address-indexed (not sequential) so the loader can use
  * loops and subroutines: while active, mem_read(addr) returns
