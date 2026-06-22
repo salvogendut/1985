@@ -42,7 +42,12 @@
  * written) so viewers can open it; the next byte starts a new file. */
 #define IDLE_FRAMES_TO_FINALISE 100
 
-static float page_w_pt(void) { return PAGE_W_360 / PDF_SCALE; }
+/* PDF surface is widened by LEFT_BLEED_360 so the leftward excursion
+ * at line start fits without pushing the right edge of the page off-
+ * canvas. PAGE_W_360 stays the PCW's logical print width; SURFACE_W
+ * is what we hand to Cairo. */
+#define SURFACE_W_360 (PAGE_W_360 + LEFT_BLEED_360)
+static float page_w_pt(void) { return SURFACE_W_360 / PDF_SCALE; }
 static float page_h_pt(void) { return PAGE_H_360 / PDF_SCALE; }
 
 static void printer_reset_matrix(Printer *p) {
@@ -203,7 +208,7 @@ static void printer_dot(Printer *p, float xf, float yf) {
      * Shift x by LEFT_BLEED_360 so the firmware's brief negative-x
      * excursion at the start of each line still lands on paper. */
     float xs = xf + LEFT_BLEED_360;
-    if (xs < 0.0f || xs >= PAGE_W_360 || yf < 0.0f || yf >= PAGE_H_360)
+    if (xs < 0.0f || xs >= SURFACE_W_360 || yf < 0.0f || yf >= PAGE_H_360)
         return;
     if (!printer_pdf_ensure_page(p)) return;
     printer_mark_active(p);
