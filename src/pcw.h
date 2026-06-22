@@ -11,6 +11,7 @@
 #include "serial.h"
 #include "cps.h"
 #include "perryfi.h"
+#include "aysound.h"
 
 /*
  * Top-level Amstrad PCW machine. Owns the Z80, all peripherals, and
@@ -35,6 +36,7 @@ typedef struct PCW {
     Serial     serial;
     Cps        cps;
     Perryfi    perryfi;
+    AySound    ay;
 
     PcwModel   model;
     int        memory_kb;

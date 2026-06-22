@@ -107,6 +107,15 @@ static u8 bus_io_read(void *ctx, u16 port) {
         return v;
     }
 
+    /* DK'tronics PCW Sound + Joystick — AY-3-8912 register read at 0xA9
+     * (joystick byte when reg 14 is selected). */
+    if ((lo == 0xA9) && pcw->ay.present) {
+        u8 v = aysound_read(&pcw->ay, lo);
+        if (pcw->trace_io)
+            fprintf(stderr, "        -> %02X (ay)\n", v);
+        return v;
+    }
+
     /* Expansion port range 0x080-0x0EF. MAME pcw.cpp:580-625 returns
      * specific values for a few ports the firmware probes:
      *   0x85 -> 0xFE   0x87 -> 0xFF
@@ -164,6 +173,10 @@ static void bus_io_write(void *ctx, u16 port, u8 val) {
         cps_write(&pcw->cps, lo, val);
         return;
     }
+    if ((lo == 0xAA || lo == 0xAB) && pcw->ay.present) {
+        aysound_write(&pcw->ay, lo, val);
+        return;
+    }
 }
 
 void pcw_init(PCW *pcw, PcwModel model, int memory_kb) {
@@ -195,6 +208,9 @@ void pcw_init(PCW *pcw, PcwModel model, int memory_kb) {
      * PerryFi extension is plugged in). */
     cps_init(&pcw->cps, false, &pcw->serial, &pcw->perryfi);
     perryfi_init(&pcw->perryfi, false);
+    /* DK'tronics PCW Sound + Joystick — present-state set by main/
+     * overlay after init based on cfg + backplane gating. */
+    aysound_init(&pcw->ay, false);
 
     pcw->bus.mem_read  = bus_mem_read;
     pcw->bus.mem_write = bus_mem_write;

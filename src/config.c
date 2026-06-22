@@ -148,6 +148,7 @@ void config_load(Config *c, const char *path) {
             if (p > 0 && p < 65536) c->ext_serial_tcp_port = p;
         }
         else if (strcmp(k, "ext_perryfi")             == 0) c->ext_perryfi             = parse_bool(v, c->ext_perryfi);
+        else if (strcmp(k, "ext_dktronics")           == 0) c->ext_dktronics           = parse_bool(v, c->ext_dktronics);
         else if (strcmp(k, "tinker")               == 0) c->tinker = parse_bool(v, c->tinker);
         else if (strcmp(k, "debug")                == 0) c->debug  = parse_bool(v, c->debug);
         else if (strcmp(k, "debug_traces")         == 0) c->debug_traces = parse_bool(v, c->debug_traces);
@@ -190,7 +191,8 @@ int config_save(const Config *c) {
     fprintf(f, "ext_serial              = %s\n",   bool_to_str(c->ext_serial));
     fprintf(f, "ext_serial_backend      = %s\n",   c->ext_serial_backend);
     fprintf(f, "ext_serial_tcp_port     = %d\n",   c->ext_serial_tcp_port);
-    fprintf(f, "ext_perryfi             = %s\n\n", bool_to_str(c->ext_perryfi));
+    fprintf(f, "ext_perryfi             = %s\n",   bool_to_str(c->ext_perryfi));
+    fprintf(f, "ext_dktronics           = %s\n\n", bool_to_str(c->ext_dktronics));
 
     fprintf(f, "[advanced]\n");
     fprintf(f, "tinker = %s\n", bool_to_str(c->tinker));

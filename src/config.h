@@ -49,6 +49,9 @@ typedef struct {
                                          * the serial port, so it's only
                                          * available when ext_serial is
                                          * enabled. */
+    bool     ext_dktronics;             /* DK'tronics PCW Sound + Joystick:
+                                         * AY-3-8912 + DB9 at 0xA9-0xAB.
+                                         * Needs the PCW Backplane. */
 
     /* [advanced] */
     bool     tinker;
