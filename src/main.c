@@ -19,6 +19,7 @@
 #include "mem.h"
 #include "fdc.h"
 #include "asic.h"
+#include "monitor.h"
 
 #ifndef PROG_GIT_COMMIT
 #define PROG_GIT_COMMIT "unknown"
@@ -356,6 +357,12 @@ int main(int argc, char **argv) {
     Overlay ov;
     overlay_init(&ov, &cfg, &pcw);
 
+    /* F8 memory monitor / disassembler — lives in its own SDL window
+     * created hidden; SDLK_F8 reveals it. Survives the lifetime of
+     * the emulator. */
+    Monitor *mon = monitor_create(&pcw);
+    if (!mon) fprintf(stderr, "warning: monitor_create failed\n");
+
     leds_set_enabled(LED_FDC_A, true);
     leds_set_enabled(LED_FDC_B, true);
 
@@ -399,6 +406,7 @@ int main(int argc, char **argv) {
     while (running) {
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
+            if (monitor_handle_event(mon, &ev)) continue;
             if (overlay_handle_event(&ov, &ev)) continue;
             switch (ev.type) {
                 case SDL_EVENT_QUIT:
@@ -412,7 +420,13 @@ int main(int argc, char **argv) {
                             printf("screenshot: %s\n", path);
                             break;
                         }
-                        case SDLK_F5: pcw_reset(&pcw); break;
+                        case SDLK_F5:
+                            /* F5: warm reset; also clears the paused state so
+                             * the monitor can be resumed without explicit "G". */
+                            pcw.paused = false;
+                            pcw_reset(&pcw);
+                            break;
+                        case SDLK_F8: monitor_open(mon); break;
                         case SDLK_F6: {
                             /* Toggle GIF capture. Auto-name in CWD on start;
                              * finalise and report frame count on stop. */
@@ -474,7 +488,17 @@ int main(int argc, char **argv) {
         pcw.debug_traces = cfg.debug_traces;
         pcw.trace_io  = cfg.debug_traces && cfg.trace_io;
         pcw.fdc.trace = cfg.debug_traces && cfg.trace_fdc;
+        bool was_paused   = pcw.paused;
+        bool was_stepping = pcw.step_once;
         pcw_frame(&pcw);
+        /* Auto-open the monitor on a breakpoint hit and refresh the
+         * disasm pane after a single-step. */
+        if (!was_paused && pcw.paused) {
+            monitor_open(mon);
+            monitor_notify_break(mon);
+        } else if (was_stepping && pcw.paused) {
+            monitor_notify_step(mon);
+        }
         roller_render(&pcw.mem, &pcw.asic, &disp);
         display_draw_framebuffer(&disp);
 
@@ -567,6 +591,8 @@ int main(int argc, char **argv) {
         if (cli.exit_after >= 0 && frame >= cli.exit_after) running = false;
 
         display_present(&disp);
+        monitor_render(mon);
+        monitor_pty_tick(mon);
 
         /* Frame pacing — aim for 50 Hz. */
         next_tick_ms += 20;
@@ -577,6 +603,7 @@ int main(int argc, char **argv) {
     }
 
     if (gc) gifcap_close(gc);
+    monitor_destroy(mon);
     paste_free(&paste);
     display_quit(&disp);
     return 0;
