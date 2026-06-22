@@ -48,24 +48,15 @@ bool asic_timer_tick(Asic *a) {
 
 int asic_poll_fdc_irq(Asic *a) {
     /* Level-triggered IRQ delivery, matching MAME pcw.cpp:153-176 and
-     * Joyce JoyceAsic.cxx:135-140. While the FDC INTRQ line is high
-     * AND routing is IRQ, re-assert /INT every step so the Z80 will
-     * accept it as soon as iff1 becomes 1. This fixes the "BIOS arms
-     * its wait loop AFTER the edge has already been consumed" bug.
+     * Joyce JoyceAsic.cxx:122-140. While the FDC INTRQ line is high
+     * AND routing is IRQ, keep presenting the request so the Z80 will
+     * accept it as soon as iff1 becomes 1.
      *
-     * NMI stays edge-triggered (matches what we currently do) — NMI
-     * accept is unconditional, so the first rising edge is enough.
-     * MAME holds NMI too, but only to handle the corner case where
-     * the FDC mode is switched mid-IRQ; we don't expose that yet. */
-    /* Edge-triggered IRQ delivery matches MAME's "rising edge on
-     * FDC INTRQ" pattern with the line being dropped when the host
-     * reads the first result byte. The earlier level-triggered
-     * variant produced identical FDC-command counts (129 vs 129)
-     * but is more invasive; keeping edge is closer to MAME. */
+     * This matters for the FD84/FDA8 coroutine path: the firmware does
+     * an EI/RET yield and expects the pending FDC interrupt to still be
+     * visible after the return, not just as a one-shot edge. */
     bool now = a->fdc && a->fdc->irq;
-    int  req = 0;
-    if (now && !a->prev_fdc_irq && a->fdc_irq_mode != 0)
-        req = a->fdc_irq_mode;
+    int  req = (now && a->fdc_irq_mode != 0) ? a->fdc_irq_mode : 0;
     a->prev_fdc_irq = now;
     return req;
 }

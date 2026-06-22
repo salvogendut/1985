@@ -34,6 +34,10 @@ static void dump_pc_bytes(PCW *pcw, u16 pc, const char *tag) {
     fputc('\n', stderr);
 }
 
+static u16 dbg_read16(PCW *pcw, u16 addr) {
+    return mem_read(&pcw->mem, addr) | (mem_read(&pcw->mem, (u16)(addr + 1)) << 8);
+}
+
 static void bus_mem_write(void *ctx, u16 addr, u8 val) {
     PCW *pcw = (PCW *)ctx;
     /* Seed-write trace was useful for the queue-investigation phase
@@ -229,6 +233,191 @@ void pcw_frame(PCW *pcw) {
                     }
                 }
             }
+            {
+                static u32 trace_51a8 = 0;
+                static u32 trace_5180 = 0;
+                static u32 trace_4d44 = 0;
+                extern u32 g_after_open_count;
+                if (g_after_open_count > 0) {
+                    static bool trace_hot_dumped = false;
+                    static u32 trace_hot = 0;
+                    if (pcw->cpu.pc >= 0x5170 && pcw->cpu.pc <= 0x51A8 && trace_hot < 96) {
+                        if (!trace_hot_dumped) {
+                            trace_hot_dumped = true;
+                            fprintf(stderr, "fg_hot_bytes banks=%02X/%02X/%02X/%02X @5170:",
+                                pcw->mem.read_bank[0], pcw->mem.read_bank[1],
+                                pcw->mem.read_bank[2], pcw->mem.read_bank[3]);
+                            for (u16 a = 0x5170; a < 0x51B0; a++)
+                                fprintf(stderr, " %02X", mem_read(&pcw->mem, a));
+                            fputc('\n', stderr);
+                        }
+                        trace_hot++;
+                        fprintf(stderr,
+                            "fg_hot#%u pc=%04X op=%02X AF=%04X HL=%04X DE=%04X BC=%04X SP=%04X "
+                            "6C49=%04X 6C4B=%04X 6C55=%04X 6C68=%04X 6C39=%02X 6C63=%02X banks=%02X/%02X/%02X/%02X\n",
+                            trace_hot, pcw->cpu.pc, mem_read(&pcw->mem, pcw->cpu.pc),
+                            pcw->cpu.af, pcw->cpu.hl, pcw->cpu.de, pcw->cpu.bc, pcw->cpu.sp,
+                            dbg_read16(pcw, 0x6C49), dbg_read16(pcw, 0x6C4B),
+                            dbg_read16(pcw, 0x6C55), dbg_read16(pcw, 0x6C68),
+                            mem_read(&pcw->mem, 0x6C39), mem_read(&pcw->mem, 0x6C63),
+                            pcw->mem.read_bank[0], pcw->mem.read_bank[1],
+                            pcw->mem.read_bank[2], pcw->mem.read_bank[3]);
+                    }
+                    {
+                        static bool trace_bb_dumped = false;
+                        static u32 trace_bb = 0;
+                        if (pcw->cpu.pc >= 0xBB80 && pcw->cpu.pc <= 0xBBD0 && trace_bb < 96) {
+                            if (!trace_bb_dumped) {
+                                trace_bb_dumped = true;
+                                fprintf(stderr, "seldsk_target_bytes banks=%02X/%02X/%02X/%02X @BB80:",
+                                    pcw->mem.read_bank[0], pcw->mem.read_bank[1],
+                                    pcw->mem.read_bank[2], pcw->mem.read_bank[3]);
+                                for (u16 a = 0xBB80; a < 0xBBD0; a++)
+                                    fprintf(stderr, " %02X", mem_read(&pcw->mem, a));
+                                fputc('\n', stderr);
+                            }
+                            trace_bb++;
+                            fprintf(stderr,
+                                "seldsk_target#%u pc=%04X op=%02X AF=%04X HL=%04X DE=%04X BC=%04X SP=%04X "
+                                "FE70=%02X FE73=%04X FE77=%04X banks=%02X/%02X/%02X/%02X\n",
+                                trace_bb, pcw->cpu.pc, mem_read(&pcw->mem, pcw->cpu.pc),
+                                pcw->cpu.af, pcw->cpu.hl, pcw->cpu.de, pcw->cpu.bc, pcw->cpu.sp,
+                                mem_read(&pcw->mem, 0xFE70), dbg_read16(pcw, 0xFE73),
+                                dbg_read16(pcw, 0xFE77),
+                                pcw->mem.read_bank[0], pcw->mem.read_bank[1],
+                                pcw->mem.read_bank[2], pcw->mem.read_bank[3]);
+                        }
+                    }
+                    {
+                        static bool trace_bc_dumped = false;
+                        static u32 trace_bc = 0;
+                        if (pcw->cpu.pc >= 0xBC00 && pcw->cpu.pc <= 0xBC80 && trace_bc < 128) {
+                            if (!trace_bc_dumped) {
+                                trace_bc_dumped = true;
+                                fprintf(stderr, "seldsk_bc_bytes banks=%02X/%02X/%02X/%02X @BC00:",
+                                    pcw->mem.read_bank[0], pcw->mem.read_bank[1],
+                                    pcw->mem.read_bank[2], pcw->mem.read_bank[3]);
+                                for (u16 a = 0xBC00; a < 0xBC80; a++)
+                                    fprintf(stderr, " %02X", mem_read(&pcw->mem, a));
+                                fputc('\n', stderr);
+                            }
+                            trace_bc++;
+                            fprintf(stderr,
+                                "seldsk_bc#%u pc=%04X op=%02X AF=%04X HL=%04X DE=%04X BC=%04X IX=%04X IY=%04X SP=%04X "
+                                "BE10=%02X BE17=%02X banks=%02X/%02X/%02X/%02X\n",
+                                trace_bc, pcw->cpu.pc, mem_read(&pcw->mem, pcw->cpu.pc),
+                                pcw->cpu.af, pcw->cpu.hl, pcw->cpu.de, pcw->cpu.bc,
+                                pcw->cpu.ix, pcw->cpu.iy, pcw->cpu.sp,
+                                mem_read(&pcw->mem, 0xBE10), mem_read(&pcw->mem, 0xBE17),
+                                pcw->mem.read_bank[0], pcw->mem.read_bank[1],
+                                pcw->mem.read_bank[2], pcw->mem.read_bank[3]);
+                        }
+                    }
+                    {
+                        static bool trace_low_dumped = false;
+                        static u32 trace_low = 0;
+                        if (pcw->cpu.pc >= 0x0080 && pcw->cpu.pc <= 0x00B0 && trace_low < 128) {
+                            if (!trace_low_dumped) {
+                                trace_low_dumped = true;
+                                fprintf(stderr, "low_helper_bytes banks=%02X/%02X/%02X/%02X @0080:",
+                                    pcw->mem.read_bank[0], pcw->mem.read_bank[1],
+                                    pcw->mem.read_bank[2], pcw->mem.read_bank[3]);
+                                for (u16 a = 0x0080; a < 0x00C0; a++)
+                                    fprintf(stderr, " %02X", mem_read(&pcw->mem, a));
+                                fputc('\n', stderr);
+                            }
+                            trace_low++;
+                            fprintf(stderr,
+                                "low_helper#%u pc=%04X op=%02X AF=%04X HL=%04X DE=%04X BC=%04X IX=%04X IY=%04X SP=%04X "
+                                "banks=%02X/%02X/%02X/%02X fdc_phase=%d irq=%d tc=%d\n",
+                                trace_low, pcw->cpu.pc, mem_read(&pcw->mem, pcw->cpu.pc),
+                                pcw->cpu.af, pcw->cpu.hl, pcw->cpu.de, pcw->cpu.bc,
+                                pcw->cpu.ix, pcw->cpu.iy, pcw->cpu.sp,
+                                pcw->mem.read_bank[0], pcw->mem.read_bank[1],
+                                pcw->mem.read_bank[2], pcw->mem.read_bank[3],
+                                pcw->fdc.phase, pcw->fdc.irq, pcw->fdc.tc);
+                        }
+                    }
+                    {
+                        static bool trace_4a_dumped = false;
+                        static u32 trace_4a = 0;
+                        if (pcw->cpu.pc >= 0x4A60 && pcw->cpu.pc <= 0x4AD0 && trace_4a < 160) {
+                            if (!trace_4a_dumped) {
+                                trace_4a_dumped = true;
+                                fprintf(stderr, "routine_4a_bytes banks=%02X/%02X/%02X/%02X @4A60:",
+                                    pcw->mem.read_bank[0], pcw->mem.read_bank[1],
+                                    pcw->mem.read_bank[2], pcw->mem.read_bank[3]);
+                                for (u16 a = 0x4A60; a < 0x4AE0; a++)
+                                    fprintf(stderr, " %02X", mem_read(&pcw->mem, a));
+                                fputc('\n', stderr);
+                            }
+                            trace_4a++;
+                            fprintf(stderr,
+                                "routine_4a#%u pc=%04X op=%02X AF=%04X HL=%04X DE=%04X BC=%04X IX=%04X IY=%04X SP=%04X "
+                                "banks=%02X/%02X/%02X/%02X\n",
+                                trace_4a, pcw->cpu.pc, mem_read(&pcw->mem, pcw->cpu.pc),
+                                pcw->cpu.af, pcw->cpu.hl, pcw->cpu.de, pcw->cpu.bc,
+                                pcw->cpu.ix, pcw->cpu.iy, pcw->cpu.sp,
+                                pcw->mem.read_bank[0], pcw->mem.read_bank[1],
+                                pcw->mem.read_bank[2], pcw->mem.read_bank[3]);
+                        }
+                    }
+                    {
+                        static bool trace_4a20_dumped = false;
+                        static u32 trace_4a20 = 0;
+                        if (pcw->cpu.pc >= 0x49D0 && pcw->cpu.pc <= 0x4A60 && trace_4a20 < 192) {
+                            if (!trace_4a20_dumped) {
+                                trace_4a20_dumped = true;
+                                fprintf(stderr, "routine_4a20_bytes banks=%02X/%02X/%02X/%02X @49D0:",
+                                    pcw->mem.read_bank[0], pcw->mem.read_bank[1],
+                                    pcw->mem.read_bank[2], pcw->mem.read_bank[3]);
+                                for (u16 a = 0x49D0; a < 0x4A60; a++)
+                                    fprintf(stderr, " %02X", mem_read(&pcw->mem, a));
+                                fputc('\n', stderr);
+                            }
+                            trace_4a20++;
+                            fprintf(stderr,
+                                "routine_4a20#%u pc=%04X op=%02X AF=%04X HL=%04X DE=%04X BC=%04X IX=%04X IY=%04X SP=%04X "
+                                "banks=%02X/%02X/%02X/%02X\n",
+                                trace_4a20, pcw->cpu.pc, mem_read(&pcw->mem, pcw->cpu.pc),
+                                pcw->cpu.af, pcw->cpu.hl, pcw->cpu.de, pcw->cpu.bc,
+                                pcw->cpu.ix, pcw->cpu.iy, pcw->cpu.sp,
+                                pcw->mem.read_bank[0], pcw->mem.read_bank[1],
+                                pcw->mem.read_bank[2], pcw->mem.read_bank[3]);
+                        }
+                    }
+                    if (pcw->cpu.pc == 0x51A8 && trace_51a8 < 32) {
+                        trace_51a8++;
+                        fprintf(stderr,
+                            "b8_setup#%u pc=51A8 HL=%04X DE=%04X BC=%04X SP=%04X "
+                            "6C49=%04X 6C4B=%04X 6C55=%04X 6C68=%04X 6C39=%02X 6C63=%02X banks=%02X/%02X/%02X/%02X\n",
+                            trace_51a8, pcw->cpu.hl, pcw->cpu.de, pcw->cpu.bc, pcw->cpu.sp,
+                            dbg_read16(pcw, 0x6C49), dbg_read16(pcw, 0x6C4B),
+                            dbg_read16(pcw, 0x6C55), dbg_read16(pcw, 0x6C68),
+                            mem_read(&pcw->mem, 0x6C39), mem_read(&pcw->mem, 0x6C63),
+                            pcw->mem.read_bank[0], pcw->mem.read_bank[1],
+                            pcw->mem.read_bank[2], pcw->mem.read_bank[3]);
+                    }
+                    if (pcw->cpu.pc == 0x5180 && trace_5180 < 64) {
+                        trace_5180++;
+                        fprintf(stderr,
+                            "b8_loop#%u pc=5180 HL=%04X DE=%04X BC=%04X A=%02X SP=%04X "
+                            "6C49=%04X 6C4B=%04X 6C55=%04X 6C68=%04X\n",
+                            trace_5180, pcw->cpu.hl, pcw->cpu.de, pcw->cpu.bc,
+                            (u8)(pcw->cpu.af >> 8), pcw->cpu.sp,
+                            dbg_read16(pcw, 0x6C49), dbg_read16(pcw, 0x6C4B),
+                            dbg_read16(pcw, 0x6C55), dbg_read16(pcw, 0x6C68));
+                    }
+                    if (pcw->cpu.pc == 0x4D44 && trace_4d44 < 64) {
+                        trace_4d44++;
+                        fprintf(stderr,
+                            "b8_coro#%u pc=4D44 SP=%04X 6C49=%04X 6C4B=%04X HL=%04X DE=%04X BC=%04X\n",
+                            trace_4d44, pcw->cpu.sp,
+                            dbg_read16(pcw, 0x6C49), dbg_read16(pcw, 0x6C4B),
+                            pcw->cpu.hl, pcw->cpu.de, pcw->cpu.bc);
+                    }
+                }
+            }
             /* BIOS jumpblock trace: CP/M+ BIOS jumpblock lives in the
              * high common area. Catch CALL/JP instructions whose
              * immediate destination is in the FCxx..FFxx range. */
@@ -313,7 +502,7 @@ void pcw_frame(PCW *pcw) {
              * in physical RAM block 3 at offset 0x3FF0..0x3FFF. */
             kbd_scan_into_ram(&pcw->kbd,
                 &pcw->mem.ram[MEM_KBD_BLOCK * MEM_BLOCK_SIZE + MEM_KBD_OFFSET]);
-            if (asic_timer_tick(&pcw->asic) && pcw->cpu.iff1)
+            if (asic_timer_tick(&pcw->asic))
                 z80_interrupt(&pcw->cpu);
             next_tick += CYCLES_PER_TICK;
         }

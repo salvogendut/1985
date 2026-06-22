@@ -45,7 +45,7 @@ typedef struct Asic {
     int  flyback_tick;      /* 0..5 within current 50 Hz frame */
     u8  interrupt_counter;  /* port 0xF8 read bits 0-3; cleared by F4-read */
     int fdc_irq_mode;       /* 0=ignore, 1=NMI, 2=IRQ */
-    bool prev_fdc_irq;      /* edge-detect for FDC IRQ line */
+    bool prev_fdc_irq;      /* previous FDC IRQ line state (debug/state only) */
 
     struct Bootstrap *bootstrap;
     struct Fdc       *fdc;

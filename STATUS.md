@@ -1,5 +1,100 @@
 # PCW Boot Investigation Status (issue #12 — `ccp-load` branch)
 
+## Latest Handoff Notes — 2026-06-22
+
+This section supersedes several older/conflicting notes below.
+
+### Current result
+
+- No `A>` prompt yet.
+- `CPM3 1-07.dsk` still reaches the CP/M Plus banner and `Drive is A:`, then idles forever.
+- The concrete stuck point is still BDOS call `f=0F` opening `A:PROFILE.SUB`:
+
+```
+bdos call#6 f=0F (C=0F) DE=0DAD ret=09B2
+fcb@0DAD drv=01 name='PROFILE .SUB'
+```
+
+- There is still no matching `bdos return fn=0F`.
+- FDC is idle at the final dump (`phase=0 irq=0 tc=1 motor=1`), and no new post-banner FDC command is issued for the directory search.
+
+### Source state right now
+
+- `src/asic.c` currently presents FDC IRQ as level-triggered while `fdc->irq` is high and routing mode is IRQ. This matches MAME/Joyce level-held semantics, but by itself does not fix the boot.
+- `src/pcw.c` currently has several bounded diagnostics for the failing `OPEN FILE` path: `seldsk_target`, `seldsk_bc`, `low_helper`, `routine_4a`, `routine_4a20`, `fg_hot`, BDOS call/return tracing, and foreground PC histograms.
+- `src/pcw.c` also has a speculative test change: timer ticks now call `z80_interrupt()` unconditionally, letting the Z80 core hold the pending IRQ until `IFF1` is enabled. This mirrors ZEsarUX's `pcw_pending_interrupt` behavior, but it did not change the boot result.
+- `STATUS.md`, `src/asic.c`, `src/asic.h`, and `src/pcw.c` are dirty in the worktree.
+
+### What was tested in this session
+
+- Re-read `STATUS.md` and verified that the older “bank-8 hash/coroutine hot loop” conclusion was misleading for the current failing path.
+- Built successfully in the distrobox container with:
+
+```
+distrobox enter my-distrobox -- bash -lc 'make -j4'
+```
+
+- Ran the 1-07 disk with the new `routine_4a20` trace:
+
+```
+./1985 --disk-a "/var/home/salvogendut/Downloads/CPM Boot/CPM3 1-07.dsk" --exit-after 2500
+```
+
+- Result: still hangs in `BDOS OPEN PROFILE.SUB`. The new trace shows `4A20` itself does not block; it calls through `4A2B/4A39/4A3C/4A3F`, then control reaches bank-8 code around `49F5..4A04`, which repeatedly initializes small records around `6C30..6C3A`.
+- Ran a longer timer-pending test:
+
+```
+./1985 --disk-a "/var/home/salvogendut/Downloads/CPM Boot/CPM3 1-07.dsk" --exit-after 7000 --dump-at 7000
+```
+
+- Result: no improvement. Still no `bdos return fn=0F`, final PC in BIOS scheduler around `0884`, banks `R[00 01 03 07]`, FDC idle.
+- Tested another boot disk:
+
+```
+./1985 --disk-a "/var/home/salvogendut/Downloads/CPM Boot/CPM3 1-01.dsk" --exit-after 3000
+```
+
+- Result: also stalls on `BDOS OPEN A:PROFILE.SUB`. This makes a one-off 1-07 image issue less likely.
+- External disk inspection with `cpmls` and `iDSK`:
+
+```
+cpmls -f pcw "/var/home/salvogendut/Downloads/CPM Boot/CPM3 1-07.dsk"
+cpmls -f pcw "/var/home/salvogendut/Downloads/CPM Boot/CPM3 1-01.dsk"
+iDSK "/var/home/salvogendut/Downloads/CPM Boot/CPM3 1-07.dsk" -l
+iDSK "/var/home/salvogendut/Downloads/CPM Boot/CPM3 1-01.dsk" -l
+```
+
+- `CPM3 1-07.dsk` has `PROFILE.ENG`, not `PROFILE.SUB`, so `OPEN PROFILE.SUB` should fail quickly and return.
+- `CPM3 1-01.dsk` has `PROFILE.SUB`, so `OPEN PROFILE.SUB` should succeed after directory access.
+- Both images hang before any new directory-read FDC command, so the problem is not simply file presence/absence.
+
+### Reference-emulator checks
+
+- `mame` is installed in the distrobox, but `mame pcw8256 -verifyroms` fails with `romset "pcw8256" not found!`; direct reference boot was not possible.
+- ZEsarUX source is available at `../zesarux-ZEsarUX-13.0/src`.
+- ZEsarUX PCW reset uses `pcw_port_f4_value=0xF1`, while MAME uses `m_bank_force=0xF0`. This is not a useful lead: bit 0 is unused, so lock behavior is effectively the same.
+- ZEsarUX queues timer interrupts using `pcw_pending_interrupt` until `IFF1` is enabled. I tested the analogous behavior in `src/pcw.c`; no boot progress.
+
+### Current narrowed path
+
+- For `CPM3 1-07.dsk`, BDOS `OPEN PROFILE.SUB` enters `SELDSK` and reaches:
+
+```
+BDOS OPEN -> BIOS SELDSK -> BB97 -> BC41 -> BBA6 -> BBBA -> BBC6 -> BC0B -> BC4F -> BC6B -> BC73 -> 0092 -> 4A70 -> 4A20
+```
+
+- `4A20` returns/continues; the visible repeated activity after that is bank-8 housekeeping around `49F5..4A04` and the keyboard/background scan around `5170..5193`.
+- The `5170..5193` hot range is keyboard scan/shadow update, not the blocker. Do not chase it as the primary failure.
+- The final idle loop is the BIOS scheduler/background work, not a crashed CPU or missing timer.
+
+### Best next probes
+
+1. Trace the exact call/return chain around `4A2B`, `4A39`, `4A3C`, `4A3F`, `49AE`, `4DEA`, and `4DB6`, including stack return words and key variables `6C21..6C3A`, `6C49`, `6C4B`, `6C55`, `6C68`.
+2. Disassemble/dump the CPU-visible code around the 1-01 hot loop `0F5A..0F5C`; that disk reaches a different foreground loop after the same `OPEN PROFILE.SUB` call, which may be easier to understand than the 1-07 bank-8 path.
+3. Add targeted traces for BDOS/BIOS disk parameter structures selected by `SELDSK`: `BE10`, `BE17`, `BE18`, `BD98`, `BD9C`, `FF18`, and the DPH/DPB pointers returned through `HL/IX/IY`.
+4. Compare the failing `SELDSK`/open path against Joyce or MAME source at the conceptual level: not FDC command completion, but how the BIOS schedules the first directory access after drive selection.
+5. If the diagnostics become too noisy, first remove or gate the current broad `fg_hist`/range traces in `src/pcw.c`; they slow long runs substantially.
+
 ## Summary
 
 The original sticky-FDC-IRQ-latch bug is fixed and the boot has visibly advanced — CP/M+ now reaches the "Drive is A:" status line and a cursor block. **The investigation has now reframed: CCP IS RUNNING.** Trace shows code executing in slot 1 with bank 8 mapped (CCP bank, per systemed.net hardware map) at `pc=5D9D`, in a tight busy-wait that decrements byte `0x6D1D` from `0xFF` to `0x00`, then `pc=5DA0` reloads it to `0x1E`, and the cycle repeats hundreds of times. The earlier conclusion that "CCP never gets invoked" was wrong; the actual bug is that CCP is **stuck in a retry/timeout loop waiting on a device or flag we are not satisfying**.
@@ -222,6 +317,12 @@ BDOS's banked-task model.
 Per MAME pcw.cpp:580-625, ports E1/E3 must return 0x7F (bit 7 clear =
 no expansion present). Was returning 0xFF (= expansion DETECTED).
 Empirically: didn't visibly change OPEN-FILE hang either.
+
+### FD84/FDA8 exact-path comparison (latest)
+- MAME and Joyce both treat FDC interrupt requests as **level-held** while the FDC INTRQ line stays high. In MAME this is `pcw_update_irqs()`; in Joyce it is `JoyceAsic::fdcIsr()` feeding the timer/IRQ dispatcher.
+- Our emulator had drifted back to **edge-only** FDC IRQ delivery in `asic_poll_fdc_irq()`, which is not faithful to that path.
+- I changed `src/asic.c` to re-present the FDC IRQ every step while the line is high, so the `FD84 -> FDA8 -> EI; RET` yield path can still see the pending interrupt after the return.
+- Rebuilt successfully after the change (`make -j4`), no compile errors.
 
 ### FDC sector-data sanity check
 With per-read trace added (`fdc read C R H size data:`), the sectors
