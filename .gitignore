@@ -5,6 +5,9 @@ disks/
 *.dsk
 *.sna
 
+# Local reference disk dumps — not redistributable.
+/Original CPM Boot Disks/
+
 # Ignore user-dropped ROM blobs; keep README and any committed tools.
 roms/*
 !roms/*.ROM
