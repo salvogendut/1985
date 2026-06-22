@@ -1,5 +1,7 @@
 # 1985 — Amstrad PCW 8256 emulator
 
+![1985](1985.png)
+
 A small Amstrad PCW emulator written in C with SDL3. Sibling project
 to [1984](https://github.com/salvogendut/1984) (the Amstrad CPC
 emulator); the two share build system, overlay framework, and the Z80
@@ -36,6 +38,17 @@ Extensions available (Extensions tab):
 
 Still stubbed: internal dot-matrix printer, RAM-disc M:, snapshot
 save, and most game-side hardware extensions.
+
+<p align="center">
+  <img src="screenshots/cpm.png" alt="CP/M+ boot banner and A&gt; prompt" width="380">
+  &nbsp;&nbsp;
+  <img src="screenshots/alien8.png" alt="Alien 8 running on the PCW" width="380">
+</p>
+
+<p align="center">
+  <img src="screenshots/emu_perryfi.png" alt="Aardwolf MUD over PerryFi AT-modem" width="480"><br>
+  <sub><b>PerryFi AT modem — CP/M terminal software connects to a real MUD over host TCP/IP</b></sub>
+</p>
 
 ## Build (Fedora)
 
