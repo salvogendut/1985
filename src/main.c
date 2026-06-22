@@ -460,6 +460,23 @@ int main(int argc, char **argv) {
                         }
                         case SDLK_F11: display_toggle_fullscreen(&disp); break;
                         case SDLK_F12: running = false; break;
+                        case SDLK_V:
+                            if (ev.key.mod & SDL_KMOD_CTRL) {
+                                /* Ctrl+V: clipboard → keyboard injection.
+                                 * Release the PCW's Ctrl key first so the
+                                 * first injected char isn't seen as Ctrl+key
+                                 * (would arrive as a control character to
+                                 * CP/M instead of plain text). */
+                                kbd_release(&pcw.kbd, 10, 1);   /* L/R Ctrl */
+                                char *txt = SDL_GetClipboardText();
+                                if (txt) {
+                                    paste_text_raw(&paste, txt);
+                                    SDL_free(txt);
+                                }
+                                break;
+                            }
+                            kbd_handle(&pcw.kbd, &ev.key);
+                            break;
                         default:
                             kbd_handle(&pcw.kbd, &ev.key);
                             break;
