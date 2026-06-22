@@ -161,7 +161,10 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                         snprintf(val, vsz, "%s", bool_str(cfg->ext_perryfi));
                     break;
                 case EXT_DKTRONICS:
-                    snprintf(label, lsz, "DK'TRONICS Sound & Joystick");
+                    /* User-facing label kept short so the value column
+                     * doesn't overlap. Full name (DK'TRONICS Sound +
+                     * Joystick) lives in code comments and the README. */
+                    snprintf(label, lsz, "DK'sound");
                     if (!cfg->ext_sanpollo_backplane)
                         snprintf(val, vsz, "[needs PCW Backplane]");
                     else

@@ -36,7 +36,7 @@ int display_init(Display *d, const Config *cfg) {
     d->smoothing  = cfg->fullscreen_smoothing;
     display_set_monochrome(d, cfg->monochrome);
 
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return -1;
     }

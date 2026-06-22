@@ -34,7 +34,11 @@ Extensions available (Extensions tab):
 - **PerryFi** — SanPollo's Wemos D1 (ESP8266) AT modem that plugs onto
   the serial line. 1985 implements the AT command set in software
   (`AT`, `ATDT host:port`, `+++ATH`, `AT&W`, `AT$SSID=`, …) and
-  forwards dial-out to a real host TCP socket — no WiFi needed.
+  forwards dial-out to a real host TCP socket. Because the host's
+  network is already there, **WiFi configuration is unnecessary** —
+  just enable PerryFi in the Extensions menu, fire up any CP/M
+  terminal program (QTERM, KERMIT, …) at 9600 bps on the serial
+  port, type `ATDT bbs.example.com:23` and you're telnetted in.
 - **DK'TRONICS Sound & Joystick** — AY-3-8912 PSG + DB9 joystick port
   at I/O `0xA9-0xAB`. 1985 ships a register-accurate AY model with
   tone/noise/envelope, mixed to mono 16-bit and routed through SDL3's

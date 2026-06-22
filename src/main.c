@@ -380,7 +380,16 @@ int main(int argc, char **argv) {
     SDL_AudioStream *ay_stream =
         SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
                                   &ayspec, NULL, NULL);
-    if (ay_stream) SDL_ResumeAudioStreamDevice(ay_stream);
+    if (!ay_stream) {
+        fprintf(stderr, "audio: SDL_OpenAudioDeviceStream failed: %s\n",
+                SDL_GetError());
+    } else if (!SDL_ResumeAudioStreamDevice(ay_stream)) {
+        fprintf(stderr, "audio: SDL_ResumeAudioStreamDevice failed: %s\n",
+                SDL_GetError());
+    } else if (cfg.debug_traces) {
+        fprintf(stderr, "audio: S16 mono %d Hz playback stream opened\n",
+                AY_AUDIO_RATE);
+    }
 
     /* SDL gamepad for the DK'tronics joystick. Pick the first one that
      * shows up; hot-plug handled below via SDL_EVENT_GAMEPAD_ADDED. */
