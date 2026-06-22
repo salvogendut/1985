@@ -1,12 +1,17 @@
 # ROMs
 
-The Amstrad PCW has **no boot ROM**. At reset the hardware injects a
-778-byte bootstrap stream into the Z80 instruction fetcher, which
-builds a 256-byte loader at 0x0002. That loader reads the first sector
-of drive A and jumps to it.
+The Amstrad PCW's boot code lives in the printer-controller MCU (a
+mask-programmed 8041AH). At reset the MCU shifts 275 bytes into low
+RAM through the parallel port; the Z80 then executes them as code,
+which reads the first sector of drive A and jumps to it.
 
-1985 emulates this bootstrap stream in `src/bootstrap.c`, so no
-firmware ROM files are needed and this directory ships empty.
+1985 ships those 275 bytes **statically compiled in** — see the
+`PCW_BOOT_ROM[]` array near the top of `src/bootstrap.c`. They are a
+verbatim copy of [Joyce](https://www.seasip.info/Unix/Joyce/)'s
+`pcw_boot.rom` (which also matches MAME's PCW printer-MCU dump and
+ZEsarUX's bundled boot ROM), so no external firmware files are needed
+and this directory ships empty.
 
 The CP/M Plus operating system itself lives on a CF2 disk image
-(720 KB, 3.5"). Mount one with `./1985 --disk-a /path/to/cpm.dsk`.
+(180 KB single-sided 3"). Mount one with
+`./1985 --disk-a /path/to/cpm.dsk`.
