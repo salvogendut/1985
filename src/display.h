@@ -47,6 +47,11 @@ void display_set_monochrome(Display *d, MonoMode m);
 /* Clear the framebuffer to bg. */
 void display_clear(Display *d);
 
+/* Fill the framebuffer with the foreground (lit) colour — used to
+ * mimic the real PCW's all-green look at power-on before the firmware
+ * programs the roller table. */
+void display_fill_lit(Display *d);
+
 /* Set a single 1bpp pixel. lit=true → fg, false → bg. */
 void display_put_pixel(Display *d, int x, int y, bool lit);
 

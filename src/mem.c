@@ -67,5 +67,7 @@ u8 mem_read(Mem *m, u16 addr) {
 void mem_write(Mem *m, u16 addr, u8 val) {
     int slot = addr >> 14;
     u8 block = m->write_bank[slot];
-    m->ram[block * MEM_BLOCK_SIZE + (addr & (MEM_BLOCK_SIZE - 1))] = val;
+    int a = block * MEM_BLOCK_SIZE + (addr & (MEM_BLOCK_SIZE - 1));
+    m->ram[a] = val;
+    m->ram_written[a >> 3] |= (u8)(1u << (a & 7));
 }

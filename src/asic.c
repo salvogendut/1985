@@ -13,6 +13,7 @@ void asic_init(Asic *a, struct Bootstrap *boot, struct Fdc *fdc) {
 
 void asic_reset(Asic *a) {
     a->roller_base     = 0;
+    a->roller_programmed = false;
     a->scroll_y        = 0;
     a->display_ctrl    = 0;
     a->display_enabled = true;   /* both gates default to enabled — the */
@@ -111,7 +112,7 @@ u8 asic_read(Asic *a, u8 port) {
 
 void asic_write(Asic *a, u8 port, u8 val) {
     switch (port) {
-        case 0xF5: a->roller_base = val; break;
+        case 0xF5: a->roller_base = val; a->roller_programmed = true; break;
         case 0xF6: a->scroll_y    = val; break;
         case 0xF7:
             a->display_ctrl   = val;
