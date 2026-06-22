@@ -53,6 +53,12 @@ typedef struct Printer {
     float text_x;
     float text_y;
     int   text_esc_skip;
+
+    /* Idle-flush counter (frames). Print activity resets this to a
+     * positive value; printer_tick decrements each frame and closes
+     * the current PDF when it hits zero — without that, Cairo only
+     * writes the trailer on shutdown and viewers see an empty file. */
+    int   idle_countdown;
 } Printer;
 
 void printer_init(Printer *p);
@@ -62,3 +68,4 @@ void printer_set_pdf_enabled(Printer *p, bool enabled);
 u8   printer_read (Printer *p, u8 port);
 void printer_write(Printer *p, u8 port, u8 val);
 void printer_write_centronics(Printer *p, u8 val);
+void printer_tick (Printer *p);   /* call once per frame at 50 Hz */

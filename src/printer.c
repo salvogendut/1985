@@ -37,6 +37,11 @@
 #define TEXT_LINE_PT        12.0f
 #define TEXT_CHAR_PT         6.0f
 
+/* Idle-finalise: at 50 Hz, 100 frames = 2 s with no print activity.
+ * On expiry the current PDF surface is finalised (trailer + xref
+ * written) so viewers can open it; the next byte starts a new file. */
+#define IDLE_FRAMES_TO_FINALISE 100
+
 static float page_w_pt(void) { return PAGE_W_360 / PDF_SCALE; }
 static float page_h_pt(void) { return PAGE_H_360 / PDF_SCALE; }
 
@@ -177,6 +182,19 @@ static void printer_check_end_form(Printer *p) {
     p->y = TOP_MARGIN_360;
 }
 
+static void printer_mark_active(Printer *p) {
+    p->idle_countdown = IDLE_FRAMES_TO_FINALISE;
+}
+
+void printer_tick(Printer *p) {
+    if (!p->idle_countdown) return;
+    if (--p->idle_countdown > 0) return;
+    /* Finalise the in-progress PDF so the file becomes openable. The
+     * next print byte will lazily create a fresh, timestamped file. */
+    if (p->pdf_cr || p->pdf_surface)
+        printer_shutdown(p);
+}
+
 static void printer_dot(Printer *p, float xf, float yf) {
     /* PDF surface is PAGE_W_360 × PAGE_H_360; Cairo silently clips
      * anything outside, so skip dots in the bottom margin between
@@ -188,6 +206,7 @@ static void printer_dot(Printer *p, float xf, float yf) {
     if (xs < 0.0f || xs >= PAGE_W_360 || yf < 0.0f || yf >= PAGE_H_360)
         return;
     if (!printer_pdf_ensure_page(p)) return;
+    printer_mark_active(p);
 
     double xp = xs / PDF_SCALE;
     double yp = yf / PDF_SCALE;
@@ -379,6 +398,7 @@ void printer_write_centronics(Printer *p, u8 val) {
     cairo_move_to(p->pdf_cr, p->text_x, p->text_y);
     char s[2] = { (char)val, 0 };
     cairo_show_text(p->pdf_cr, s);
+    printer_mark_active(p);
 
     p->text_x += TEXT_CHAR_PT;
     if (p->text_x > page_w_pt() - TEXT_MARGIN_PT)

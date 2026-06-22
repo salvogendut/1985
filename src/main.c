@@ -591,6 +591,7 @@ int main(int argc, char **argv) {
         }
 
         pcw_frame(&pcw);
+        printer_tick(&pcw.printer);
 
         /* Render one frame of AY audio (clears to silence when AY is
          * absent — keeps the SDL stream pacing steady). */
