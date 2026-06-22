@@ -47,6 +47,10 @@ typedef struct Fdc {
     bool motor_on;          /* spindle motor (ASIC port 0xF8 cmds 9/10) */
     bool trace;             /* stderr command-and-result trace */
     bool irq;               /* uPD765A IRQ output line — observed by ASIC */
+    u32  irq_pulse_count;   /* increments on every rising edge of irq, so
+                             * the ASIC can detect per-byte EXEC pulses
+                             * that happen within a single z80_step (drop
+                             * then re-assert in the same fdc_read call). */
 
     FdcPhase phase;
     u8       msr;           /* main status register, recomputed per phase */

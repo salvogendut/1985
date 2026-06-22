@@ -52,19 +52,23 @@ int asic_poll_fdc_irq(Asic *a) {
      *   pending_irq every step while fdc->irq is high. Z80 accepts
      *   only when iff1 == 1. Matches MAME pcw.cpp:153-176 and the
      *   FD84/FDA8 coroutine yield pattern.
-     * - NMI mode (fdc_irq_mode == 1): EDGE-triggered. NMI accept is
-     *   unconditional (not gated on iff1), so a level-triggered NMI
-     *   would re-fire on every instruction inside the NMI handler,
-     *   producing infinite stack pushes. Only fire on the rising
-     *   edge of fdc->irq. */
+     * - NMI mode (fdc_irq_mode == 1): EDGE-triggered via the FDC's
+     *   irq_pulse_count counter. NMI accept is unconditional (not
+     *   gated on iff1), so a level-triggered NMI would re-fire on
+     *   every instruction inside the NMI handler. We use a counter
+     *   bumped on each rising edge so per-byte EXEC pulses (drop +
+     *   re-assert in the same z80_step) are still detectable.
+     */
     bool now = a->fdc && a->fdc->irq;
+    u32 pulse = a->fdc ? a->fdc->irq_pulse_count : 0;
     int  req = 0;
     if (a->fdc_irq_mode == 2 && now) {
         req = 2;                               /* IRQ: level */
-    } else if (a->fdc_irq_mode == 1 && now && !a->prev_fdc_irq) {
-        req = 1;                               /* NMI: edge */
+    } else if (a->fdc_irq_mode == 1 && pulse != a->last_irq_pulse) {
+        req = 1;                               /* NMI: per-pulse edge */
     }
     a->prev_fdc_irq = now;
+    a->last_irq_pulse = pulse;
     return req;
 }
 

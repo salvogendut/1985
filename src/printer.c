@@ -18,12 +18,14 @@ u8 printer_read(Printer *p, u8 port) {
 
     if (port == 0xFC) return 0xF8;     /* no controller error */
 
-    /* Match ZEsarUX (machines/pcw.c:pcw_in_port_fd): return just 0x40
-     * (bit 6 = "printer has finished"). Returning the full status set
-     * (BAIL | FINISHED | FEEDER | PAPER | READY = 0xCC) might be
-     * triggering an unwanted code path in BDOS. */
-    return 0x40;
-    (void)p;
+    /* Match Joyce JoyceMatrix.cxx:107-131: READY | FEEDER | PAPER (= 0x4C)
+     * baseline, plus BAIL (0x80) if bail bar is in. We don't currently
+     * model paper feeder details, so always report all three present.
+     * (ZEsarUX returns just 0x40 -- works for older OS like J11CPM3 but
+     * J17CPM3 needs the FEEDER+PAPER bits to avoid a hang.) */
+    u8 v = 0x40 | 0x08 | 0x04;            /* READY | FEEDER | PAPER */
+    if (p->bail_in) v |= 0x80;            /* BAIL bar in */
+    return v;
 }
 
 void printer_write(Printer *p, u8 port, u8 val) {

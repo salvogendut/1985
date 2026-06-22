@@ -69,12 +69,14 @@ static void enter_exec_read(Fdc *f) {
      * NMI mode to handle these per-byte interrupts -- without per-byte
      * INTRQ, BIOS hangs waiting for the NMI to fire. */
     f->irq = true;
+    f->irq_pulse_count++;
 }
 
 static void enter_exec_write(Fdc *f) {
     f->phase = FDC_PHASE_EXEC_WRITE;
     f->msr   = MSR_RQM | MSR_NDM | MSR_BUSY;
     f->irq = true;
+    f->irq_pulse_count++;
 }
 
 static void trace_result(Fdc *f);
@@ -84,6 +86,7 @@ static void enter_result(Fdc *f) {
     f->msr   = MSR_RQM | MSR_DIO | MSR_BUSY;
     f->result_pos = 0;
     f->irq = true;
+    f->irq_pulse_count++;
     trace_result(f);
 }
 
@@ -137,6 +140,7 @@ static void cmd_recalibrate(Fdc *f) {
     if (!f->drive[f->cur_unit].inserted) f->st0 |= ST0_NR;
     f->int_pending = true;
     f->irq = true;
+    f->irq_pulse_count++;
     enter_idle(f);
 }
 
@@ -155,6 +159,7 @@ static void cmd_seek(Fdc *f) {
     if (!f->drive[f->cur_unit].inserted) f->st0 |= ST0_NR;
     f->int_pending = true;
     f->irq = true;
+    f->irq_pulse_count++;
     enter_idle(f);
 }
 
@@ -503,8 +508,12 @@ u8 fdc_read(Fdc *f, u8 port) {
             /* Drop INTRQ on read; re-assert if more bytes pending.
              * In non-DMA mode the FDC raises INTRQ for each byte. */
             f->irq = false;
-            if (f->exec_pos >= f->exec_len) finish_execution(f);
-            else f->irq = true;
+            if (f->exec_pos >= f->exec_len) {
+                finish_execution(f);
+            } else {
+                f->irq = true;
+                f->irq_pulse_count++;
+            }
             return b;
         }
         default:
@@ -547,9 +556,12 @@ void fdc_write(Fdc *f, u8 port, u8 val) {
             if (f->exec_pos < FDC_EXEC_BUF_LEN)
                 f->exec_buf[f->exec_pos++] = val;
             f->irq = false;
-            if (f->exec_pos >= f->exec_len)
+            if (f->exec_pos >= f->exec_len) {
                 finish_execution(f);
-            else f->irq = true;
+            } else {
+                f->irq = true;
+                f->irq_pulse_count++;
+            }
             break;
         }
         default:
