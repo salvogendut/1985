@@ -30,7 +30,12 @@ typedef struct PCW {
 
     PcwModel   model;
 
-    /* Trace-on-IO toggle, populated from cfg.trace_io. */
+    /* Master gate for ALL debug stderr output, populated from
+     * cfg.debug_traces. When false, none of the dev traces print
+     * regardless of the per-channel sub-flags below. */
+    bool       debug_traces;
+
+    /* Per-channel sub-flags. Effective only when debug_traces is true. */
     bool       trace_io;
 } PCW;
 

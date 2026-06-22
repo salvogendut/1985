@@ -35,6 +35,7 @@ typedef struct {
     /* [advanced] */
     bool     tinker;
     bool     debug;
+    bool     debug_traces;   /* master gate for all stderr noise -- default OFF */
     bool     trace_io;
     bool     trace_fdc;
     bool     trace_input;

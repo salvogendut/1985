@@ -12,6 +12,7 @@ static u8 bus_mem_read(void *ctx, u16 addr) {
 }
 
 static void dump_pc_bytes(PCW *pcw, u16 pc, const char *tag) {
+    if (!pcw->debug_traces) return;
     static bool dumped_077b = false;
     static bool dumped_5d76 = false;
     static bool dumped_08a0 = false;
@@ -210,6 +211,9 @@ void pcw_frame(PCW *pcw) {
             /* Skip straight to the next tick — IRQ will wake the CPU. */
             cycles = next_tick;
         } else {
+          /* Dev-only stderr probes, gated behind the master debug-traces
+           * flag (toggled at runtime from the Advanced overlay). */
+          if (pcw->debug_traces) {
             /* Foreground-PC histogram: after BDOS f=0F call, sample
              * the foreground PC (= where the CPU would be if no IRQ
              * were active). Detect "foreground" as iff1=1 AND the
@@ -488,6 +492,7 @@ void pcw_frame(PCW *pcw) {
                     last_c = c; last_de = de;
                 }
             }
+          }  /* end pcw->debug_traces gate */
             cycles += z80_step(&pcw->cpu, &pcw->bus);
         }
 

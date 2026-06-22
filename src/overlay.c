@@ -31,7 +31,7 @@ static int row_count(const Overlay *ov, OvSection s) {
         case OV_GENERAL:    return 3;  /* model, memory, tinker */
         case OV_MEDIA:      return 2;  /* drive A, drive B */
         case OV_EXTENSIONS: return 1;  /* printer placeholder */
-        case OV_TINKER:     return ov->cfg->tinker ? 8 : 0;
+        case OV_TINKER:     return ov->cfg->tinker ? 9 : 0;
         default:            return 0;
     }
 }
@@ -84,11 +84,12 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                 case 0: snprintf(label, lsz, "Smoothing");      snprintf(val, vsz, "%s", bool_str(cfg->fullscreen_smoothing)); break;
                 case 1: snprintf(label, lsz, "Monochrome");     snprintf(val, vsz, "%s", mono_str(cfg->monochrome));           break;
                 case 2: snprintf(label, lsz, "Debugging");      snprintf(val, vsz, "%s", bool_str(cfg->debug));                break;
-                case 3: snprintf(label, lsz, "Trace IO");       snprintf(val, vsz, "%s", bool_str(cfg->trace_io));             break;
-                case 4: snprintf(label, lsz, "Trace FDC");      snprintf(val, vsz, "%s", bool_str(cfg->trace_fdc));            break;
-                case 5: snprintf(label, lsz, "Trace Input");    snprintf(val, vsz, "%s", bool_str(cfg->trace_input));          break;
-                case 6: snprintf(label, lsz, "Load snapshot");  snprintf(val, vsz, "...");                                     break;
-                case 7: snprintf(label, lsz, "Version");        snprintf(val, vsz, "1985 v" "0.1.0");                          break;
+                case 3: snprintf(label, lsz, "Debug output");   snprintf(val, vsz, "%s", bool_str(cfg->debug_traces));         break;
+                case 4: snprintf(label, lsz, "Trace IO");       snprintf(val, vsz, "%s", bool_str(cfg->trace_io));             break;
+                case 5: snprintf(label, lsz, "Trace FDC");      snprintf(val, vsz, "%s", bool_str(cfg->trace_fdc));            break;
+                case 6: snprintf(label, lsz, "Trace Input");    snprintf(val, vsz, "%s", bool_str(cfg->trace_input));          break;
+                case 7: snprintf(label, lsz, "Load snapshot");  snprintf(val, vsz, "...");                                     break;
+                case 8: snprintf(label, lsz, "Version");        snprintf(val, vsz, "1985 v" "0.1.0");                          break;
             }
             break;
         default: break;
@@ -162,12 +163,13 @@ static void activate(Overlay *ov) {
             switch (ov->row) {
                 case 0: c->fullscreen_smoothing = !c->fullscreen_smoothing; ov->dirty = true; break;
                 case 1: cycle_mono(&c->monochrome); ov->dirty = true; break;
-                case 2: c->debug       = !c->debug;       ov->dirty = true; break;
-                case 3: c->trace_io    = !c->trace_io;    ov->dirty = true; break;
-                case 4: c->trace_fdc   = !c->trace_fdc;   ov->dirty = true; break;
-                case 5: c->trace_input = !c->trace_input; ov->dirty = true; break;
-                case 6: ov->dialog_kind = DIALOG_SNAPSHOT_LOAD; break;
-                case 7: break;
+                case 2: c->debug        = !c->debug;        ov->dirty = true; break;
+                case 3: c->debug_traces = !c->debug_traces; ov->dirty = true; break;
+                case 4: c->trace_io     = !c->trace_io;     ov->dirty = true; break;
+                case 5: c->trace_fdc    = !c->trace_fdc;    ov->dirty = true; break;
+                case 6: c->trace_input  = !c->trace_input;  ov->dirty = true; break;
+                case 7: ov->dialog_kind = DIALOG_SNAPSHOT_LOAD; break;
+                case 8: break;
             }
             break;
         default: break;
