@@ -7,12 +7,10 @@ core.
 
 ## Status
 
-**Scaffolding only.** The build produces a working binary that opens an
-SDL3 window and runs the Z80 against PCW memory and I/O, but the
-roller-RAM video decoder and the FDC drive backend are stubbed, so it
-does not yet boot CP/M Plus. The framework, configuration file, F9
-overlay, and headless-capture flags are all wired up and ready to drive
-the real hardware as it lands in follow-up releases.
+**Boots CP/M Plus.** All three reference boot disks (J11/J17/J29 CP/M
+3) reach the `A>` prompt with keyboard input. The Z80 core, ASIC, uPD765A
+FDC, roller-RAM video decoder, keyboard matrix, and F9 overlay are all
+wired up. Printer, RAM-disc M:, and snapshot save are still stubs.
 
 ## Build (Fedora)
 
@@ -46,10 +44,22 @@ to expose it.
 
 GPL-2.0-only. See `LICENSE`.
 
-## References
+## Acknowledgments
 
-- [Joyce](https://www.seasip.info/Unix/Joyce/) — John Elliott's
-  long-running PCW emulator. `joyce-custom` next to this checkout is
-  the reference used for hardware shape (CRTC roller-RAM, port map,
-  bootstrap stream); 1985's own code is fresh.
-- [PCW hardware documentation](https://www.seasip.info/AmstradXT/index.html)
+1985 is its own code, but it would not have reached a working CP/M+
+boot without two existing emulators to cross-check against:
+
+- **[Joyce](https://www.seasip.info/Unix/Joyce/)** — John Elliott's
+  long-running PCW emulator. The reference for ASIC port map,
+  roller-RAM video, the keyboard matrix, and (crucially) the uPD765A
+  FDC IRQ arm-delay logic from its `lib765` core. Also the source of
+  the authoritative `Docs/hardware.txt` and the boot-ROM bytes.
+- **[ZEsarUX](https://github.com/chernandezba/zesarux)** — César
+  Hernández Bañó's multi-machine Z80 emulator. Cross-checked for FDC
+  IRQ delivery, printer port 0xFD semantics, F4 lock bits, and the
+  expansion-port range handler.
+
+Additional documentation:
+
+- [PCW hardware reference](https://www.seasip.info/AmstradXT/index.html)
+- [systemed.net PCW pages](https://www.systemed.net/pcw/hardware.html)
