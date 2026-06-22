@@ -44,6 +44,11 @@ typedef struct {
                                          * backplane to expose it. */
     char     ext_serial_backend[8];     /* "pty" or "tcp" */
     int      ext_serial_tcp_port;       /* default 4002 */
+    bool     ext_perryfi;               /* SanPollo PerryFi: AT-modem to
+                                         * the host network. Plugs onto
+                                         * the serial port, so it's only
+                                         * available when ext_serial is
+                                         * enabled. */
 
     /* [advanced] */
     bool     tinker;

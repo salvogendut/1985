@@ -5,6 +5,7 @@
 
 #include "cps.h"
 #include "serial.h"
+#include "perryfi.h"
 #include "leds.h"
 
 #include <stdio.h>
@@ -99,37 +100,51 @@ static u8 dart_in_ctrl(CpsDart *d) {
 /* ---------------------------------------------------------------- */
 /* Channel A — serial.                                              */
 
-static void update_rr_serial(CpsDart *a, struct Serial *s) {
+/* Pick the live channel-A endpoint: PerryFi steals the line when its
+ * `present` flag is set; otherwise the raw pty/tcp backend wins. */
+static bool a_rx_has(const Cps *c) {
+    if (c->perryfi && c->perryfi->present) return perryfi_rx_has(c->perryfi);
+    if (c->serial  && c->serial->present)  return serial_rx_has(c->serial);
+    return false;
+}
+static bool a_rx_pop(Cps *c, u8 *out) {
+    if (c->perryfi && c->perryfi->present) return perryfi_rx_pop(c->perryfi, out);
+    if (c->serial  && c->serial->present)  return serial_rx_pop(c->serial, out);
+    return false;
+}
+static bool a_tx_push(Cps *c, u8 b) {
+    if (c->perryfi && c->perryfi->present) return perryfi_tx_push(c->perryfi, b);
+    if (c->serial  && c->serial->present)  return serial_tx_push(c->serial, b);
+    return false;
+}
+
+static void update_rr_serial(Cps *c) {
+    CpsDart *a = &c->dartA;
     /* RR0: clear the bits we drive, then re-assert based on backend. */
     a->rreg[0] &= ~(RR0_RX_AVAIL | RR0_TX_BUF_EMPTY | RR0_CTS);
-    if (s && s->present && serial_rx_has(s)) a->rreg[0] |= RR0_RX_AVAIL;
+    if (a_rx_has(c)) a->rreg[0] |= RR0_RX_AVAIL;
     a->rreg[0] |= RR0_TX_BUF_EMPTY;     /* we never back up */
     a->rreg[0] |= RR0_CTS;              /* assume cleared-to-send */
-    /* RR1: "all sent" is always true. */
     a->rreg[1] = (a->rreg[1] & ~RR1_ALL_SENT) | RR1_ALL_SENT;
 }
 
 static u8 dartA_in_ctrl(Cps *c) {
-    update_rr_serial(&c->dartA, c->serial);
+    update_rr_serial(c);
     return dart_in_ctrl(&c->dartA);
 }
 
 static u8 dartA_in_data(Cps *c) {
     u8 b = 0;
-    if (c->serial && c->serial->present) {
-        if (serial_rx_pop(c->serial, &b))
-            leds_ping_split(LED_SERIAL, false);   /* RX (red) — host → PCW */
-    }
+    if (a_rx_pop(c, &b))
+        leds_ping_split(LED_SERIAL, false);   /* RX (red) — host/modem → PCW */
     c->dartA.latch = b;
     return b;
 }
 
 static void dartA_out_data(Cps *c, u8 val) {
     c->dartA.latch = val;
-    if (c->serial && c->serial->present) {
-        if (serial_tx_push(c->serial, val))
-            leds_ping_split(LED_SERIAL, true);    /* TX (green) — PCW → host */
-    }
+    if (a_tx_push(c, val))
+        leds_ping_split(LED_SERIAL, true);    /* TX (green) — PCW → host/modem */
 }
 
 static void dartA_out_ctrl(Cps *c, u8 val) {
@@ -217,10 +232,11 @@ static void pit_write_ctrl(Cps *c, u8 val) {
 /* ---------------------------------------------------------------- */
 /* Public API.                                                      */
 
-void cps_init(Cps *c, bool present, struct Serial *serial) {
+void cps_init(Cps *c, bool present, struct Serial *serial, struct Perryfi *perryfi) {
     memset(c, 0, sizeof(*c));
     c->present = present;
     c->serial  = serial;
+    c->perryfi = perryfi;
     cps_reset(c);
 }
 

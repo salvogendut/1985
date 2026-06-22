@@ -336,12 +336,16 @@ int main(int argc, char **argv) {
      * I/O port window (0xE0-0xE8) is hooked on the same gate; the
      * split-LED in the bar tracks live RX/TX traffic. */
     {
-        bool serial_avail = (cfg.model == PCW_MODEL_9512) || cfg.ext_sanpollo_backplane;
-        bool serial_on    = cfg.ext_serial && serial_avail;
+        bool serial_avail  = (cfg.model == PCW_MODEL_9512) || cfg.ext_sanpollo_backplane;
+        bool serial_on     = cfg.ext_serial  && serial_avail;
+        bool perryfi_on    = serial_on        && cfg.ext_perryfi;
+        /* When PerryFi takes over the serial line, the raw pty/tcp
+         * backend stays dark — the AT modem is what's "plugged in". */
         serial_init(&pcw.serial,
-                    serial_on,
+                    serial_on && !perryfi_on,
                     cfg.ext_serial_backend,
                     cfg.ext_serial_tcp_port);
+        perryfi_init(&pcw.perryfi, perryfi_on);
         cps_set_present(&pcw.cps, serial_on);
         leds_set_enabled(LED_SERIAL, serial_on);
     }
