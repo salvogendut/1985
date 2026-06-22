@@ -1,6 +1,33 @@
 # PCW Boot Investigation Status (issue #12 — `ccp-load` branch)
 
-## 🎉 BOOTS TO A> on `CPM3 1-01.dsk` — 2026-06-22
+## 🎉🎉 BOOTS TO A> on 1-01, 1-07, 2-09 — 2026-06-22
+
+All three CPM3 boot disks now reach the A> prompt and accept keyboard
+input (`dir`, etc.). Same end-state as Joyce on real-hardware-derived
+images. The fix journey is documented below.
+
+### Final fix layer 2: FDC IRQ arm-delay (commit `3635d15`)
+
+`J17CPM3.EMS` (the OS in 1-07.dsk) needs the FDC INTRQ to fire AFTER
+the host has set up its NMI/wait. Real FDC has a delay between
+command completion and INTRQ assertion -- Joyce's lib765 models this
+with `SHORT_TIMEOUT = 1000` machine cycles.
+
+`src/fdc.{c,h}` and `src/asic.c`:
+- Added `Fdc::irq_arm_ticks` countdown.
+- `enter_exec_read` / `enter_exec_write` / `cmd_seek` / `cmd_recalibrate`
+  set `irq_arm_ticks = 64` instead of asserting INTRQ immediately.
+- `enter_result` arms the delay only if INTRQ is currently low (so
+  EXEC->RESULT transition with INTRQ already high stays high).
+- `asic_poll_fdc_irq` decrements `irq_arm_ticks` each call; when it
+  hits 0 it sets `irq = true` and bumps `irq_pulse_count`.
+
+J11CPM3 (1-01) doesn't depend on this delay (its NMI handler drains
+the buffer in a tight loop and doesn't care when INTRQ fires within
+the wait window), so it still boots. J17CPM3 (1-07) was hanging
+because INTRQ fired before its setup completed.
+
+## 🎉 BOOTS TO A> on `CPM3 1-01.dsk` — 2026-06-22 (earlier today)
 
 Branch `ccp-load` at commit `533f4f4` now boots `CPM3 1-01.dsk` all the way to
 the `A>` prompt, runs PROFILE.SUB (SETDEF + PIP copies of basic.com, dir.com,
