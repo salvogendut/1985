@@ -88,6 +88,10 @@ void display_clear(Display *d) {
     for (int i = 0; i < DISPLAY_W * DISPLAY_H; i++) d->fb[i] = d->bg;
 }
 
+void display_fill_lit(Display *d) {
+    for (int i = 0; i < DISPLAY_W * DISPLAY_H; i++) d->fb[i] = d->fg;
+}
+
 void display_put_pixel(Display *d, int x, int y, bool lit) {
     if (x < 0 || x >= DISPLAY_W || y < 0 || y >= DISPLAY_H) return;
     d->fb[y * DISPLAY_W + x] = lit ? d->fg : d->bg;

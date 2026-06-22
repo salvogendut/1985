@@ -47,12 +47,21 @@ struct Keyboard;    /* forward */
 
 typedef struct Mem {
     u8  ram[MEM_SIZE];
+    /* Per-byte "guest has written this" bitmap. Lets the video walker
+     * tell apart pixels written by the firmware from un-touched RAM
+     * (which would otherwise decode as visual garbage at boot). */
+    u8  ram_written[MEM_SIZE / 8];
     u8  read_bank [4];                   /* block selected for reads in each slot */
     u8  write_bank[4];                   /* block selected for writes in each slot */
     u8  bank_force;                      /* port F4 bits 4-7 = force read bank == write bank */
     struct Bootstrap *bootstrap;         /* non-NULL while reset stream is active */
     struct Keyboard  *kbd;               /* live matrix overlay for block 3 reads */
 } Mem;
+
+static inline bool mem_byte_written(const Mem *m, int abs_addr) {
+    int a = abs_addr & (MEM_SIZE - 1);
+    return (m->ram_written[a >> 3] >> (a & 7)) & 1;
+}
 
 void mem_init(Mem *m);
 void mem_reset(Mem *m);

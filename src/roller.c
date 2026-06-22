@@ -36,8 +36,11 @@ void roller_render(struct Mem *m, struct Asic *a, struct Display *d) {
      * something else on this firmware (Loco/CP/M+ writes F7=0 early
      * and never re-asserts bit 6, but expects the display to stay on),
      * so we don't gate on it. */
-    if (!a->display_enabled) {
-        display_clear(d);
+    /* Display off (firmware hasn't sent F8 cmd 7 yet) or roller base
+     * not yet pointed at meaningful RAM: real HW shows a solid green
+     * phosphor field — mimic that instead of decoding garbage. */
+    if (!a->display_enabled || !a->roller_programmed) {
+        display_fill_lit(d);
         return;
     }
 
@@ -48,6 +51,21 @@ void roller_render(struct Mem *m, struct Asic *a, struct Display *d) {
     for (int y = 0; y < SCREEN_ROWS; y++) {
         int idx = (y + scroll) & 0xFF;
         int tbl_off = (base + idx * 2) & 0x3FFFF;
+
+        /* If the firmware hasn't actually written this roller table
+         * slot yet, treat the row as un-populated. Otherwise the two
+         * source bytes are random RAM and decode to visual garbage. */
+        bool tbl_ready = mem_byte_written(m, tbl_off)
+                      && mem_byte_written(m, (tbl_off + 1) & 0x3FFFF);
+        if (!tbl_ready) {
+            for (int col = 0; col < SCREEN_COLS; col++) {
+                int xbase = col * 8;
+                for (int b = 0; b < 8; b++)
+                    display_put_pixel(d, xbase + b, y, true);
+            }
+            continue;
+        }
+
         unsigned word = (unsigned)m->ram[tbl_off]
                       | ((unsigned)m->ram[(tbl_off + 1) & 0x3FFFF] << 8);
         int row_addr = (int)(((word & 0xE000u) << 1)
@@ -55,8 +73,17 @@ void roller_render(struct Mem *m, struct Asic *a, struct Display *d) {
                           |  (word & 0x0007u));
 
         for (int col = 0; col < SCREEN_COLS; col++) {
-            u8 byte = m->ram[(row_addr + col * 8) & 0x3FFFF];
+            int src = (row_addr + col * 8) & 0x3FFFF;
             int xbase = col * 8;
+            if (!mem_byte_written(m, src)) {
+                /* Pixel cell whose source byte has never been written
+                 * by the guest — show phosphor green, not whatever
+                 * random data happens to live in that RAM cell. */
+                for (int b = 0; b < 8; b++)
+                    display_put_pixel(d, xbase + b, y, true);
+                continue;
+            }
+            u8 byte = m->ram[src];
             for (int b = 0; b < 8; b++)
                 display_put_pixel(d, xbase + b, y,
                                   (((byte >> (7 - b)) & 1) ^ invert) != 0);

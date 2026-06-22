@@ -36,6 +36,10 @@ struct Fdc;
 
 typedef struct Asic {
     u8  roller_base;        /* port 0xF5 */
+    bool roller_programmed; /* set on first F5 write; until then the
+                             * roller's "base" really means "boot ROM
+                             * at addr 0" and decoding it produces
+                             * visual garbage. */
     u8  scroll_y;           /* port 0xF6 */
     u8  display_ctrl;       /* port 0xF7 */
     bool display_enabled;   /* port 0xF8 cmd 7/8 — system-level gate */
