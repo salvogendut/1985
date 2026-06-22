@@ -93,7 +93,7 @@ static int row_count(const Overlay *ov, OvSection s) {
             if (ov->cfg->model == PCW_MODEL_8256) n++;
             return n;
         }
-        case OV_TINKER:     return ov->cfg->tinker ? 10 : 0;
+        case OV_TINKER:     return ov->cfg->tinker ? 11 : 0;
         default:            return 0;
     }
 }
@@ -208,8 +208,9 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                     else
                         snprintf(val, vsz, "PTY");
                     break;
-                case 8: snprintf(label, lsz, "Load snapshot");  snprintf(val, vsz, "...");                                     break;
-                case 9: snprintf(label, lsz, "Version");        snprintf(val, vsz, "1985 v" "0.1.0");                          break;
+                case 8: snprintf(label, lsz, "Show keyboard layout"); snprintf(val, vsz, "...");                               break;
+                case 9: snprintf(label, lsz, "Load snapshot");  snprintf(val, vsz, "...");                                     break;
+                case 10: snprintf(label, lsz, "Version");       snprintf(val, vsz, "1985 v" "0.1.0");                          break;
             }
             break;
         default: break;
@@ -391,8 +392,9 @@ static void activate(Overlay *ov) {
                         ov->dirty = true;
                     }
                     break;
-                case 8: ov->dialog_kind = DIALOG_SNAPSHOT_LOAD; break;
-                case 9: break;
+                case 8: ov->state = OV_STATE_KEYS; break;
+                case 9: ov->dialog_kind = DIALOG_SNAPSHOT_LOAD; break;
+                case 10: break;
             }
             break;
         default: break;
@@ -468,6 +470,12 @@ bool overlay_handle_event(Overlay *ov, SDL_Event *ev) {
     if (ev->type == SDL_EVENT_QUIT) return false;
 
     if (ev->type != SDL_EVENT_KEY_DOWN) return true;
+
+    if (ov->state == OV_STATE_KEYS) {
+        /* Any key dismisses the help panel. */
+        ov->state = OV_STATE_MENU;
+        return true;
+    }
 
     if (ov->state == OV_STATE_CONFIRM) {
         if (ev->key.key == SDLK_RETURN || ev->key.key == SDLK_KP_ENTER
@@ -572,6 +580,59 @@ void overlay_render(Overlay *ov, SDL_Renderer *r) {
     if (ov->section == OV_MEDIA) {
         draw_text(r, ORIGIN_X, ORIGIN_Y + 4 * LINE_H,
                   "Enter: select DSK   Del: eject", 160, 160, 160);
+    }
+
+    /* Keyboard help — opened from Advanced ▸ "Show keyboard layout".
+     * Drawn on top of the dimmed window; any key returns to the menu. */
+    if (ov->state == OV_STATE_KEYS) {
+        static const struct { const char *pcw, *host; } rows[] = {
+            { "f1 .. f8",          "Shift + F1 .. F8" },
+            { "EXIT",              "Esc" },
+            { "STOP",              "`" },
+            { "EXTRA",             "Ctrl" },
+            { "ALT",               "Alt" },
+            { "COPY",              "Home" },
+            { "CUT",               "Insert" },
+            { "PASTE",             "PageUp" },
+            { "DOC / PAGE",        "PageDown" },
+            { "CAN",               "End  /  Keypad ." },
+            { "DEL\x1A",           "Delete" },
+            { "LINE / EOL",        "Keypad 7" },
+            { "WORD / CHAR",       "Keypad 9" },
+            { "FIND / EXCH",       "Keypad 1" },
+            { "UNIT / PARA",       "Keypad 3" },
+            { "RELAY",             "Keypad 0" },
+            { "[+]   (Set)",       "Keypad +" },
+            { "[-]   (Clear)",     "Keypad -" },
+            { "PTR",               "PrintScreen  /  Keypad *" },
+            { "Return",            "Enter  /  Keypad Enter" },
+        };
+        int n = (int)(sizeof(rows) / sizeof(rows[0]));
+
+        int ww = DISPLAY_LOGICAL_W;
+        int wh = DISPLAY_LOGICAL_H;
+        const int FONT_H = 8;
+        int box_w = 520;
+        int box_h = FONT_H + 12 + n * (FONT_H + 4) + 20;
+        float bx = (ww - box_w) / 2.0f;
+        float by = (wh - box_h) / 2.0f;
+
+        fill_rect(r, 0, 0, (float)ww, (float)wh, 0, 0, 0, 160);
+        fill_rect(r, bx, by, (float)box_w, (float)box_h, 20, 20, 50, 255);
+        draw_rect_outline(r, bx, by, (float)box_w, (float)box_h, 70, 90, 200);
+
+        const char *title = "PCW key                 Host key";
+        draw_text(r, (int)(bx + 16), (int)(by + 8), title, 255, 255, 100);
+
+        int row_y = (int)(by + 8 + FONT_H + 8);
+        for (int i = 0; i < n; i++) {
+            draw_text(r, (int)(bx + 16),  row_y, rows[i].pcw,  220, 220, 220);
+            draw_text(r, (int)(bx + 216), row_y, rows[i].host, 200, 200, 255);
+            row_y += FONT_H + 4;
+        }
+        draw_text(r, (int)(bx + 16), (int)(by + box_h - FONT_H - 6),
+                  "Press any key to return.", 140, 140, 140);
+        return;
     }
 
     /* Centered confirm dialog (matches 1984's modal). Drawn on top of

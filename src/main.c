@@ -40,46 +40,6 @@
 int g_debug_enabled = 0;
 int cpc_frame_count = 0;
 
-static bool main_window_key_event(const Display *disp, const SDL_Event *ev) {
-    if (ev->type != SDL_EVENT_KEY_DOWN && ev->type != SDL_EVENT_KEY_UP)
-        return false;
-    return ev->key.windowID == SDL_GetWindowID(disp->win);
-}
-
-static bool main_window_event(const Display *disp, const SDL_Event *ev) {
-    SDL_WindowID main_id = SDL_GetWindowID(disp->win);
-    switch (ev->type) {
-        case SDL_EVENT_MOUSE_BUTTON_DOWN:
-        case SDL_EVENT_MOUSE_BUTTON_UP:
-            return ev->button.windowID == main_id;
-        case SDL_EVENT_MOUSE_MOTION:
-            return ev->motion.windowID == main_id;
-        case SDL_EVENT_WINDOW_FOCUS_LOST:
-        case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
-            return ev->window.windowID == main_id;
-        default:
-            return main_window_key_event(disp, ev);
-    }
-}
-
-static void set_input_captured(Display *disp, bool *captured, bool capture) {
-    if (*captured == capture) return;
-    *captured = capture;
-    SDL_SetWindowKeyboardGrab(disp->win, capture);
-    SDL_SetWindowMouseGrab(disp->win, capture);
-}
-
-static bool is_capture_release_key(const SDL_KeyboardEvent *key) {
-    bool enter = key->key == SDLK_RETURN || key->key == SDLK_KP_ENTER;
-    return enter && (key->mod & SDL_KMOD_CTRL);
-}
-
-static void release_capture_combo_keys(PCW *pcw) {
-    kbd_release(&pcw->kbd, 10, 1);  /* Ctrl */
-    kbd_release(&pcw->kbd, 2, 2);   /* Return */
-    kbd_release(&pcw->kbd, 10, 5);  /* keypad Enter */
-}
-
 static const char *USAGE =
 "Usage: 1985 [options]\n"
 "  --config PATH               override config file path\n"
@@ -478,42 +438,21 @@ int main(int argc, char **argv) {
     if (cfg.debug_traces) {
         printf("1985 — Amstrad PCW 8256 / 8512 / 9512 emulator (git %s)\n", PROG_GIT_COMMIT);
         printf("config: %s\n", cfg.path);
-        printf("Click = capture input, Ctrl+Enter = release, F9 = options, F11 = fullscreen, F12 = quit\n");
+        printf("F9 = options, F11 = fullscreen, F12 = quit\n");
     }
 
     bool running = true;
-    bool input_captured = false;
     int  frame   = 0;
     Uint64 next_tick_ms = SDL_GetTicks();
 
     while (running) {
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
-            if (input_captured && main_window_key_event(&disp, &ev)) {
-                if (ev.type == SDL_EVENT_KEY_DOWN && is_capture_release_key(&ev.key)) {
-                    set_input_captured(&disp, &input_captured, false);
-                    release_capture_combo_keys(&pcw);
-                    continue;
-                }
-                kbd_handle(&pcw.kbd, &ev.key);
-                continue;
-            }
-            if (input_captured && ev.type == SDL_EVENT_WINDOW_FOCUS_LOST
-                && main_window_event(&disp, &ev)) {
-                set_input_captured(&disp, &input_captured, false);
-                continue;
-            }
             if (monitor_handle_event(mon, &ev)) continue;
             if (overlay_handle_event(&ov, &ev)) continue;
             switch (ev.type) {
                 case SDL_EVENT_QUIT:
                     running = false; break;
-                case SDL_EVENT_MOUSE_BUTTON_DOWN:
-                    if (ev.button.windowID == SDL_GetWindowID(disp.win)
-                        && ev.button.button == SDL_BUTTON_LEFT) {
-                        set_input_captured(&disp, &input_captured, true);
-                    }
-                    break;
                 case SDL_EVENT_GAMEPAD_ADDED:
                     if (!gamepad) gamepad = SDL_OpenGamepad(ev.gdevice.which);
                     break;
@@ -525,6 +464,14 @@ int main(int argc, char **argv) {
                     }
                     break;
                 case SDL_EVENT_KEY_DOWN:
+                    /* Shift+F1..Shift+F8 are PCW f1..f8 — let the matrix
+                     * handler take them before any host shortcut fires. */
+                    if (ev.key.scancode >= SDL_SCANCODE_F1
+                        && ev.key.scancode <= SDL_SCANCODE_F8
+                        && (ev.key.mod & SDL_KMOD_SHIFT)) {
+                        kbd_handle(&pcw.kbd, &ev.key);
+                        break;
+                    }
                     switch (ev.key.key) {
                         case SDLK_F4: {
                             char path[64];
@@ -676,10 +623,8 @@ int main(int argc, char **argv) {
               : (cfg.model == PCW_MODEL_9512) ? "PCW 9512"
               : "PCW 8256";
             const char *keys =
-                input_captured
-              ? "  CAPTURED  F-keys=guest  Ctrl+Enter=release"
-              : "  Click=capture  F4=shot  F5=reset  F6=gif  "
-                "F8=mon  F9=opts  F11=full  F12=quit";
+                "  F4=screenshot  F5=reset  F6=capture  F8=monitor  "
+                "F9=options  F11=fullscreen  F12=quit";
 
             SDL_SetRenderLogicalPresentation(disp.renderer, 0, 0,
                                              SDL_LOGICAL_PRESENTATION_DISABLED);
@@ -767,7 +712,6 @@ int main(int argc, char **argv) {
     }
 
     if (gc) gifcap_close(gc);
-    set_input_captured(&disp, &input_captured, false);
     monitor_destroy(mon);
     if (gamepad)   SDL_CloseGamepad(gamepad);
     if (ay_stream) SDL_DestroyAudioStream(ay_stream);

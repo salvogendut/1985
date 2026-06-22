@@ -14,6 +14,7 @@ typedef enum {
 typedef enum {
     OV_STATE_MENU    = 0,
     OV_STATE_CONFIRM = 1,
+    OV_STATE_KEYS    = 2,
 } OvState;
 
 typedef enum {
