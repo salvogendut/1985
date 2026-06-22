@@ -25,6 +25,7 @@
 #include <stdbool.h>
 
 struct Serial;
+struct Perryfi;
 struct Printer;
 
 typedef enum { CPS_DART_MODE_REGISTER = 0, CPS_DART_MODE_DATA = 1 } CpsDartMode;
@@ -57,13 +58,16 @@ typedef struct Cps {
     u8   parallel_data;
     bool parallel_strobe;    /* current DTR/STROBE level */
 
-    /* Backends. dartA's data port reads/writes go through `serial`. */
+    /* Backends — both borrowed. Channel A's data port routes through
+     * `perryfi` when its `present` flag is set, otherwise through the
+     * raw `serial` (pty/tcp) backend. */
     struct Serial  *serial;
+    struct Perryfi *perryfi;
 } Cps;
 
-/* `serial` is borrowed (lifetime managed by the caller). Pass NULL to
- * leave the dart-A side unwired — useful for early boot smoke tests. */
-void cps_init(Cps *c, bool present, struct Serial *serial);
+/* Borrowed pointers — lifetimes managed by the caller. Pass NULL to
+ * leave the dart-A side unwired (smoke tests). */
+void cps_init(Cps *c, bool present, struct Serial *serial, struct Perryfi *perryfi);
 void cps_reset(Cps *c);
 void cps_set_present(Cps *c, bool present);
 

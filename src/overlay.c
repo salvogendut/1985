@@ -27,6 +27,7 @@ typedef enum {
     EXT_SECOND_DRIVE,
     EXT_SANPOLLO,
     EXT_SERIAL,
+    EXT_PERRYFI,
 } ExtRow;
 
 static ExtRow ext_row_at(const Config *cfg, int row) {
@@ -37,6 +38,7 @@ static ExtRow ext_row_at(const Config *cfg, int row) {
     }
     if (row == r++) return EXT_SANPOLLO;
     if (row == r++) return EXT_SERIAL;
+    if (row == r++) return EXT_PERRYFI;
     return EXT_NONE;
 }
 
@@ -72,10 +74,11 @@ static int row_count(const Overlay *ov, OvSection s) {
              *   Second drive       (8256 only)
              *   PCW Backplane
              *   Serial port
+             *   PerryFi            (AT-modem; lives on the serial line)
              *
              * The Serial backend toggle (pty/tcp) lives under Advanced —
              * it's a developer convenience, not a hardware option. */
-            int n = 3;
+            int n = 4;
             if (ov->cfg->model == PCW_MODEL_8256) n++;
             return n;
         }
@@ -144,6 +147,15 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                         snprintf(val, vsz, "[needs PCW Backplane]");
                     else
                         snprintf(val, vsz, "%s", bool_str(cfg->ext_serial));
+                    break;
+                case EXT_PERRYFI:
+                    snprintf(label, lsz, "PerryFi");
+                    if (!ext_serial_available(cfg))
+                        snprintf(val, vsz, "[needs PCW Backplane]");
+                    else if (!cfg->ext_serial)
+                        snprintf(val, vsz, "[needs Serial port]");
+                    else
+                        snprintf(val, vsz, "%s", bool_str(cfg->ext_perryfi));
                     break;
                 default: break;
             }
@@ -288,6 +300,12 @@ static void activate(Overlay *ov) {
                         ov->dirty = true;
                     }
                     break;
+                case EXT_PERRYFI:
+                    if (ext_serial_available(c) && c->ext_serial) {
+                        c->ext_perryfi = !c->ext_perryfi;
+                        ov->dirty = true;
+                    }
+                    break;
                 case EXT_PRINTER:
                 case EXT_NONE:
                 default:
@@ -346,7 +364,8 @@ static void close_overlay(Overlay *ov, bool save) {
                            || (ov->cfg->memory_kb            != ov->saved.memory_kb)
                            || (ov->cfg->ext_second_drive     != ov->saved.ext_second_drive)
                            || (ov->cfg->ext_sanpollo_backplane != ov->saved.ext_sanpollo_backplane)
-                           || (ov->cfg->ext_serial           != ov->saved.ext_serial);
+                           || (ov->cfg->ext_serial           != ov->saved.ext_serial)
+                           || (ov->cfg->ext_perryfi          != ov->saved.ext_perryfi);
         config_save(ov->cfg);
         ov->dirty = false;
         if (need_cold_boot && ov->pcw) {
@@ -357,9 +376,11 @@ static void close_overlay(Overlay *ov, bool save) {
             if (ov->cfg->drive_b[0]) disk_load(&ov->pcw->fdc.drive[1], ov->cfg->drive_b);
             bool savail = (ov->cfg->model == PCW_MODEL_9512) || ov->cfg->ext_sanpollo_backplane;
             bool s_on   = ov->cfg->ext_serial && savail;
-            serial_init(&ov->pcw->serial, s_on,
+            bool p_on   = s_on && ov->cfg->ext_perryfi;
+            serial_init(&ov->pcw->serial, s_on && !p_on,
                         ov->cfg->ext_serial_backend,
                         ov->cfg->ext_serial_tcp_port);
+            perryfi_init(&ov->pcw->perryfi, p_on);
             cps_set_present(&ov->pcw->cps, s_on);
             leds_set_enabled(LED_SERIAL, s_on);
         }

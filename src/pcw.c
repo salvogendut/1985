@@ -191,8 +191,10 @@ void pcw_init(PCW *pcw, PcwModel model, int memory_kb) {
 
     /* CPS8256 SIO/Centronics. Present-state is set by main/overlay
      * after init based on model + backplane. Channel A reads/writes
-     * route through pcw->serial. */
-    cps_init(&pcw->cps, false, &pcw->serial);
+     * route through pcw->serial (or through pcw->perryfi when the
+     * PerryFi extension is plugged in). */
+    cps_init(&pcw->cps, false, &pcw->serial, &pcw->perryfi);
+    perryfi_init(&pcw->perryfi, false);
 
     pcw->bus.mem_read  = bus_mem_read;
     pcw->bus.mem_write = bus_mem_write;
@@ -235,6 +237,7 @@ void pcw_frame(PCW *pcw) {
     /* Drain the serial backend(s) once per emulated frame — same
      * cadence 1984 uses for USIfAC. */
     serial_poll(&pcw->serial);
+    perryfi_poll(&pcw->perryfi);
 
     int cycles = 0;
     int next_tick = CYCLES_PER_TICK;
