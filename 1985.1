@@ -1,16 +1,24 @@
-.TH 1985 1 "June 2026" "1985 0.1.0" "User Commands"
+.TH 1985 1 "June 2026" "1985 0.4.0" "User Commands"
 .SH NAME
-1985 \- Amstrad PCW 8256 emulator
+1985 \- Amstrad PCW 8256/8512/9512 emulator
 .SH SYNOPSIS
 .B 1985
 .RI [ OPTIONS ]
 .SH DESCRIPTION
 .B 1985
-is an Amstrad PCW 8256 emulator written in C with SDL3. Sibling project
-to 1984 (the Amstrad CPC emulator) sharing build system, F9 overlay,
-and Z80 core. The PCW family ran CP/M Plus on a Z80 with a Motorola
-6845 CRTC, a 720x256 monochrome green-phosphor display, an NEC uPD765A
-floppy controller, and 256 KB of banked RAM.
+is an Amstrad PCW emulator written in C with SDL3, a sibling project to
+1984 (the Amstrad CPC emulator) sharing build system, F9 overlay, and
+Z80 core. The PCW family ran CP/M Plus on a Z80 with a custom ASIC
+driving a 720x256 monochrome roller-RAM display, an NEC uPD765A floppy
+controller, and up to 2 MB of banked RAM.
+.PP
+Models supported:
+.B PCW 8256
+(256 KB, single floppy, green monitor),
+.B PCW 8512
+(512 KB, two floppies, green),
+.B PCW 9512
+(512 KB, two floppies, white).
 .PP
 On first run
 .B 1985
@@ -38,10 +46,10 @@ Mount a .dsk image in drive B.
 Type TEXT verbatim after boot.
 .TP
 .BI --load-sna= PATH
-Load a .sna snapshot at init (stubbed).
+Load a .sna snapshot at init.
 .TP
 .BI --save-sna-at= N:PATH
-Save .sna at frame N (stubbed).
+Save .sna at frame N.
 .TP
 .BI --screenshot-at= N:PATH
 Save a PPM screenshot at frame N and exit.
@@ -65,17 +73,14 @@ Load an SDCC .map for the F8 disassembler.
 Show help and exit.
 .SH KEYBOARD SHORTCUTS
 .TP
-.B Click in window
-Capture keyboard input for the guest.
-.TP
-.B Ctrl+Enter
-Release captured keyboard input.
-.TP
 .B F4
 Save .ppm screenshot.
 .TP
 .B F5
 Warm reset.
+.TP
+.B F6
+Toggle GIF capture.
 .TP
 .B F8
 Open / close memory monitor.
@@ -89,22 +94,29 @@ Toggle fullscreen.
 .B F12
 Quit.
 .TP
+.B Shift+F1..F8
+PCW f1..f8 keys.
+.TP
+.B Ctrl++ / Ctrl+-
+Step window scale 1x .. 4x.
+.TP
 .B Ctrl+V
 Paste clipboard.
 .SH OVERLAY
 Four tabs:
 .B General
-(model, RAM, debug toggle),
+(model, RAM, Second drive on 8256, PCW Backplane, Tinker),
 .B Media
 (drive A / B file pickers),
 .B Extensions
-(PDF printer folder, second drive, backplane, serial, PerryFi,
-DK'tronics sound/joystick),
+(PDF printer folder, serial port, PerryFi, DK'tronics sound/joystick \(em
+appears only when the PCW Backplane is plugged in),
 .B Advanced
-(smoothing, monochrome tint, FPS, trace toggles, snapshot load/save).
+(smoothing, tint, tint mode, video mode, printer mode/model, debug
+toggles, serial mode, snapshot save/load).
 The Advanced tab is hidden unless
 .B tinker=true
-is set in the config.
+is set in the config (toggle it from General).
 .SH FILES
 .TP
 .I ~/.config/1985/1985.conf

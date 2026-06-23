@@ -24,24 +24,43 @@
 typedef enum {
     EXT_NONE = 0,
     EXT_PRINTER,
-    EXT_SECOND_DRIVE,
-    EXT_SANPOLLO,
     EXT_SERIAL,
     EXT_PERRYFI,
     EXT_DKTRONICS,
 } ExtRow;
 
 static ExtRow ext_row_at(const Config *cfg, int row) {
+    (void)cfg;
     int r = 0;
     if (row == r++) return EXT_PRINTER;
-    if (cfg->model == PCW_MODEL_8256) {
-        if (row == r++) return EXT_SECOND_DRIVE;
-    }
-    if (row == r++) return EXT_SANPOLLO;
     if (row == r++) return EXT_SERIAL;
     if (row == r++) return EXT_PERRYFI;
     if (row == r++) return EXT_DKTRONICS;
     return EXT_NONE;
+}
+
+/* General-tab row identity. Same shape as ExtRow: the displayed row
+ * index shifts when an 8256-only row is hidden, so navigation routes
+ * by kind. */
+typedef enum {
+    GEN_NONE = 0,
+    GEN_MODEL,
+    GEN_MEMORY,
+    GEN_SECOND_DRIVE,    /* 8256 only — 8512/9512 have two drives stock */
+    GEN_BACKPLANE,
+    GEN_TINKER,
+} GenRow;
+
+static GenRow gen_row_at(const Config *cfg, int row) {
+    int r = 0;
+    if (row == r++) return GEN_MODEL;
+    if (row == r++) return GEN_MEMORY;
+    if (cfg->model == PCW_MODEL_8256) {
+        if (row == r++) return GEN_SECOND_DRIVE;
+    }
+    if (row == r++) return GEN_BACKPLANE;
+    if (row == r++) return GEN_TINKER;
+    return GEN_NONE;
 }
 
 /* The serial port is built into the 9512; on the 8256/8512 it only
@@ -74,7 +93,9 @@ static const char *section_title(OvSection s) {
 
 static int row_count(const Overlay *ov, OvSection s) {
     switch (s) {
-        case OV_GENERAL:    return 3;  /* model, memory, tinker */
+        case OV_GENERAL:
+            /* model, memory, [second drive on 8256], backplane, tinker */
+            return ov->cfg->model == PCW_MODEL_8256 ? 5 : 4;
         case OV_MEDIA:
             /* 8256 shipped with a single floppy; 8512/9512 had two.
              * Users can bolt a second drive onto an 8256 via the
@@ -83,19 +104,23 @@ static int row_count(const Overlay *ov, OvSection s) {
                 return ov->cfg->ext_second_drive ? 2 : 1;
             return 2;
         case OV_EXTENSIONS: {
-            /* Layout (rows shift when an 8256-only row is hidden):
+            /* The Extensions tab only exists when the PCW Backplane is
+             * plugged in (toggled from General). Everything in this list
+             * physically hangs off the backplane, so hiding the tab when
+             * it's absent matches the real machine.
+             *
+             * Layout:
              *   Printer
-             *   Second drive            (8256 only)
-             *   PCW Backplane
              *   Serial port
              *   PerryFi                 (AT-modem; lives on the serial line)
              *   DK'TRONICS Sound & Joystick
              *
              * The Serial backend toggle (pty/tcp) lives under Advanced —
-             * it's a developer convenience, not a hardware option. */
-            int n = 5;
-            if (ov->cfg->model == PCW_MODEL_8256) n++;
-            return n;
+             * it's a developer convenience, not a hardware option.
+             * Second drive moved to General — a stock-PCW accessory that
+             * doesn't need the backplane. */
+            if (!ov->cfg->ext_sanpollo_backplane) return 0;
+            return 4;
         }
         case OV_TINKER:     return ov->cfg->tinker ? 16 : 0;
         default:            return 0;
@@ -148,10 +173,13 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
     label[0] = 0; val[0] = 0;
     switch (ov->section) {
         case OV_GENERAL:
-            switch (row) {
-                case 0: snprintf(label, lsz, "Model");     snprintf(val, vsz, "%s", model_str(cfg->model)); break;
-                case 1: snprintf(label, lsz, "RAM (KB)");  snprintf(val, vsz, "%d", cfg->memory_kb);        break;
-                case 2: snprintf(label, lsz, "Tinker");    snprintf(val, vsz, "%s", bool_str(cfg->tinker)); break;
+            switch (gen_row_at(cfg, row)) {
+                case GEN_MODEL:        snprintf(label, lsz, "Model");         snprintf(val, vsz, "%s", model_str(cfg->model));                  break;
+                case GEN_MEMORY:       snprintf(label, lsz, "RAM (KB)");      snprintf(val, vsz, "%d", cfg->memory_kb);                         break;
+                case GEN_SECOND_DRIVE: snprintf(label, lsz, "Second drive");  snprintf(val, vsz, "%s", bool_str(cfg->ext_second_drive));        break;
+                case GEN_BACKPLANE:    snprintf(label, lsz, "PCW Backplane"); snprintf(val, vsz, "%s", bool_str(cfg->ext_sanpollo_backplane));  break;
+                case GEN_TINKER:       snprintf(label, lsz, "Tinker");        snprintf(val, vsz, "%s", bool_str(cfg->tinker));                  break;
+                case GEN_NONE: default: break;
             }
             break;
         case OV_MEDIA:
@@ -171,28 +199,13 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                     else
                         snprintf(val, vsz, "yes: [choose folder]");
                     break;
-                case EXT_SECOND_DRIVE:
-                    snprintf(label, lsz, "Second drive");
-                    snprintf(val,   vsz, "%s", bool_str(cfg->ext_second_drive));
-                    break;
-                case EXT_SANPOLLO:
-                    /* User-facing label is "PCW Backplane"; SanPollo is the
-                     * manufacturer and stays in field / code names only. */
-                    snprintf(label, lsz, "PCW Backplane");
-                    snprintf(val,   vsz, "%s", bool_str(cfg->ext_sanpollo_backplane));
-                    break;
                 case EXT_SERIAL:
                     snprintf(label, lsz, "Serial port");
-                    if (!ext_serial_available(cfg))
-                        snprintf(val, vsz, "[needs PCW Backplane]");
-                    else
-                        snprintf(val, vsz, "%s", bool_str(cfg->ext_serial));
+                    snprintf(val, vsz, "%s", bool_str(cfg->ext_serial));
                     break;
                 case EXT_PERRYFI:
                     snprintf(label, lsz, "PerryFi");
-                    if (!ext_serial_available(cfg))
-                        snprintf(val, vsz, "[needs PCW Backplane]");
-                    else if (!cfg->ext_serial)
+                    if (!cfg->ext_serial)
                         snprintf(val, vsz, "[needs Serial port]");
                     else
                         snprintf(val, vsz, "%s", bool_str(cfg->ext_perryfi));
@@ -202,10 +215,7 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                      * doesn't overlap. Full name (DK'TRONICS Sound +
                      * Joystick) lives in code comments and the README. */
                     snprintf(label, lsz, "DK'sound");
-                    if (!cfg->ext_sanpollo_backplane)
-                        snprintf(val, vsz, "[needs PCW Backplane]");
-                    else
-                        snprintf(val, vsz, "%s", bool_str(cfg->ext_dktronics));
+                    snprintf(val, vsz, "%s", bool_str(cfg->ext_dktronics));
                     break;
                 default: break;
             }
@@ -239,7 +249,7 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                 case 12: snprintf(label, lsz, "Show keyboard layout"); snprintf(val, vsz, "...");                              break;
                 case 13: snprintf(label, lsz, "Save snapshot"); snprintf(val, vsz, "...");                                     break;
                 case 14: snprintf(label, lsz, "Load snapshot"); snprintf(val, vsz, "...");                                     break;
-                case 15: snprintf(label, lsz, "Version");       snprintf(val, vsz, "1985 v" "0.3.0");                          break;
+                case 15: snprintf(label, lsz, "Version");       snprintf(val, vsz, "1985 v" "0.4.0");                          break;
             }
             break;
         default: break;
@@ -337,8 +347,8 @@ static void activate(Overlay *ov) {
     Config *c = ov->cfg;
     switch (ov->section) {
         case OV_GENERAL:
-            switch (ov->row) {
-                case 0:
+            switch (gen_row_at(c, ov->row)) {
+                case GEN_MODEL:
                     c->model = (PcwModel)(((int)c->model + 1) % 3);
                     /* Snap RAM and monitor to the chosen model's stock
                      * configuration: 8256=256K+green, 8512=512K+green,
@@ -361,16 +371,52 @@ static void activate(Overlay *ov) {
                      * cold-boot at overlay close (#70). */
                     if (ov->disp) display_set_monochrome(ov->disp, c->monochrome);
                     apply_pdf_printer(ov);
+                    leds_set_enabled(LED_FDC_B,
+                                     c->model != PCW_MODEL_8256 || c->ext_second_drive);
+                    /* GEN_SECOND_DRIVE only exists on 8256 — snap the
+                     * cursor back to a valid row if it now points off
+                     * the end. */
+                    if (ov->row >= row_count(ov, OV_GENERAL))
+                        ov->row = row_count(ov, OV_GENERAL) - 1;
                     ov->dirty = true;
                     break;
-                case 1:
+                case GEN_MEMORY:
                     c->memory_kb = (c->memory_kb == 256) ? 512 : (c->memory_kb == 512) ? 2048 : 256;
                     ov->dirty = true;
                     break;
-                case 2:
+                case GEN_SECOND_DRIVE:
+                    c->ext_second_drive = !c->ext_second_drive;
+                    leds_set_enabled(LED_FDC_B,
+                                     c->model != PCW_MODEL_8256 || c->ext_second_drive);
+                    ov->dirty = true;
+                    break;
+                case GEN_BACKPLANE:
+                    c->ext_sanpollo_backplane = !c->ext_sanpollo_backplane;
+                    /* Pulling the backplane disables everything that
+                     * was plugged into it. PDF printer goes too — the
+                     * whole Extensions tab disappears. */
+                    if (!c->ext_sanpollo_backplane) {
+                        c->ext_pdf_printer = false;
+                        c->ext_dktronics   = false;
+                        c->ext_perryfi     = false;
+                        if (c->model != PCW_MODEL_9512) {
+                            c->ext_serial = false;
+                            if (ov->pcw) {
+                                serial_shutdown(&ov->pcw->serial);
+                                cps_set_present(&ov->pcw->cps, false);
+                            }
+                            leds_set_enabled(LED_SERIAL, false);
+                        }
+                        apply_pdf_printer(ov);
+                    }
+                    leds_set_enabled(LED_PRINTER, c->ext_sanpollo_backplane);
+                    ov->dirty = true;
+                    break;
+                case GEN_TINKER:
                     c->tinker = !c->tinker;
                     ov->dirty = true;
                     break;
+                case GEN_NONE: default: break;
             }
             break;
         case OV_MEDIA:
@@ -378,50 +424,28 @@ static void activate(Overlay *ov) {
             break;
         case OV_EXTENSIONS:
             switch (ext_row_at(c, ov->row)) {
-                case EXT_SECOND_DRIVE:
-                    c->ext_second_drive = !c->ext_second_drive;
-                    ov->dirty = true;
-                    break;
-                case EXT_SANPOLLO:
-                    c->ext_sanpollo_backplane = !c->ext_sanpollo_backplane;
-                    /* Pulling the backplane disables everything that
-                     * was plugged into it. */
-                    if (!c->ext_sanpollo_backplane && c->model != PCW_MODEL_9512) {
-                        c->ext_serial = false;
-                        if (ov->pcw) {
-                            serial_shutdown(&ov->pcw->serial);
-                            cps_set_present(&ov->pcw->cps, false);
-                        }
-                        leds_set_enabled(LED_SERIAL, false);
-                    }
-                    ov->dirty = true;
-                    break;
                 case EXT_SERIAL:
-                    if (ext_serial_available(c)) {
-                        c->ext_serial = !c->ext_serial;
-                        if (ov->pcw) {
-                            serial_shutdown(&ov->pcw->serial);
-                            serial_init(&ov->pcw->serial,
-                                        c->ext_serial,
-                                        c->ext_serial_backend,
-                                        c->ext_serial_tcp_port);
-                            cps_set_present(&ov->pcw->cps, c->ext_serial);
-                        }
-                        leds_set_enabled(LED_SERIAL, c->ext_serial);
-                        ov->dirty = true;
+                    c->ext_serial = !c->ext_serial;
+                    if (ov->pcw) {
+                        serial_shutdown(&ov->pcw->serial);
+                        serial_init(&ov->pcw->serial,
+                                    c->ext_serial,
+                                    c->ext_serial_backend,
+                                    c->ext_serial_tcp_port);
+                        cps_set_present(&ov->pcw->cps, c->ext_serial);
                     }
+                    leds_set_enabled(LED_SERIAL, c->ext_serial);
+                    ov->dirty = true;
                     break;
                 case EXT_PERRYFI:
-                    if (ext_serial_available(c) && c->ext_serial) {
+                    if (c->ext_serial) {
                         c->ext_perryfi = !c->ext_perryfi;
                         ov->dirty = true;
                     }
                     break;
                 case EXT_DKTRONICS:
-                    if (c->ext_sanpollo_backplane) {
-                        c->ext_dktronics = !c->ext_dktronics;
-                        ov->dirty = true;
-                    }
+                    c->ext_dktronics = !c->ext_dktronics;
+                    ov->dirty = true;
                     break;
                 case EXT_PRINTER:
                     if (c->ext_pdf_printer) {
