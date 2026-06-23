@@ -69,6 +69,10 @@ typedef struct {
                                          * printer/Centronics output. */
     char      ext_pdf_printer_dir[PATH_MAX];
     PrintSink ext_print_sink;           /* PDF or REAL (#60). */
+    bool      printer_centronics_9512;  /* 9512 only: route LST: through the
+                                         * built-in Centronics (external printer)
+                                         * instead of the stock daisywheel.
+                                         * Ignored on 8256/8512. (#70) */
 
     /* [advanced] */
     bool     tinker;

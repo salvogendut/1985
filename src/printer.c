@@ -457,16 +457,13 @@ void printer_write(Printer *p, u8 port, u8 val) {
      * through the decoder without drawing anything. */
     leds_ping(LED_PRINTER);
 
-    /* 9512 ships a daisywheel — it has no dot addressing, so the
-     * built-in printer port's matrix protocol is meaningless to it.
-     * Real CP/M+ on a 9512 talks to the daisywheel via Centronics
-     * (printer_write_centronics path); the dot-matrix commands here
-     * just get dropped on the floor. The LED still pings above so
-     * the user sees the port is being driven. */
-    if (p->kind == PRINTER_KIND_DAISYWHEEL) {
-        p->cmd_pos = 0;
-        return;
-    }
+    /* Note on the 9512 daisywheel: real hardware can't address dots,
+     * so this port's matrix protocol isn't a perfect match for that
+     * model. CP/M+ on the 9512 still pushes its LST: bytes through
+     * here, though, and the dot-matrix decoder renders them as text
+     * glyphs that read fine on the PDF — so we keep the decoder live
+     * regardless of PrinterKind. Faithful daisywheel emulation would
+     * be a separate effort. */
 
     p->cmd[p->cmd_pos++] = val;
     if (p->cmd_pos < 2) return;
