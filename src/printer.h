@@ -40,6 +40,15 @@ typedef enum {
     PRINT_SINK_REAL,
 } PrintSink;
 
+/* Built-in printer hardware shape. 8256 / 8512 shipped with a 9-pin
+ * dot-matrix; 9512 shipped with a daisywheel (chars only, no
+ * graphics). Derived from the PCW model at boot — not user-cyclable
+ * because real hardware can't be swapped. */
+typedef enum {
+    PRINTER_KIND_DOT_MATRIX = 0,
+    PRINTER_KIND_DAISYWHEEL,
+} PrinterKind;
+
 typedef struct Printer {
     bool connected;
     bool bail_in;
@@ -57,6 +66,7 @@ typedef struct Printer {
 
     bool pdf_enabled;
     PrintSink sink;
+    PrinterKind kind;
     bool pdf_ephemeral;             /* true: file is in /tmp, delete after spooling */
     char pdf_output_dir[PATH_MAX];
     char pdf_path[PATH_MAX];
@@ -80,6 +90,7 @@ void printer_shutdown(Printer *p);
 void printer_set_pdf_output_dir(Printer *p, const char *dir);
 void printer_set_pdf_enabled(Printer *p, bool enabled);
 void printer_set_sink(Printer *p, PrintSink sink);
+void printer_set_kind(Printer *p, PrinterKind kind);
 u8   printer_read (Printer *p, u8 port);
 void printer_write(Printer *p, u8 port, u8 val);
 void printer_write_centronics(Printer *p, u8 val);

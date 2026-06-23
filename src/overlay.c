@@ -57,6 +57,9 @@ static void apply_pdf_printer(Overlay *ov) {
                             ov->cfg->ext_pdf_printer
                             && ov->cfg->ext_pdf_printer_dir[0]);
     printer_set_sink(&ov->pcw->printer, ov->cfg->ext_print_sink);
+    printer_set_kind(&ov->pcw->printer,
+                     ov->cfg->model == PCW_MODEL_9512 ? PRINTER_KIND_DAISYWHEEL
+                                                      : PRINTER_KIND_DOT_MATRIX);
 }
 
 static const char *section_title(OvSection s) {
@@ -343,6 +346,13 @@ static void activate(Overlay *ov) {
                         c->memory_kb  = 512;
                         c->monochrome = MONO_WHITE;
                     }
+                    /* Live-preview the new tint so the user sees the
+                     * model-appropriate phosphor immediately (#69),
+                     * and refresh the printer kind so the 9512's
+                     * daisywheel takes effect without waiting for the
+                     * cold-boot at overlay close (#70). */
+                    if (ov->disp) display_set_monochrome(ov->disp, c->monochrome);
+                    apply_pdf_printer(ov);
                     ov->dirty = true;
                     break;
                 case 1:

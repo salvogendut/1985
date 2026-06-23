@@ -261,6 +261,10 @@ void printer_set_sink(Printer *p, PrintSink sink) {
     p->sink = sink;
 }
 
+void printer_set_kind(Printer *p, PrinterKind kind) {
+    p->kind = kind;
+}
+
 void printer_set_pdf_output_dir(Printer *p, const char *dir) {
     char next[PATH_MAX];
     snprintf(next, sizeof(next), "%s", (dir && dir[0]) ? dir : ".");
@@ -452,6 +456,17 @@ void printer_write(Printer *p, u8 port, u8 val) {
      * panel LED, even if PDF capture is off and the command goes
      * through the decoder without drawing anything. */
     leds_ping(LED_PRINTER);
+
+    /* 9512 ships a daisywheel — it has no dot addressing, so the
+     * built-in printer port's matrix protocol is meaningless to it.
+     * Real CP/M+ on a 9512 talks to the daisywheel via Centronics
+     * (printer_write_centronics path); the dot-matrix commands here
+     * just get dropped on the floor. The LED still pings above so
+     * the user sees the port is being driven. */
+    if (p->kind == PRINTER_KIND_DAISYWHEEL) {
+        p->cmd_pos = 0;
+        return;
+    }
 
     p->cmd[p->cmd_pos++] = val;
     if (p->cmd_pos < 2) return;
