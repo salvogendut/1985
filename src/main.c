@@ -1,7 +1,4 @@
 #include <SDL3/SDL.h>
-#ifdef _WIN32
-#include <windows.h>
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -322,13 +319,6 @@ static int load_raw_image(PCW *pcw, const char *path, u16 base) {
 
 int main(int argc, char **argv) {
 #ifdef _WIN32
-    /* DIAGNOSTIC for issue #55: confirm we are reaching main() at all
-     * on a GUI-subsystem Windows build. If this MessageBox does not
-     * appear, the binary is dying before main runs (loader, AV,
-     * cmdline subsystem). Remove once #55 is resolved. */
-    MessageBoxA(NULL, "1985 reached main() — about to init SDL.",
-                "1985 diagnostic", MB_OK | MB_ICONINFORMATION);
-
     /* GUI-subsystem build: stderr/stdout have nowhere to go when the
      * exe is double-clicked. Redirect them to log files next to the
      * binary so init failures are diagnosable. */
@@ -350,7 +340,11 @@ int main(int argc, char **argv) {
     Display disp;
     if (display_init(&disp, &cfg) < 0) return 1;
 
-    PCW pcw;
+    /* PCW carries the full 2 MB RAM inline; that would blow the default
+     * 1 MB Windows main-thread stack before main() even runs. Static
+     * storage parks it in BSS instead. (Linux mains get 8 MB, hence
+     * Windows-only crash — see #55.) */
+    static PCW pcw;
     pcw_init(&pcw, cfg.model, cfg.memory_kb);
     printer_set_pdf_output_dir(&pcw.printer, cfg.ext_pdf_printer_dir);
     printer_set_pdf_enabled(&pcw.printer,
