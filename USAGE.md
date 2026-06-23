@@ -35,10 +35,11 @@
 
 ## Overlay tabs
 
-- **General** — model (8256 / 8512 / 9512), RAM, debug toggle.
+- **General** — model (8256 / 8512 / 9512), RAM, Second drive (8256
+  only), PCW Backplane, Tinker toggle.
 - **Media** — drive A and B file pickers.
-- **Extensions** — PDF printer output folder, second drive,
-  backplane-gated serial/PerryFi, and DK'tronics sound/joystick.
-- **Advanced** (hidden unless `tinker=true`) — smoothing, monochrome
-  tint (off / green / amber / white), FPS counter, trace toggles,
-  snapshot load/save.
+- **Extensions** (only when the PCW Backplane is enabled) — PDF printer
+  output folder, serial port, PerryFi, DK'tronics sound/joystick.
+- **Advanced** (hidden unless `tinker=true`) — smoothing, tint
+  (green / amber / white), tint mode (normal / glow), video mode,
+  printer mode/model, debug toggles, serial mode, snapshot load/save.

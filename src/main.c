@@ -423,7 +423,10 @@ int main(int argc, char **argv) {
     }
 
     leds_set_enabled(LED_FDC_A, true);
-    leds_set_enabled(LED_FDC_B, true);
+    /* Drive B only exists on 8512/9512 stock, or on an 8256 with the
+     * Second drive accessory. Hide the LED otherwise. */
+    leds_set_enabled(LED_FDC_B,
+                     cfg.model != PCW_MODEL_8256 || cfg.ext_second_drive);
     leds_set_enabled(LED_PRINTER, cfg.ext_sanpollo_backplane);
 
     Paste paste;
