@@ -1,5 +1,5 @@
 Name:           1985
-Version:        0.4.0
+Version:        0.3.0
 Release:        1%{?dist}
 Summary:        Amstrad PCW 8256 / 8512 / 9512 emulator
 
@@ -78,15 +78,6 @@ appstream-util validate-relax --nonet %{buildroot}%{_datadir}/metainfo/io.github
 %{_datadir}/icons/hicolor/*/apps/io.github.salvogendut.Emulator1985.png
 
 %changelog
-* Tue Jun 23 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.0-1
-- F9 ▸ General reorganised: PCW Backplane now lives here and gates
-  the whole Extensions tab; Second drive moved here too (8256 only)
-  since it's a stock accessory and doesn't need the backplane (#75).
-- Floppy LED B is hidden when the running model has no second drive,
-  matching the real machine (#77).
-- Printer LED hides when the backplane is unplugged.
-- Man page refreshed for 0.4.0.
-
 * Tue Jun 23 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.3.0-1
 - Live tint update on General ▸ Model switch (#69).
 - 9512 Printer model row in Advanced (Daisywheel / Centronics),
