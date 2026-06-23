@@ -34,6 +34,27 @@ static MonoMode parse_mono(const char *s, MonoMode fallback) {
     return fallback;
 }
 
+static const char *video_to_str(VideoMode v) {
+    switch (v) {
+        case VIDEO_CGA1: return "cga1";
+        case VIDEO_CGA2: return "cga2";
+        case VIDEO_EGA:  return "ega";
+        case VIDEO_PCW:
+        default:         return "pcw";
+    }
+}
+
+static VideoMode parse_video(const char *s, VideoMode fallback) {
+    if (!s) return fallback;
+    if (strcasecmp(s, "pcw")  == 0) return VIDEO_PCW;
+    if (strcasecmp(s, "cga")  == 0) return VIDEO_CGA1;   /* legacy alias */
+    if (strcasecmp(s, "cga1") == 0) return VIDEO_CGA1;
+    if (strcasecmp(s, "cga2") == 0) return VIDEO_CGA2;
+    if (strcasecmp(s, "ega")  == 0) return VIDEO_EGA;
+    fprintf(stderr, "config: unknown video_mode '%s' — using default\n", s);
+    return fallback;
+}
+
 static const char *model_to_str(PcwModel m) {
     switch (m) {
         case PCW_MODEL_8512: return "8512";
@@ -136,6 +157,7 @@ void config_load(Config *c, const char *path) {
         else if (strcmp(k, "fullscreen")           == 0) c->fullscreen = parse_bool(v, c->fullscreen);
         else if (strcmp(k, "fullscreen_smoothing") == 0) c->fullscreen_smoothing = parse_bool(v, c->fullscreen_smoothing);
         else if (strcmp(k, "monochrome")           == 0) c->monochrome = parse_mono(v, c->monochrome);
+        else if (strcmp(k, "video_mode")           == 0) c->video_mode = parse_video(v, c->video_mode);
         else if (strcmp(k, "ext_second_drive")        == 0) c->ext_second_drive        = parse_bool(v, c->ext_second_drive);
         else if (strcmp(k, "ext_sanpollo_backplane")  == 0) c->ext_sanpollo_backplane  = parse_bool(v, c->ext_sanpollo_backplane);
         else if (strcmp(k, "ext_serial")              == 0) c->ext_serial              = parse_bool(v, c->ext_serial);
@@ -186,7 +208,8 @@ int config_save(const Config *c) {
     fprintf(f, "scale = %d\n", c->scale);
     fprintf(f, "fullscreen = %s\n", bool_to_str(c->fullscreen));
     fprintf(f, "fullscreen_smoothing = %s\n", bool_to_str(c->fullscreen_smoothing));
-    fprintf(f, "monochrome = %s\n\n", mono_to_str(c->monochrome));
+    fprintf(f, "monochrome = %s\n", mono_to_str(c->monochrome));
+    fprintf(f, "video_mode = %s\n\n", video_to_str(c->video_mode));
 
     fprintf(f, "[extensions]\n");
     fprintf(f, "ext_second_drive        = %s\n",   bool_to_str(c->ext_second_drive));

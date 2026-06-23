@@ -89,9 +89,37 @@ void roller_render(struct Mem *m, struct Asic *a, struct Display *d) {
                 continue;
             }
             u8 byte = m->ram[src];
-            for (int b = 0; b < 8; b++)
-                display_put_pixel(d, xbase + b, y,
-                                  (((byte >> (7 - b)) & 1) ^ invert) != 0);
+            if (invert) byte ^= 0xFF;
+
+            switch (d->video_mode) {
+                case VIDEO_CGA1:
+                case VIDEO_CGA2: {
+                    /* 2 bpp: each pair of bits is a palette index;
+                     * doubled horizontally so the line still spans 720. */
+                    for (int b = 0; b < 8; b += 2) {
+                        int idx = (byte >> (6 - b)) & 0x3;
+                        display_put_indexed(d, xbase + b,     y, idx);
+                        display_put_indexed(d, xbase + b + 1, y, idx);
+                    }
+                    break;
+                }
+                case VIDEO_EGA: {
+                    /* 4 bpp: each nybble is a palette index; quadrupled
+                     * horizontally so the line still spans 720. */
+                    for (int b = 0; b < 8; b += 4) {
+                        int idx = (byte >> (4 - b)) & 0xF;
+                        for (int r = 0; r < 4; r++)
+                            display_put_indexed(d, xbase + b + r, y, idx);
+                    }
+                    break;
+                }
+                case VIDEO_PCW:
+                default:
+                    for (int b = 0; b < 8; b++)
+                        display_put_pixel(d, xbase + b, y,
+                                          ((byte >> (7 - b)) & 1) != 0);
+                    break;
+            }
         }
     }
 }

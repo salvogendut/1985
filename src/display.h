@@ -37,12 +37,23 @@ typedef struct Display {
 
     /* Resolved phosphor colours for "lit" pixel and "background". */
     u32  fg, bg;
+
+    /* Host-side reinterpretation of the 1bpp roller-RAM. PCW = native
+     * mono (use fg/bg); CGA / EGA branch in roller.c to indexed colour
+     * lookups via palette[]. See VideoMode in config.h. */
+    VideoMode video_mode;
+    u32  palette[16];
 } Display;
 
 int  display_init(Display *d, const Config *cfg);
 void display_quit(Display *d);
 
 void display_set_monochrome(Display *d, MonoMode m);
+void display_set_video_mode(Display *d, VideoMode v);
+
+/* Plot a colour-indexed pixel (CGA/EGA modes). Index is masked to the
+ * palette size in the active video mode (4 in CGA, 16 in EGA). */
+void display_put_indexed(Display *d, int x, int y, int idx);
 
 /* Clear the framebuffer to bg. */
 void display_clear(Display *d);

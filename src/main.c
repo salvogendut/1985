@@ -382,7 +382,7 @@ int main(int argc, char **argv) {
     if (cli.boot_ems && load_raw_image(&pcw, cli.boot_ems, 0) < 0) return 1;
 
     Overlay ov;
-    overlay_init(&ov, &cfg, &pcw);
+    overlay_init(&ov, &cfg, &pcw, &disp);
 
     /* F8 memory monitor / disassembler — lives in its own SDL window
      * created hidden; SDLK_F8 reveals it. Survives the lifetime of

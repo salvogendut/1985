@@ -29,12 +29,59 @@ void display_set_monochrome(Display *d, MonoMode m) {
     d->bg = mono_dim(m);
 }
 
+/* Palettes lifted from ZesarUX's pcw_rgb24_full_table. CGA1 picks
+ * the low-intensity palette-0 (black/green/red/brown), CGA2 the
+ * high-intensity palette-1 (black/cyan/magenta/white); EGA uses
+ * the classic 16-colour IBM palette. */
+static void load_cga1_palette(u32 *p) {
+    p[0] = 0x000000;
+    p[1] = 0x00AA00;
+    p[2] = 0xAA0000;
+    p[3] = 0xAA5500;
+}
+static void load_cga2_palette(u32 *p) {
+    p[0] = 0x000000;
+    p[1] = 0x55FFFF;
+    p[2] = 0xFF55FF;
+    p[3] = 0xFFFFFF;
+}
+static void load_ega_palette(u32 *p) {
+    static const u32 ega[16] = {
+        0x000000, 0x0000AA, 0x00AA00, 0x00AAAA,
+        0xAA0000, 0xAA00AA, 0xAA5500, 0xAAAAAA,
+        0x555555, 0x5555FF, 0x55FF55, 0x55FFFF,
+        0xFF5555, 0xFF55FF, 0xFFFF55, 0xFFFFFF,
+    };
+    for (int i = 0; i < 16; i++) p[i] = ega[i];
+}
+
+void display_set_video_mode(Display *d, VideoMode v) {
+    d->video_mode = v;
+    /* Background is forced black in colour modes so the saturated
+     * palette entries pop against an unlit pixel. Mono modes keep
+     * their CRT-bloom dim background from display_set_monochrome(). */
+    switch (v) {
+        case VIDEO_CGA1: load_cga1_palette(d->palette); d->bg = 0x000000; break;
+        case VIDEO_CGA2: load_cga2_palette(d->palette); d->bg = 0x000000; break;
+        case VIDEO_EGA:  load_ega_palette(d->palette);  d->bg = 0x000000; break;
+        case VIDEO_PCW:
+        default:         d->bg = mono_dim(d->mono);                       break;
+    }
+}
+
+void display_put_indexed(Display *d, int x, int y, int idx) {
+    if (x < 0 || x >= DISPLAY_W || y < 0 || y >= DISPLAY_H) return;
+    int mask = (d->video_mode == VIDEO_EGA) ? 15 : 3;
+    d->fb[y * DISPLAY_W + x] = d->palette[idx & mask];
+}
+
 int display_init(Display *d, const Config *cfg) {
     memset(d, 0, sizeof(*d));
     d->scale      = cfg->scale > 0 ? cfg->scale : 2;
     d->fullscreen = cfg->fullscreen;
     d->smoothing  = cfg->fullscreen_smoothing;
     display_set_monochrome(d, cfg->monochrome);
+    display_set_video_mode(d, cfg->video_mode);
 
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());

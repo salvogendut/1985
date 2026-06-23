@@ -26,6 +26,7 @@ typedef enum {
 } DialogKind;
 
 struct PCW;
+struct Display;
 
 typedef struct {
     bool        visible;
@@ -36,6 +37,7 @@ typedef struct {
     Config     *cfg;
     Config      saved;
     struct PCW *pcw;
+    struct Display *disp;
     /* pending file-dialog result */
     DialogKind  dialog_kind;
     int         dialog_drive;    /* 0=A, 1=B */
@@ -44,7 +46,7 @@ typedef struct {
     bool        needs_cold_boot;
 } Overlay;
 
-void overlay_init(Overlay *ov, Config *cfg, struct PCW *pcw);
+void overlay_init(Overlay *ov, Config *cfg, struct PCW *pcw, struct Display *disp);
 
 bool overlay_handle_event(Overlay *ov, SDL_Event *ev);
 void overlay_render(Overlay *ov, SDL_Renderer *r);
