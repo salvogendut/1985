@@ -424,7 +424,7 @@ int main(int argc, char **argv) {
 
     leds_set_enabled(LED_FDC_A, true);
     leds_set_enabled(LED_FDC_B, true);
-    leds_set_enabled(LED_PRINTER, true);
+    leds_set_enabled(LED_PRINTER, cfg.ext_sanpollo_backplane);
 
     Paste paste;
     paste_init(&paste);
