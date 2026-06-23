@@ -119,10 +119,11 @@ static const char *mono_str(MonoMode m) {
 
 static const char *video_str(VideoMode v) {
     switch (v) {
-        case VIDEO_CGA: return "CGA (4 col)";
-        case VIDEO_EGA: return "EGA (16 col)";
+        case VIDEO_CGA1: return "CGA1 (BGRBrn)";
+        case VIDEO_CGA2: return "CGA2 (BCMW)";
+        case VIDEO_EGA:  return "EGA (16 col)";
         case VIDEO_PCW:
-        default:        return "PCW (mono)";
+        default:         return "PCW (mono)";
     }
 }
 
@@ -198,7 +199,7 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
         case OV_TINKER:
             switch (row) {
                 case 0: snprintf(label, lsz, "Smoothing");      snprintf(val, vsz, "%s", bool_str(cfg->fullscreen_smoothing)); break;
-                case 1: snprintf(label, lsz, "Monochrome");     snprintf(val, vsz, "%s", mono_str(cfg->monochrome));           break;
+                case 1: snprintf(label, lsz, "Tint");           snprintf(val, vsz, "%s", mono_str(cfg->monochrome));           break;
                 case 2: snprintf(label, lsz, "Video mode");     snprintf(val, vsz, "%s", video_str(cfg->video_mode));          break;
                 case 3: snprintf(label, lsz, "Debugging");      snprintf(val, vsz, "%s", bool_str(cfg->debug));                break;
                 case 4: snprintf(label, lsz, "Debug output");   snprintf(val, vsz, "%s", bool_str(cfg->debug_traces));         break;
@@ -228,11 +229,21 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
 }
 
 static void cycle_mono(MonoMode *m) {
-    *m = (MonoMode)(((int)*m + 1) % 4);
+    /* Cycle GREEN → AMBER → WHITE only. MONO_OFF stays a valid config
+     * value (untinted white) but isn't reachable from the UI — the
+     * "no tint at all" use case is now covered by switching Video mode
+     * away from PCW. */
+    switch (*m) {
+        case MONO_AMBER: *m = MONO_WHITE; break;
+        case MONO_WHITE: *m = MONO_GREEN; break;
+        case MONO_GREEN:
+        case MONO_OFF:
+        default:         *m = MONO_AMBER; break;
+    }
 }
 
 static void cycle_video(VideoMode *v) {
-    *v = (VideoMode)(((int)*v + 1) % 3);
+    *v = (VideoMode)(((int)*v + 1) % 4);
 }
 
 static void overlay_file_callback(void *userdata, const char * const *files,

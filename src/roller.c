@@ -92,7 +92,8 @@ void roller_render(struct Mem *m, struct Asic *a, struct Display *d) {
             if (invert) byte ^= 0xFF;
 
             switch (d->video_mode) {
-                case VIDEO_CGA: {
+                case VIDEO_CGA1:
+                case VIDEO_CGA2: {
                     /* 2 bpp: each pair of bits is a palette index;
                      * doubled horizontally so the line still spans 720. */
                     for (int b = 0; b < 8; b += 2) {

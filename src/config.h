@@ -23,7 +23,8 @@ typedef enum {
  * No guest software can drive these — purely a decorative toggle. */
 typedef enum {
     VIDEO_PCW = 0,   /* 1 bpp, 720×256, 2 colours (uses MonoMode tint) */
-    VIDEO_CGA,       /* 2 bpp, 360×256 doubled, 4-colour CGA palette  */
+    VIDEO_CGA1,      /* 2 bpp, CGA palette 0 hi: black/green/red/brown  */
+    VIDEO_CGA2,      /* 2 bpp, CGA palette 1 hi: black/cyan/magenta/white */
     VIDEO_EGA,       /* 4 bpp, 180×256 quadrupled, 16-colour palette  */
 } VideoMode;
 

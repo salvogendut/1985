@@ -29,14 +29,21 @@ void display_set_monochrome(Display *d, MonoMode m) {
     d->bg = mono_dim(m);
 }
 
-/* Palettes lifted from ZesarUX's pcw_rgb24_full_table. CGA picks
- * the low-intensity palette-0 (black/green/red/brown); EGA uses the
- * classic 16-colour IBM palette. */
-static void load_cga_palette(u32 *p) {
+/* Palettes lifted from ZesarUX's pcw_rgb24_full_table. CGA1 picks
+ * the low-intensity palette-0 (black/green/red/brown), CGA2 the
+ * high-intensity palette-1 (black/cyan/magenta/white); EGA uses
+ * the classic 16-colour IBM palette. */
+static void load_cga1_palette(u32 *p) {
     p[0] = 0x000000;
     p[1] = 0x00AA00;
     p[2] = 0xAA0000;
     p[3] = 0xAA5500;
+}
+static void load_cga2_palette(u32 *p) {
+    p[0] = 0x000000;
+    p[1] = 0x55FFFF;
+    p[2] = 0xFF55FF;
+    p[3] = 0xFFFFFF;
 }
 static void load_ega_palette(u32 *p) {
     static const u32 ega[16] = {
@@ -54,16 +61,17 @@ void display_set_video_mode(Display *d, VideoMode v) {
      * palette entries pop against an unlit pixel. Mono modes keep
      * their CRT-bloom dim background from display_set_monochrome(). */
     switch (v) {
-        case VIDEO_CGA: load_cga_palette(d->palette); d->bg = 0x000000; break;
-        case VIDEO_EGA: load_ega_palette(d->palette); d->bg = 0x000000; break;
+        case VIDEO_CGA1: load_cga1_palette(d->palette); d->bg = 0x000000; break;
+        case VIDEO_CGA2: load_cga2_palette(d->palette); d->bg = 0x000000; break;
+        case VIDEO_EGA:  load_ega_palette(d->palette);  d->bg = 0x000000; break;
         case VIDEO_PCW:
-        default:        d->bg = mono_dim(d->mono);                     break;
+        default:         d->bg = mono_dim(d->mono);                       break;
     }
 }
 
 void display_put_indexed(Display *d, int x, int y, int idx) {
     if (x < 0 || x >= DISPLAY_W || y < 0 || y >= DISPLAY_H) return;
-    int mask = (d->video_mode == VIDEO_CGA) ? 3 : 15;
+    int mask = (d->video_mode == VIDEO_EGA) ? 15 : 3;
     d->fb[y * DISPLAY_W + x] = d->palette[idx & mask];
 }
 

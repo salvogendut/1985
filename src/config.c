@@ -36,18 +36,21 @@ static MonoMode parse_mono(const char *s, MonoMode fallback) {
 
 static const char *video_to_str(VideoMode v) {
     switch (v) {
-        case VIDEO_CGA: return "cga";
-        case VIDEO_EGA: return "ega";
+        case VIDEO_CGA1: return "cga1";
+        case VIDEO_CGA2: return "cga2";
+        case VIDEO_EGA:  return "ega";
         case VIDEO_PCW:
-        default:        return "pcw";
+        default:         return "pcw";
     }
 }
 
 static VideoMode parse_video(const char *s, VideoMode fallback) {
     if (!s) return fallback;
-    if (strcasecmp(s, "pcw") == 0) return VIDEO_PCW;
-    if (strcasecmp(s, "cga") == 0) return VIDEO_CGA;
-    if (strcasecmp(s, "ega") == 0) return VIDEO_EGA;
+    if (strcasecmp(s, "pcw")  == 0) return VIDEO_PCW;
+    if (strcasecmp(s, "cga")  == 0) return VIDEO_CGA1;   /* legacy alias */
+    if (strcasecmp(s, "cga1") == 0) return VIDEO_CGA1;
+    if (strcasecmp(s, "cga2") == 0) return VIDEO_CGA2;
+    if (strcasecmp(s, "ega")  == 0) return VIDEO_EGA;
     fprintf(stderr, "config: unknown video_mode '%s' — using default\n", s);
     return fallback;
 }
