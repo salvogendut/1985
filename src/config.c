@@ -187,6 +187,7 @@ void config_load(Config *c, const char *path) {
         else if (strcmp(k, "ext_pdf_printer_dir")     == 0) snprintf(c->ext_pdf_printer_dir,
                                                                       sizeof(c->ext_pdf_printer_dir), "%s", v);
         else if (strcmp(k, "ext_print_sink")          == 0) c->ext_print_sink = parse_sink(v, c->ext_print_sink);
+        else if (strcmp(k, "printer_centronics_9512") == 0) c->printer_centronics_9512 = parse_bool(v, c->printer_centronics_9512);
         else if (strcmp(k, "tinker")               == 0) c->tinker = parse_bool(v, c->tinker);
         else if (strcmp(k, "debug")                == 0) c->debug  = parse_bool(v, c->debug);
         else if (strcmp(k, "debug_traces")         == 0) c->debug_traces = parse_bool(v, c->debug_traces);
@@ -234,7 +235,8 @@ int config_save(const Config *c) {
     fprintf(f, "ext_dktronics           = %s\n",   bool_to_str(c->ext_dktronics));
     fprintf(f, "ext_pdf_printer         = %s\n",   bool_to_str(c->ext_pdf_printer));
     fprintf(f, "ext_pdf_printer_dir     = %s\n",   c->ext_pdf_printer_dir);
-    fprintf(f, "ext_print_sink          = %s\n\n", sink_to_str(c->ext_print_sink));
+    fprintf(f, "ext_print_sink          = %s\n",   sink_to_str(c->ext_print_sink));
+    fprintf(f, "printer_centronics_9512 = %s\n\n", bool_to_str(c->printer_centronics_9512));
 
     fprintf(f, "[advanced]\n");
     fprintf(f, "tinker = %s\n", bool_to_str(c->tinker));
