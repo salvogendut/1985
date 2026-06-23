@@ -163,7 +163,10 @@ to cross-check against:
 - **[ZEsarUX](https://github.com/chernandezba/zesarux)** — César
   Hernández Bañó's multi-machine Z80 emulator. Cross-checked for FDC
   IRQ delivery, printer port 0xFD semantics, F4 lock bits, and the
-  expansion-port range handler.
+  expansion-port range handler. The decorative **PCW / CGA1 / CGA2 /
+  EGA video modes** (Advanced ▸ Video mode) are also ported directly
+  from ZEsarUX's `pcw_video_mode` — palettes and bit-grouping match
+  `src/machines/pcw.c` in that project.
 - **[SanPollo / PCWBackplane](https://github.com/SanPollo/PCWBackplane)**
   — modern 50-pin edge-connector hub for the original PCW range,
   modelled in 1985 as the "PCW Backplane" toggle.
