@@ -21,7 +21,15 @@ Models supported: **PCW 8256** (256 KB, single floppy, green monitor),
 floppies, white). Changing model or RAM in the overlay triggers a full
 cold boot.
 
-Extensions available (Extensions tab):
+The **Second drive** option (8256 only — 8512/9512 ship with two
+floppies) lives in **General**: a stock accessory that doesn't need
+the backplane.
+
+The **PCW Backplane** toggle in General is the master switch for the
+Extensions tab. With it off, no hardware extensions show — pull it
+and Extensions / its add-ons all reappear together.
+
+Extensions available (Extensions tab, gated on PCW Backplane):
 - **PDF printer** — host-side PDF capture for the built-in PCW
   dot-matrix printer protocol and CPS8256 Centronics bytes. Enabling it
   opens a folder chooser; each print job lands in a fresh timestamped
@@ -39,9 +47,6 @@ Extensions available (Extensions tab):
   and the CPS8256 Centronics port is built in instead of needing the
   PCW Backplane — print jobs come through that path and remain capturable
   by the PDF / Real Printer sink. 8256 and 8512 keep the dot-matrix.
-- **Second drive** — bolt-on drive B for the 8256 (8512/9512 always have two).
-- **PCW Backplane** — SanPollo 50-pin edge-connector hub. Acts as a
-  gate for the items that physically plug into it.
 - **Serial port** — Amstrad CPS8256 (Z80-DART + 8253 baud generator +
   Centronics) at I/O ports `0xE0-0xE8`. Built into the 9512; needs the
   backplane on the 8256/8512. Host-side terminates in either a PTY
