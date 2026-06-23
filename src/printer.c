@@ -9,6 +9,54 @@
 #include <string.h>
 #include <time.h>
 
+#ifndef _WIN32
+#include <unistd.h>      /* fork, execlp, dup2 */
+#include <fcntl.h>       /* open, O_WRONLY */
+#include <sys/wait.h>
+#include <signal.h>
+#include <sys/types.h>
+#endif
+
+/* Spool the just-finalised PDF to the host's default printer via
+ * CUPS' `lp`. Detaches: we don't wait on the child so the emulator
+ * doesn't stutter while CUPS queues. Returns silently if lp isn't
+ * on PATH (the user gets a console message). No-op on Windows. */
+static void printer_spool_to_lp(const char *pdf_path) {
+#ifdef _WIN32
+    (void)pdf_path;
+    fprintf(stderr, "printer: real-printer sink not implemented on Windows yet\n");
+#else
+    if (!pdf_path || !pdf_path[0]) return;
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("printer: fork");
+        return;
+    }
+    if (pid == 0) {
+        /* Child: detach from emulator, exec lp. Redirect its stdout
+         * and stderr to /dev/null so the "request id is ..." line
+         * doesn't leak into our terminal; queuing failures are still
+         * surfaced via lp's exit code (which we don't wait on but
+         * CUPS will record). */
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            dup2(devnull, STDOUT_FILENO);
+            dup2(devnull, STDERR_FILENO);
+            if (devnull > 2) close(devnull);
+        }
+        execlp("lp", "lp", pdf_path, (char *)NULL);
+        _exit(127);
+    }
+    /* Parent: SIGCHLD is left as SIG_DFL but we never call wait() —
+     * set it to SIG_IGN once so the OS reaps the child for us. */
+    static bool signal_set = false;
+    if (!signal_set) {
+        signal(SIGCHLD, SIG_IGN);
+        signal_set = true;
+    }
+#endif
+}
+
 /* Joyce-compatible matrix-printer geometry. Coordinates are in 1/360in
  * internally; Cairo PDF uses points (1/72in), so divide by five. */
 #define PAGE_W_360       2997.0f
@@ -135,7 +183,6 @@ static bool printer_pdf_open(Printer *p) {
     }
 
     cairo_set_source_rgb(p->pdf_cr, 0.0, 0.0, 0.0);
-    fprintf(stderr, "printer: writing PDF to %s\n", p->pdf_path);
     return true;
 }
 
@@ -154,6 +201,8 @@ static void printer_pdf_show_page(Printer *p) {
 }
 
 void printer_shutdown(Printer *p) {
+    /* Snapshot the path before clearing — we hand it to lp below. */
+    char done_path[PATH_MAX] = {0};
     if (p->pdf_cr) {
         if (p->pdf_page_open)
             cairo_show_page(p->pdf_cr);
@@ -164,9 +213,13 @@ void printer_shutdown(Printer *p) {
         cairo_surface_finish(p->pdf_surface);
         cairo_surface_destroy(p->pdf_surface);
         p->pdf_surface = NULL;
+        snprintf(done_path, sizeof(done_path), "%s", p->pdf_path);
     }
     p->pdf_page_open = false;
     p->pdf_path[0] = 0;
+
+    if (p->sink == PRINT_SINK_REAL && done_path[0])
+        printer_spool_to_lp(done_path);
 }
 #else  /* !HAVE_CAIRO */
 static bool printer_pdf_ensure_page(Printer *p) { (void)p; return false; }
@@ -177,6 +230,10 @@ void printer_shutdown(Printer *p) {
     p->pdf_path[0] = 0;
 }
 #endif
+
+void printer_set_sink(Printer *p, PrintSink sink) {
+    p->sink = sink;
+}
 
 void printer_set_pdf_output_dir(Printer *p, const char *dir) {
     char next[PATH_MAX];

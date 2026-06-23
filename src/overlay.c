@@ -56,6 +56,7 @@ static void apply_pdf_printer(Overlay *ov) {
     printer_set_pdf_enabled(&ov->pcw->printer,
                             ov->cfg->ext_pdf_printer
                             && ov->cfg->ext_pdf_printer_dir[0]);
+    printer_set_sink(&ov->pcw->printer, ov->cfg->ext_print_sink);
 }
 
 static const char *section_title(OvSection s) {
@@ -93,7 +94,7 @@ static int row_count(const Overlay *ov, OvSection s) {
             if (ov->cfg->model == PCW_MODEL_8256) n++;
             return n;
         }
-        case OV_TINKER:     return ov->cfg->tinker ? 12 : 0;
+        case OV_TINKER:     return ov->cfg->tinker ? 13 : 0;
         default:            return 0;
     }
 }
@@ -125,6 +126,10 @@ static const char *video_str(VideoMode v) {
         case VIDEO_PCW:
         default:         return "PCW (mono)";
     }
+}
+
+static const char *sink_str(PrintSink s) {
+    return (s == PRINT_SINK_REAL) ? "Real printer" : "PDF file";
 }
 
 static const char *bool_str(bool b) { return b ? "yes" : "no"; }
@@ -201,12 +206,13 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                 case 0: snprintf(label, lsz, "Smoothing");      snprintf(val, vsz, "%s", bool_str(cfg->fullscreen_smoothing)); break;
                 case 1: snprintf(label, lsz, "Tint");           snprintf(val, vsz, "%s", mono_str(cfg->monochrome));           break;
                 case 2: snprintf(label, lsz, "Video mode");     snprintf(val, vsz, "%s", video_str(cfg->video_mode));          break;
-                case 3: snprintf(label, lsz, "Debugging");      snprintf(val, vsz, "%s", bool_str(cfg->debug));                break;
-                case 4: snprintf(label, lsz, "Debug output");   snprintf(val, vsz, "%s", bool_str(cfg->debug_traces));         break;
-                case 5: snprintf(label, lsz, "Trace IO");       snprintf(val, vsz, "%s", bool_str(cfg->trace_io));             break;
-                case 6: snprintf(label, lsz, "Trace FDC");      snprintf(val, vsz, "%s", bool_str(cfg->trace_fdc));            break;
-                case 7: snprintf(label, lsz, "Trace Input");    snprintf(val, vsz, "%s", bool_str(cfg->trace_input));          break;
-                case 8:
+                case 3: snprintf(label, lsz, "Printer mode");   snprintf(val, vsz, "%s", sink_str(cfg->ext_print_sink));       break;
+                case 4: snprintf(label, lsz, "Debugging");      snprintf(val, vsz, "%s", bool_str(cfg->debug));                break;
+                case 5: snprintf(label, lsz, "Debug output");   snprintf(val, vsz, "%s", bool_str(cfg->debug_traces));         break;
+                case 6: snprintf(label, lsz, "Trace IO");       snprintf(val, vsz, "%s", bool_str(cfg->trace_io));             break;
+                case 7: snprintf(label, lsz, "Trace FDC");      snprintf(val, vsz, "%s", bool_str(cfg->trace_fdc));            break;
+                case 8: snprintf(label, lsz, "Trace Input");    snprintf(val, vsz, "%s", bool_str(cfg->trace_input));          break;
+                case 9:
                     snprintf(label, lsz, "Serial mode");
                     if (!ext_serial_available(cfg))
                         snprintf(val, vsz, "[needs PCW Backplane]");
@@ -219,9 +225,9 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                     else
                         snprintf(val, vsz, "PTY");
                     break;
-                case 9:  snprintf(label, lsz, "Show keyboard layout"); snprintf(val, vsz, "...");                              break;
-                case 10: snprintf(label, lsz, "Load snapshot"); snprintf(val, vsz, "...");                                     break;
-                case 11: snprintf(label, lsz, "Version");       snprintf(val, vsz, "1985 v" "0.1.0");                          break;
+                case 10: snprintf(label, lsz, "Show keyboard layout"); snprintf(val, vsz, "...");                              break;
+                case 11: snprintf(label, lsz, "Load snapshot"); snprintf(val, vsz, "...");                                     break;
+                case 12: snprintf(label, lsz, "Version");       snprintf(val, vsz, "1985 v" "0.1.0");                          break;
             }
             break;
         default: break;
@@ -401,12 +407,18 @@ static void activate(Overlay *ov) {
                     if (ov->disp) display_set_video_mode(ov->disp, c->video_mode);
                     ov->dirty = true;
                     break;
-                case 3: c->debug        = !c->debug;        ov->dirty = true; break;
-                case 4: c->debug_traces = !c->debug_traces; ov->dirty = true; break;
-                case 5: c->trace_io     = !c->trace_io;     ov->dirty = true; break;
-                case 6: c->trace_fdc    = !c->trace_fdc;    ov->dirty = true; break;
-                case 7: c->trace_input  = !c->trace_input;  ov->dirty = true; break;
-                case 8:
+                case 3:
+                    c->ext_print_sink = (c->ext_print_sink == PRINT_SINK_REAL)
+                                      ? PRINT_SINK_PDF : PRINT_SINK_REAL;
+                    apply_pdf_printer(ov);
+                    ov->dirty = true;
+                    break;
+                case 4: c->debug        = !c->debug;        ov->dirty = true; break;
+                case 5: c->debug_traces = !c->debug_traces; ov->dirty = true; break;
+                case 6: c->trace_io     = !c->trace_io;     ov->dirty = true; break;
+                case 7: c->trace_fdc    = !c->trace_fdc;    ov->dirty = true; break;
+                case 8: c->trace_input  = !c->trace_input;  ov->dirty = true; break;
+                case 9:
                     /* Serial mode — flip pty ↔ tcp and re-initialise the
                      * backend so the row value updates immediately. */
                     if (ext_serial_available(c) && c->ext_serial) {
@@ -426,9 +438,9 @@ static void activate(Overlay *ov) {
                         ov->dirty = true;
                     }
                     break;
-                case 9:  ov->state = OV_STATE_KEYS; break;
-                case 10: ov->dialog_kind = DIALOG_SNAPSHOT_LOAD; break;
-                case 11: break;
+                case 10: ov->state = OV_STATE_KEYS; break;
+                case 11: ov->dialog_kind = DIALOG_SNAPSHOT_LOAD; break;
+                case 12: break;
             }
             break;
         default: break;

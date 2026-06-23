@@ -28,6 +28,7 @@ typedef enum {
     VIDEO_EGA,       /* 4 bpp, 180×256 quadrupled, 16-colour palette  */
 } VideoMode;
 
+
 typedef struct {
     /* [machine] */
     PcwModel model;          /* default PCW_MODEL_8256 */
@@ -64,9 +65,10 @@ typedef struct {
     bool     ext_dktronics;             /* DK'tronics PCW Sound + Joystick:
                                          * AY-3-8912 + DB9 at 0xA9-0xAB.
                                          * Needs the PCW Backplane. */
-    bool     ext_pdf_printer;           /* Host-side PDF sink for built-in
+    bool      ext_pdf_printer;          /* Host-side PDF sink for built-in
                                          * printer/Centronics output. */
-    char     ext_pdf_printer_dir[PATH_MAX];
+    char      ext_pdf_printer_dir[PATH_MAX];
+    PrintSink ext_print_sink;           /* PDF or REAL (#60). */
 
     /* [advanced] */
     bool     tinker;
