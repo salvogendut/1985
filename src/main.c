@@ -350,6 +350,9 @@ int main(int argc, char **argv) {
     printer_set_pdf_enabled(&pcw.printer,
                             cfg.ext_pdf_printer && cfg.ext_pdf_printer_dir[0]);
     printer_set_sink(&pcw.printer, cfg.ext_print_sink);
+    printer_set_kind(&pcw.printer,
+                     cfg.model == PCW_MODEL_9512 ? PRINTER_KIND_DAISYWHEEL
+                                                 : PRINTER_KIND_DOT_MATRIX);
     pcw.debug_traces = cfg.debug_traces;
     pcw.trace_io  = cfg.debug_traces && cfg.trace_io;
     pcw.fdc.trace = cfg.debug_traces && cfg.trace_fdc;

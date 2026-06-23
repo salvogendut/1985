@@ -29,8 +29,16 @@ Extensions available (Extensions tab):
   ~2 seconds. Advanced ▸ **Printer mode** flips the sink between
   **PDF** (default — file on disk) and **Real printer**, which spools
   the finalised PDF to the host's default CUPS printer via `lp` (Linux
-  / macOS; Windows falls back to PDF). The orange LED in the bottom
-  bar lights while bytes are flowing.
+  / macOS; Windows falls back to PDF). When Real Printer is on and the
+  PDF extension is off, the print job goes through a temp file in
+  `$TMPDIR` and is unlinked once `lp` has queued it. The orange LED in
+  the bottom bar lights while bytes are flowing.
+
+  On the **9512** the built-in printer is a daisywheel (chars only, no
+  dot graphics), so the dot-matrix port FCh/FDh is treated as a no-op
+  and the CPS8256 Centronics port is built in instead of needing the
+  PCW Backplane — print jobs come through that path and remain capturable
+  by the PDF / Real Printer sink. 8256 and 8512 keep the dot-matrix.
 - **Second drive** — bolt-on drive B for the 8256 (8512/9512 always have two).
 - **PCW Backplane** — SanPollo 50-pin edge-connector hub. Acts as a
   gate for the items that physically plug into it.
