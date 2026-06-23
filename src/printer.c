@@ -10,7 +10,8 @@
 #include <time.h>
 
 #ifndef _WIN32
-#include <unistd.h>      /* fork, execlp */
+#include <unistd.h>      /* fork, execlp, dup2 */
+#include <fcntl.h>       /* open, O_WRONLY */
 #include <sys/wait.h>
 #include <signal.h>
 #include <sys/types.h>
@@ -32,11 +33,18 @@ static void printer_spool_to_lp(const char *pdf_path) {
         return;
     }
     if (pid == 0) {
-        /* Child: detach from emulator, exec lp. lp queues and exits
-         * promptly so no need to double-fork for daemonisation. */
+        /* Child: detach from emulator, exec lp. Redirect its stdout
+         * and stderr to /dev/null so the "request id is ..." line
+         * doesn't leak into our terminal; queuing failures are still
+         * surfaced via lp's exit code (which we don't wait on but
+         * CUPS will record). */
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            dup2(devnull, STDOUT_FILENO);
+            dup2(devnull, STDERR_FILENO);
+            if (devnull > 2) close(devnull);
+        }
         execlp("lp", "lp", pdf_path, (char *)NULL);
-        /* exec only returns on failure. */
-        perror("printer: execlp lp");
         _exit(127);
     }
     /* Parent: SIGCHLD is left as SIG_DFL but we never call wait() —
@@ -46,7 +54,6 @@ static void printer_spool_to_lp(const char *pdf_path) {
         signal(SIGCHLD, SIG_IGN);
         signal_set = true;
     }
-    fprintf(stderr, "printer: spooled %s → default printer (lp)\n", pdf_path);
 #endif
 }
 
@@ -176,7 +183,6 @@ static bool printer_pdf_open(Printer *p) {
     }
 
     cairo_set_source_rgb(p->pdf_cr, 0.0, 0.0, 0.0);
-    fprintf(stderr, "printer: writing PDF to %s\n", p->pdf_path);
     return true;
 }
 

@@ -24,9 +24,13 @@ cold boot.
 Extensions available (Extensions tab):
 - **PDF printer** — host-side PDF capture for the built-in PCW
   dot-matrix printer protocol and CPS8256 Centronics bytes. Enabling it
-  opens a folder chooser; the first print event creates a timestamped
-  `1985-print-YYYYMMDD-HHMMSS.pdf` there, with later pages appended
-  until the printer is disabled or the emulator exits.
+  opens a folder chooser; each print job lands in a fresh timestamped
+  `1985-print-YYYYMMDD-HHMMSS.pdf` once the printer has been idle for
+  ~2 seconds. Advanced ▸ **Printer mode** flips the sink between
+  **PDF** (default — file on disk) and **Real printer**, which spools
+  the finalised PDF to the host's default CUPS printer via `lp` (Linux
+  / macOS; Windows falls back to PDF). The orange LED in the bottom
+  bar lights while bytes are flowing.
 - **Second drive** — bolt-on drive B for the 8256 (8512/9512 always have two).
 - **PCW Backplane** — SanPollo 50-pin edge-connector hub. Acts as a
   gate for the items that physically plug into it.
@@ -50,6 +54,19 @@ Extensions available (Extensions tab):
   default audio device. Port A reads come from the first SDL gamepad
   the host enumerates (Atari-style: up/down/left/right + two fire
   buttons mapped to South/East).
+
+Decorative video modes (Advanced ▸ Video mode) reinterpret the 1bpp
+roller-RAM at host render time — these are ahistorical novelties (no
+real PCW software drives them), ported from ZEsarUX:
+
+- **PCW** — native 1 bpp, 720×256, monochrome with the chosen tint
+  (Advanced ▸ Tint — green / amber / white).
+- **CGA1** — 2 bpp, 4-colour CGA palette 0 (black / green / red /
+  brown), doubled horizontally.
+- **CGA2** — 2 bpp, 4-colour CGA palette 1 (black / cyan / magenta /
+  white).
+- **EGA** — 4 bpp, classic 16-colour IBM palette, quadrupled
+  horizontally.
 
 Still stubbed: RAM-disc M:, snapshot save, 9512 daisywheel fidelity,
 and most game-side hardware extensions.
@@ -75,19 +92,35 @@ make
 ./1985
 ```
 
+Pass `--without-cairo` to `./configure` to drop the PDF printer
+backend (useful on platforms where bundling the Cairo stack is
+impractical — the printer ports still report "ready" to the guest
+and the LED still blinks, but bytes don't get captured to a host
+file).
+
+## Binaries
+
+Each push to `main` and each `v*` tag produces signed-off Linux,
+Fedora RPM, and Windows builds via GitHub Actions — grab them from
+the [Releases page](https://github.com/salvogendut/1985/releases).
+The Windows zip is unpacked with `1985.exe`, `SDL3.dll`, and the
+boot ROM next to it; double-click to launch. If anything goes
+wrong on first run, look for `1985.log` in the same folder.
+
 ## Keyboard shortcuts
 
 | Key | Action |
 |-----|--------|
-| Click in window | Capture keyboard input for guest |
-| Ctrl+Enter | Release captured keyboard input |
 | F4  | Save PPM screenshot |
 | F5  | Reset |
-| F8  | Memory monitor / disassembler |
+| F6  | Toggle GIF capture (auto-named in CWD) |
+| F8  | Memory monitor / disassembler (own window) |
 | F9  | Options overlay |
 | F11 | Toggle fullscreen |
 | F12 | Quit |
-| Ctrl+V | Paste clipboard |
+| Shift+F1 … Shift+F8 | PCW f1 … f8 keys |
+| Ctrl+= / Ctrl+− | Step window scale 1× … 4× |
+| Ctrl+V | Paste clipboard into the guest keyboard |
 
 ## Configuration
 
