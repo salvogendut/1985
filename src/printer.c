@@ -6,6 +6,7 @@
 #include <cairo-pdf.h>
 #endif
 #include <stdio.h>
+#include <stdlib.h>     /* getenv */
 #include <string.h>
 #include <time.h>
 
@@ -21,9 +22,18 @@
  * CUPS' `lp`. Detaches: we don't wait on the child so the emulator
  * doesn't stutter while CUPS queues. Returns silently if lp isn't
  * on PATH (the user gets a console message). No-op on Windows. */
-static void printer_spool_to_lp(const char *pdf_path) {
+/* Returns true if we should capture print bytes — either to keep a
+ * user-visible PDF (pdf_enabled) or to feed the Real Printer sink. */
+static bool printer_capture_active(const Printer *p) {
+    return p->pdf_enabled || p->sink == PRINT_SINK_REAL;
+}
+
+/* If wait_then_unlink is true, blocks until lp exits and then removes
+ * the file — used when the PDF is ephemeral (/tmp file created only
+ * because Real Printer was on without PDF extension enabled). */
+static void printer_spool_to_lp(const char *pdf_path, bool wait_then_unlink) {
 #ifdef _WIN32
-    (void)pdf_path;
+    (void)pdf_path; (void)wait_then_unlink;
     fprintf(stderr, "printer: real-printer sink not implemented on Windows yet\n");
 #else
     if (!pdf_path || !pdf_path[0]) return;
@@ -47,12 +57,21 @@ static void printer_spool_to_lp(const char *pdf_path) {
         execlp("lp", "lp", pdf_path, (char *)NULL);
         _exit(127);
     }
-    /* Parent: SIGCHLD is left as SIG_DFL but we never call wait() —
-     * set it to SIG_IGN once so the OS reaps the child for us. */
-    static bool signal_set = false;
-    if (!signal_set) {
-        signal(SIGCHLD, SIG_IGN);
-        signal_set = true;
+    /* Parent. For an ephemeral temp PDF we must outlive `lp` so we
+     * can unlink the file once CUPS has read it into its spool
+     * directory. lp typically returns in <100 ms; cost is one print
+     * job's worth of latency. For a user-owned PDF, fire and forget
+     * (SIGCHLD to SIG_IGN auto-reaps the zombie). */
+    if (wait_then_unlink) {
+        int status;
+        waitpid(pid, &status, 0);
+        unlink(pdf_path);
+    } else {
+        static bool signal_set = false;
+        if (!signal_set) {
+            signal(SIGCHLD, SIG_IGN);
+            signal_set = true;
+        }
     }
 #endif
 }
@@ -134,7 +153,13 @@ static void printer_make_pdf_path(Printer *p) {
     if (!lt || !strftime(base, sizeof(base), "1985-print-%Y%m%d-%H%M%S", lt))
         snprintf(base, sizeof(base), "1985-print");
 
-    const char *dir = p->pdf_output_dir[0] ? p->pdf_output_dir : ".";
+    /* If the user has the PDF extension off but selected Real Printer,
+     * we still need a file to feed lp — drop it in $TMPDIR and remember
+     * to unlink after spooling. */
+    p->pdf_ephemeral = !p->pdf_enabled;
+    const char *tmp_env = p->pdf_ephemeral ? getenv("TMPDIR") : NULL;
+    const char *dir = p->pdf_ephemeral ? (tmp_env && tmp_env[0] ? tmp_env : "/tmp")
+                                       : (p->pdf_output_dir[0] ? p->pdf_output_dir : ".");
     size_t dir_len = strlen(dir);
     const char *sep = (dir_len > 0 && (dir[dir_len - 1] == '/' || dir[dir_len - 1] == '\\'))
                     ? "" : "/";
@@ -154,7 +179,7 @@ static void printer_make_pdf_path(Printer *p) {
 
 #if HAVE_CAIRO
 static bool printer_pdf_open(Printer *p) {
-    if (!p->pdf_enabled) return false;
+    if (!printer_capture_active(p)) return false;
     if (p->pdf_cr) return true;
 
     printer_make_pdf_path(p);
@@ -219,7 +244,8 @@ void printer_shutdown(Printer *p) {
     p->pdf_path[0] = 0;
 
     if (p->sink == PRINT_SINK_REAL && done_path[0])
-        printer_spool_to_lp(done_path);
+        printer_spool_to_lp(done_path, p->pdf_ephemeral);
+    p->pdf_ephemeral = false;
 }
 #else  /* !HAVE_CAIRO */
 static bool printer_pdf_ensure_page(Printer *p) { (void)p; return false; }
@@ -446,7 +472,7 @@ static void printer_text_linefeed(Printer *p) {
 void printer_write_centronics(Printer *p, u8 val) {
     if (!p) return;
     leds_ping(LED_PRINTER);
-    if (!p->pdf_enabled) return;
+    if (!printer_capture_active(p)) return;
 
     if (p->text_esc_skip > 0) {
         p->text_esc_skip--;

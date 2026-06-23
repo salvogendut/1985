@@ -57,6 +57,7 @@ typedef struct Printer {
 
     bool pdf_enabled;
     PrintSink sink;
+    bool pdf_ephemeral;             /* true: file is in /tmp, delete after spooling */
     char pdf_output_dir[PATH_MAX];
     char pdf_path[PATH_MAX];
     cairo_surface_t *pdf_surface;
