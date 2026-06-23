@@ -17,6 +17,16 @@ typedef enum {
     MONO_WHITE,
 } MonoMode;
 
+/* Host-side reinterpretation of the 1bpp roller-RAM, ported from
+ * ZesarUX's pcw_video_mode. Real PCWs only had VIDEO_PCW; the others
+ * regroup the same bytes into wider pixels indexed through a palette.
+ * No guest software can drive these — purely a decorative toggle. */
+typedef enum {
+    VIDEO_PCW = 0,   /* 1 bpp, 720×256, 2 colours (uses MonoMode tint) */
+    VIDEO_CGA,       /* 2 bpp, 360×256 doubled, 4-colour CGA palette  */
+    VIDEO_EGA,       /* 4 bpp, 180×256 quadrupled, 16-colour palette  */
+} VideoMode;
+
 typedef struct {
     /* [machine] */
     PcwModel model;          /* default PCW_MODEL_8256 */
@@ -30,7 +40,8 @@ typedef struct {
     int      scale;          /* 1..4 */
     bool     fullscreen;
     bool     fullscreen_smoothing;
-    MonoMode monochrome;     /* default MONO_GREEN */
+    MonoMode  monochrome;    /* default MONO_GREEN */
+    VideoMode video_mode;    /* default VIDEO_PCW */
 
     /* [extensions] — model-specific add-ons. */
     bool     ext_second_drive;          /* PCW 8256 only: bolt-on drive B */
