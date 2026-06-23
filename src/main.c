@@ -678,8 +678,17 @@ int main(int argc, char **argv) {
             int ww, wh;
             SDL_GetWindowSize(disp.win, &ww, &wh);
             const float strip_h = 16.0f;
-            const float led_bar = (float)DISPLAY_LED_BAR_H;
-            float strip_y = (float)wh - led_bar - strip_h;
+            /* Compute the LED band's actual physical-pixel height under
+             * letterbox scaling so the strip lands above it instead of
+             * on top of it. Letterbox uses the smaller of the two axis
+             * scales, and centres the content vertically. */
+            float scale_x = (float)ww / (float)DISPLAY_LOGICAL_W;
+            float scale_y = (float)wh / (float)DISPLAY_LOGICAL_H;
+            float scale   = scale_x < scale_y ? scale_x : scale_y;
+            float scaled_h = (float)DISPLAY_LOGICAL_H * scale;
+            float letterbox_top = ((float)wh - scaled_h) * 0.5f;
+            float led_top = letterbox_top + (float)DISPLAY_SCREEN_H * scale;
+            float strip_y = led_top - strip_h;
             float text_y  = strip_y + 4.0f;
             SDL_FRect strip = { 0.0f, strip_y, (float)ww, strip_h };
             SDL_SetRenderDrawBlendMode(disp.renderer, SDL_BLENDMODE_NONE);
