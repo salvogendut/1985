@@ -169,6 +169,7 @@ void config_load(Config *c, const char *path) {
         else if (strcmp(k, "fullscreen")           == 0) c->fullscreen = parse_bool(v, c->fullscreen);
         else if (strcmp(k, "fullscreen_smoothing") == 0) c->fullscreen_smoothing = parse_bool(v, c->fullscreen_smoothing);
         else if (strcmp(k, "monochrome")           == 0) c->monochrome = parse_mono(v, c->monochrome);
+        else if (strcmp(k, "tint_glow")            == 0) c->tint_glow  = parse_bool(v, c->tint_glow);
         else if (strcmp(k, "video_mode")           == 0) c->video_mode = parse_video(v, c->video_mode);
         else if (strcmp(k, "ext_second_drive")        == 0) c->ext_second_drive        = parse_bool(v, c->ext_second_drive);
         else if (strcmp(k, "ext_sanpollo_backplane")  == 0) c->ext_sanpollo_backplane  = parse_bool(v, c->ext_sanpollo_backplane);
@@ -223,6 +224,7 @@ int config_save(const Config *c) {
     fprintf(f, "fullscreen = %s\n", bool_to_str(c->fullscreen));
     fprintf(f, "fullscreen_smoothing = %s\n", bool_to_str(c->fullscreen_smoothing));
     fprintf(f, "monochrome = %s\n", mono_to_str(c->monochrome));
+    fprintf(f, "tint_glow  = %s\n", bool_to_str(c->tint_glow));
     fprintf(f, "video_mode = %s\n\n", video_to_str(c->video_mode));
 
     fprintf(f, "[extensions]\n");

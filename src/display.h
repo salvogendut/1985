@@ -34,6 +34,7 @@ typedef struct Display {
     bool fullscreen;
     bool smoothing;
     MonoMode mono;
+    bool tint_glow;          /* near-black background for any tint */
 
     /* Resolved phosphor colours for "lit" pixel and "background". */
     u32  fg, bg;
@@ -49,6 +50,7 @@ int  display_init(Display *d, const Config *cfg);
 void display_quit(Display *d);
 
 void display_set_monochrome(Display *d, MonoMode m);
+void display_set_tint_glow(Display *d, bool on);
 void display_set_video_mode(Display *d, VideoMode v);
 
 /* Plot a colour-indexed pixel (CGA/EGA modes). Index is masked to the

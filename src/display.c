@@ -13,20 +13,31 @@ static u32 mono_lit(MonoMode m) {
     }
 }
 
-static u32 mono_dim(MonoMode m) {
-    /* 1/8 of the lit colour — gives a slight CRT-bloom feel rather
-     * than pitch black, matching the dark green of the GT65. */
+static u32 mono_dim(MonoMode m, bool glow) {
+    /* Glow drops the background close to pitch-black so the lit
+     * pixels really pop, matching a CRT-with-the-brightness-up
+     * look. Otherwise stay at 1/8 of the lit colour for a slight
+     * bloom feel rather than full black. */
     u32 lit = mono_lit(m);
-    u8 r = (u8)((((lit >> 16) & 0xFF) * 1) / 8);
-    u8 g = (u8)((((lit >> 8)  & 0xFF) * 1) / 8);
-    u8 b = (u8)(( (lit        & 0xFF) * 1) / 8);
+    int divisor = glow ? 64 : 8;
+    u8 r = (u8)(((lit >> 16) & 0xFF) / divisor);
+    u8 g = (u8)(((lit >> 8)  & 0xFF) / divisor);
+    u8 b = (u8)(( lit        & 0xFF) / divisor);
     return ((u32)r << 16) | ((u32)g << 8) | b;
 }
 
 void display_set_monochrome(Display *d, MonoMode m) {
     d->mono = m;
     d->fg = mono_lit(m);
-    d->bg = mono_dim(m);
+    d->bg = mono_dim(m, d->tint_glow);
+}
+
+void display_set_tint_glow(Display *d, bool on) {
+    d->tint_glow = on;
+    /* PCW video mode is the only one that uses the dim bg; the
+     * colour modes force black already, so refreshing them is a
+     * no-op for the bg but still cheap and keeps the code uniform. */
+    if (d->video_mode == VIDEO_PCW) d->bg = mono_dim(d->mono, on);
 }
 
 /* Palettes lifted from ZesarUX's pcw_rgb24_full_table. CGA1 picks
@@ -65,7 +76,7 @@ void display_set_video_mode(Display *d, VideoMode v) {
         case VIDEO_CGA2: load_cga2_palette(d->palette); d->bg = 0x000000; break;
         case VIDEO_EGA:  load_ega_palette(d->palette);  d->bg = 0x000000; break;
         case VIDEO_PCW:
-        default:         d->bg = mono_dim(d->mono);                       break;
+        default:         d->bg = mono_dim(d->mono, d->tint_glow);          break;
     }
 }
 
@@ -80,6 +91,7 @@ int display_init(Display *d, const Config *cfg) {
     d->scale      = cfg->scale > 0 ? cfg->scale : 2;
     d->fullscreen = cfg->fullscreen;
     d->smoothing  = cfg->fullscreen_smoothing;
+    d->tint_glow = cfg->tint_glow;
     display_set_monochrome(d, cfg->monochrome);
     display_set_video_mode(d, cfg->video_mode);
 
