@@ -486,6 +486,29 @@ int main(int argc, char **argv) {
                         kbd_handle(&pcw.kbd, &ev.key);
                         break;
                     }
+                    /* Ctrl + / Ctrl − : step the window scale 1×..4×.
+                     * EQUALS covers "=/+" regardless of shift; KP_PLUS /
+                     * KP_MINUS cover the numeric keypad. No-op while
+                     * fullscreen — there's nothing to resize. */
+                    if ((ev.key.mod & SDL_KMOD_CTRL) && !disp.fullscreen) {
+                        bool kp = (ev.key.scancode == SDL_SCANCODE_EQUALS
+                                || ev.key.scancode == SDL_SCANCODE_KP_PLUS);
+                        bool km = (ev.key.scancode == SDL_SCANCODE_MINUS
+                                || ev.key.scancode == SDL_SCANCODE_KP_MINUS);
+                        if (kp || km) {
+                            int s = disp.scale + (kp ? 1 : -1);
+                            if (s < 1) s = 1;
+                            if (s > 4) s = 4;
+                            if (s != disp.scale) {
+                                disp.scale = s;
+                                cfg.scale  = s;
+                                SDL_SetWindowSize(disp.win,
+                                                  DISPLAY_LOGICAL_W * s,
+                                                  DISPLAY_LOGICAL_H * s);
+                            }
+                            break;
+                        }
+                    }
                     switch (ev.key.key) {
                         case SDLK_F4: {
                             char path[64];
