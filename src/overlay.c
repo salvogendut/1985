@@ -23,7 +23,6 @@
  * by kind, not by displayed index. */
 typedef enum {
     EXT_NONE = 0,
-    EXT_PRINTER,
     EXT_SERIAL,
     EXT_PERRYFI,
     EXT_DKTRONICS,
@@ -32,7 +31,6 @@ typedef enum {
 static ExtRow ext_row_at(const Config *cfg, int row) {
     (void)cfg;
     int r = 0;
-    if (row == r++) return EXT_PRINTER;
     if (row == r++) return EXT_SERIAL;
     if (row == r++) return EXT_PERRYFI;
     if (row == r++) return EXT_DKTRONICS;
@@ -47,6 +45,10 @@ typedef enum {
     GEN_MODEL,
     GEN_MEMORY,
     GEN_SECOND_DRIVE,    /* 8256 only — 8512/9512 have two drives stock */
+    GEN_PRINTER,         /* PDF capture of the built-in printer port —
+                          * every PCW model has the FCh/FDh / Centronics
+                          * hardware, so the toggle isn't gated on the
+                          * backplane (#79) */
     GEN_BACKPLANE,
     GEN_TINKER,
 } GenRow;
@@ -58,6 +60,7 @@ static GenRow gen_row_at(const Config *cfg, int row) {
     if (cfg->model == PCW_MODEL_8256) {
         if (row == r++) return GEN_SECOND_DRIVE;
     }
+    if (row == r++) return GEN_PRINTER;
     if (row == r++) return GEN_BACKPLANE;
     if (row == r++) return GEN_TINKER;
     return GEN_NONE;
@@ -94,8 +97,8 @@ static const char *section_title(OvSection s) {
 static int row_count(const Overlay *ov, OvSection s) {
     switch (s) {
         case OV_GENERAL:
-            /* model, memory, [second drive on 8256], backplane, tinker */
-            return ov->cfg->model == PCW_MODEL_8256 ? 5 : 4;
+            /* model, memory, [second drive on 8256], printer, backplane, tinker */
+            return ov->cfg->model == PCW_MODEL_8256 ? 6 : 5;
         case OV_MEDIA:
             /* 8256 shipped with a single floppy; 8512/9512 had two.
              * Users can bolt a second drive onto an 8256 via the
@@ -110,17 +113,16 @@ static int row_count(const Overlay *ov, OvSection s) {
              * it's absent matches the real machine.
              *
              * Layout:
-             *   Printer
              *   Serial port
              *   PerryFi                 (AT-modem; lives on the serial line)
              *   DK'TRONICS Sound & Joystick
              *
              * The Serial backend toggle (pty/tcp) lives under Advanced —
              * it's a developer convenience, not a hardware option.
-             * Second drive moved to General — a stock-PCW accessory that
-             * doesn't need the backplane. */
+             * Second drive and PDF printer moved to General — both are
+             * stock-PCW features that don't need the backplane. */
             if (!ov->cfg->ext_sanpollo_backplane) return 0;
-            return 4;
+            return 3;
         }
         case OV_TINKER:     return ov->cfg->tinker ? 16 : 0;
         default:            return 0;
@@ -177,6 +179,15 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                 case GEN_MODEL:        snprintf(label, lsz, "Model");         snprintf(val, vsz, "%s", model_str(cfg->model));                  break;
                 case GEN_MEMORY:       snprintf(label, lsz, "RAM (KB)");      snprintf(val, vsz, "%d", cfg->memory_kb);                         break;
                 case GEN_SECOND_DRIVE: snprintf(label, lsz, "Second drive");  snprintf(val, vsz, "%s", bool_str(cfg->ext_second_drive));        break;
+                case GEN_PRINTER:
+                    snprintf(label, lsz, "PDF printer");
+                    if (!cfg->ext_pdf_printer)
+                        snprintf(val, vsz, "no");
+                    else if (cfg->ext_pdf_printer_dir[0])
+                        snprintf(val, vsz, "yes: %s", cfg->ext_pdf_printer_dir);
+                    else
+                        snprintf(val, vsz, "yes: [choose folder]");
+                    break;
                 case GEN_BACKPLANE:    snprintf(label, lsz, "PCW Backplane"); snprintf(val, vsz, "%s", bool_str(cfg->ext_sanpollo_backplane));  break;
                 case GEN_TINKER:       snprintf(label, lsz, "Tinker");        snprintf(val, vsz, "%s", bool_str(cfg->tinker));                  break;
                 case GEN_NONE: default: break;
@@ -190,15 +201,6 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
             break;
         case OV_EXTENSIONS:
             switch (ext_row_at(cfg, row)) {
-                case EXT_PRINTER:
-                    snprintf(label, lsz, "PDF printer");
-                    if (!cfg->ext_pdf_printer)
-                        snprintf(val, vsz, "no");
-                    else if (cfg->ext_pdf_printer_dir[0])
-                        snprintf(val, vsz, "yes: %s", cfg->ext_pdf_printer_dir);
-                    else
-                        snprintf(val, vsz, "yes: [choose folder]");
-                    break;
                 case EXT_SERIAL:
                     snprintf(label, lsz, "Serial port");
                     snprintf(val, vsz, "%s", bool_str(cfg->ext_serial));
@@ -390,13 +392,23 @@ static void activate(Overlay *ov) {
                                      c->model != PCW_MODEL_8256 || c->ext_second_drive);
                     ov->dirty = true;
                     break;
+                case GEN_PRINTER:
+                    if (c->ext_pdf_printer) {
+                        c->ext_pdf_printer = false;
+                        apply_pdf_printer(ov);
+                        leds_set_enabled(LED_PRINTER, false);
+                        ov->dirty = true;
+                    } else {
+                        open_printer_dir_dialog(ov);
+                    }
+                    break;
                 case GEN_BACKPLANE:
                     c->ext_sanpollo_backplane = !c->ext_sanpollo_backplane;
-                    /* Pulling the backplane disables everything that
-                     * was plugged into it. PDF printer goes too — the
-                     * whole Extensions tab disappears. */
+                    /* Pulling the backplane disables only what physically
+                     * hangs off it — serial / PerryFi / DK'tronics. The
+                     * PDF printer lives in General now (#79) because the
+                     * built-in printer port is on every PCW. */
                     if (!c->ext_sanpollo_backplane) {
-                        c->ext_pdf_printer = false;
                         c->ext_dktronics   = false;
                         c->ext_perryfi     = false;
                         if (c->model != PCW_MODEL_9512) {
@@ -407,9 +419,7 @@ static void activate(Overlay *ov) {
                             }
                             leds_set_enabled(LED_SERIAL, false);
                         }
-                        apply_pdf_printer(ov);
                     }
-                    leds_set_enabled(LED_PRINTER, c->ext_sanpollo_backplane);
                     ov->dirty = true;
                     break;
                 case GEN_TINKER:
@@ -446,15 +456,6 @@ static void activate(Overlay *ov) {
                 case EXT_DKTRONICS:
                     c->ext_dktronics = !c->ext_dktronics;
                     ov->dirty = true;
-                    break;
-                case EXT_PRINTER:
-                    if (c->ext_pdf_printer) {
-                        c->ext_pdf_printer = false;
-                        apply_pdf_printer(ov);
-                        ov->dirty = true;
-                    } else {
-                        open_printer_dir_dialog(ov);
-                    }
                     break;
                 case EXT_NONE:
                 default:
@@ -823,6 +824,7 @@ void overlay_tick(Overlay *ov) {
                      sizeof(ov->cfg->ext_pdf_printer_dir), "%s", ov->dialog_path);
             ov->cfg->ext_pdf_printer = true;
             apply_pdf_printer(ov);
+            leds_set_enabled(LED_PRINTER, true);
             ov->dirty = true;
             break;
         default: break;

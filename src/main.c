@@ -427,7 +427,9 @@ int main(int argc, char **argv) {
      * Second drive accessory. Hide the LED otherwise. */
     leds_set_enabled(LED_FDC_B,
                      cfg.model != PCW_MODEL_8256 || cfg.ext_second_drive);
-    leds_set_enabled(LED_PRINTER, cfg.ext_sanpollo_backplane);
+    /* LED tracks the PDF printer capture toggle: lit when capture is
+     * armed, hidden when the user has turned it off. */
+    leds_set_enabled(LED_PRINTER, cfg.ext_pdf_printer);
 
     Paste paste;
     paste_init(&paste);
