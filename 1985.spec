@@ -1,5 +1,5 @@
 Name:           1985
-Version:        0.2.0
+Version:        0.3.0
 Release:        1%{?dist}
 Summary:        Amstrad PCW 8256 / 8512 / 9512 emulator
 
@@ -78,6 +78,15 @@ appstream-util validate-relax --nonet %{buildroot}%{_datadir}/metainfo/io.github
 %{_datadir}/icons/hicolor/*/apps/io.github.salvogendut.Emulator1985.png
 
 %changelog
+* Tue Jun 23 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.3.0-1
+- Live tint update on General ▸ Model switch (#69).
+- 9512 Printer model row in Advanced (Daisywheel / Centronics),
+  informational for now (#70).
+- Tint mode: Normal / Glow — drops the background to near-black
+  for any phosphor tint to match a turned-up CRT (#73).
+- README cleanups: M: stub line removed, ZEsarUX credited for
+  the ported video modes.
+
 * Tue Jun 23 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.2.0-1
 - Fix silent crash on Windows (PCW struct moved to BSS — 2 MB RAM
   was blowing the 1 MB main-thread stack).
