@@ -318,6 +318,15 @@ static int load_raw_image(PCW *pcw, const char *path, u16 base) {
 }
 
 int main(int argc, char **argv) {
+#ifdef _WIN32
+    /* GUI-subsystem build: stderr/stdout have nowhere to go when the
+     * exe is double-clicked. Redirect them to log files next to the
+     * binary so init failures are diagnosable. */
+    freopen("1985.log", "w", stderr);
+    freopen("1985.out", "w", stdout);
+    setvbuf(stderr, NULL, _IONBF, 0);
+#endif
+
     Cli cli;
     if (parse_cli(argc, argv, &cli) < 0) return 1;
 
@@ -331,7 +340,11 @@ int main(int argc, char **argv) {
     Display disp;
     if (display_init(&disp, &cfg) < 0) return 1;
 
-    PCW pcw;
+    /* PCW carries the full 2 MB RAM inline; that would blow the default
+     * 1 MB Windows main-thread stack before main() even runs. Static
+     * storage parks it in BSS instead. (Linux mains get 8 MB, hence
+     * Windows-only crash — see #55.) */
+    static PCW pcw;
     pcw_init(&pcw, cfg.model, cfg.memory_kb);
     printer_set_pdf_output_dir(&pcw.printer, cfg.ext_pdf_printer_dir);
     printer_set_pdf_enabled(&pcw.printer,
