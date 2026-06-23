@@ -180,7 +180,7 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                 case GEN_MEMORY:       snprintf(label, lsz, "RAM (KB)");      snprintf(val, vsz, "%d", cfg->memory_kb);                         break;
                 case GEN_SECOND_DRIVE: snprintf(label, lsz, "Second drive");  snprintf(val, vsz, "%s", bool_str(cfg->ext_second_drive));        break;
                 case GEN_PRINTER:
-                    snprintf(label, lsz, "PDF printer");
+                    snprintf(label, lsz, "Printer");
                     if (!cfg->ext_pdf_printer)
                         snprintf(val, vsz, "no");
                     else if (cfg->ext_pdf_printer_dir[0])
