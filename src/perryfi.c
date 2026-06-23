@@ -1,7 +1,14 @@
 /* perryfi.c — software AT modem. See perryfi.h. */
 
+/* _GNU_SOURCE (glibc) trumps the strict _POSIX_C_SOURCE filter so
+ * MSG_NOSIGNAL stays visible. __BSD_VISIBLE does the same on the
+ * BSDs; _DEFAULT_SOURCE is kept for older glibc. */
+#define _GNU_SOURCE
 #define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
+#if defined(__FreeBSD__) || defined(__DragonFly__) || defined(__OpenBSD__) || defined(__NetBSD__)
+#define __BSD_VISIBLE 1
+#endif
 
 #include "perryfi.h"
 
@@ -20,6 +27,14 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
+
+/* MSG_NOSIGNAL is a Linux extension; on the BSDs it's not defined.
+ * serial_init() ignores SIGPIPE process-wide so passing 0 here is
+ * safe. Falls back AFTER <sys/socket.h> so the system header has had
+ * its say first. */
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL 0
+#endif
 #endif
 
 #define MASK (PERRYFI_RING - 1)

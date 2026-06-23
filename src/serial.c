@@ -1,10 +1,14 @@
 /* serial.c — see serial.h. Pattern lifted from 1984's usifac.c. */
 
 #define _XOPEN_SOURCE 600   /* posix_openpt, grantpt, unlockpt, ptsname */
-#define _DEFAULT_SOURCE     /* cfmakeraw */
+#define _DEFAULT_SOURCE     /* glibc: cfmakeraw, MSG_NOSIGNAL */
+#if defined(__FreeBSD__) || defined(__DragonFly__) || defined(__OpenBSD__) || defined(__NetBSD__)
+#define __BSD_VISIBLE 1     /* BSD: cfmakeraw, INADDR_LOOPBACK */
+#endif
 
 #include "serial.h"
 
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,6 +23,13 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
+#endif
+
+/* MSG_NOSIGNAL is a Linux extension; on the BSDs (and Windows) we
+ * suppress SIGPIPE differently — see serial_init(). Fallback must
+ * come after <sys/socket.h> so the system header has had its say. */
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL 0
 #endif
 
 #define MASK (SERIAL_RING - 1)
@@ -136,6 +147,11 @@ void serial_init(Serial *s, bool enable, const char *backend, int tcp_port) {
     s->present = false;
     return;
 #else
+    /* On the BSDs MSG_NOSIGNAL is a no-op (set to 0 above); ignore
+     * SIGPIPE process-wide so a TCP peer hanging up mid-send can't
+     * terminate the emulator. Harmless on Linux too. */
+    signal(SIGPIPE, SIG_IGN);
+
     if (backend && !strcmp(backend, "tcp")) {
         s->backend = SERIAL_BACKEND_TCP;
         if (open_tcp(s, tcp_port) < 0) s->present = false;
