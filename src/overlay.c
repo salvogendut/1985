@@ -376,6 +376,7 @@ static void activate(Overlay *ov) {
                         }
                         apply_pdf_printer(ov);
                     }
+                    leds_set_enabled(LED_PRINTER, c->ext_sanpollo_backplane);
                     ov->dirty = true;
                     break;
                 case 3:
