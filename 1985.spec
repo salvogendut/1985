@@ -1,5 +1,5 @@
 Name:           1985
-Version:        0.1.0
+Version:        0.2.0
 Release:        1%{?dist}
 Summary:        Amstrad PCW 8256 / 8512 / 9512 emulator
 
@@ -78,6 +78,20 @@ appstream-util validate-relax --nonet %{buildroot}%{_datadir}/metainfo/io.github
 %{_datadir}/icons/hicolor/*/apps/io.github.salvogendut.Emulator1985.png
 
 %changelog
+* Tue Jun 23 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.2.0-1
+- Fix silent crash on Windows (PCW struct moved to BSS — 2 MB RAM
+  was blowing the 1 MB main-thread stack).
+- Fix FreeBSD build (BSD-visible feature macros + MSG_NOSIGNAL).
+- Ctrl + / Ctrl − step window scale 1× … 4×.
+- Decorative video modes ported from ZEsarUX: PCW / CGA1 / CGA2
+  / EGA.
+- "Printer mode" toggle — PDF file (default) or real printer via
+  CUPS lp.
+- Snapshot save / load (.sna), with Save / Load entries in F9 ▸
+  Advanced.
+- Default window scale dropped from 2× to 1×.
+- README refreshed.
+
 * Tue Jun 23 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.1.0-1
 - All three PCW models (8256/8512/9512) boot CP/M Plus.
 - Extensions menu: PDF printer, second drive, PCW Backplane,

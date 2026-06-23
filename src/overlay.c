@@ -228,7 +228,7 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                 case 10: snprintf(label, lsz, "Show keyboard layout"); snprintf(val, vsz, "...");                              break;
                 case 11: snprintf(label, lsz, "Save snapshot"); snprintf(val, vsz, "...");                                     break;
                 case 12: snprintf(label, lsz, "Load snapshot"); snprintf(val, vsz, "...");                                     break;
-                case 13: snprintf(label, lsz, "Version");       snprintf(val, vsz, "1985 v" "0.1.0");                          break;
+                case 13: snprintf(label, lsz, "Version");       snprintf(val, vsz, "1985 v" "0.2.0");                          break;
             }
             break;
         default: break;
