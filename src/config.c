@@ -122,7 +122,7 @@ void config_defaults(Config *c) {
     memset(c, 0, sizeof(*c));
     c->model                = PCW_MODEL_8256;
     c->memory_kb            = 256;
-    c->scale                = 2;
+    c->scale                = 1;
     c->fullscreen           = false;
     c->fullscreen_smoothing = true;
     c->monochrome           = MONO_GREEN;
