@@ -44,6 +44,18 @@ static const char *video_to_str(VideoMode v) {
     }
 }
 
+static const char *sink_to_str(PrintSink s) {
+    return (s == PRINT_SINK_REAL) ? "real" : "pdf";
+}
+
+static PrintSink parse_sink(const char *s, PrintSink fallback) {
+    if (!s) return fallback;
+    if (strcasecmp(s, "pdf")  == 0) return PRINT_SINK_PDF;
+    if (strcasecmp(s, "real") == 0) return PRINT_SINK_REAL;
+    fprintf(stderr, "config: unknown print_sink '%s' — using default\n", s);
+    return fallback;
+}
+
 static VideoMode parse_video(const char *s, VideoMode fallback) {
     if (!s) return fallback;
     if (strcasecmp(s, "pcw")  == 0) return VIDEO_PCW;
@@ -174,6 +186,7 @@ void config_load(Config *c, const char *path) {
         else if (strcmp(k, "ext_pdf_printer")         == 0) c->ext_pdf_printer         = parse_bool(v, c->ext_pdf_printer);
         else if (strcmp(k, "ext_pdf_printer_dir")     == 0) snprintf(c->ext_pdf_printer_dir,
                                                                       sizeof(c->ext_pdf_printer_dir), "%s", v);
+        else if (strcmp(k, "ext_print_sink")          == 0) c->ext_print_sink = parse_sink(v, c->ext_print_sink);
         else if (strcmp(k, "tinker")               == 0) c->tinker = parse_bool(v, c->tinker);
         else if (strcmp(k, "debug")                == 0) c->debug  = parse_bool(v, c->debug);
         else if (strcmp(k, "debug_traces")         == 0) c->debug_traces = parse_bool(v, c->debug_traces);
@@ -220,7 +233,8 @@ int config_save(const Config *c) {
     fprintf(f, "ext_perryfi             = %s\n",   bool_to_str(c->ext_perryfi));
     fprintf(f, "ext_dktronics           = %s\n",   bool_to_str(c->ext_dktronics));
     fprintf(f, "ext_pdf_printer         = %s\n",   bool_to_str(c->ext_pdf_printer));
-    fprintf(f, "ext_pdf_printer_dir     = %s\n\n", c->ext_pdf_printer_dir);
+    fprintf(f, "ext_pdf_printer_dir     = %s\n",   c->ext_pdf_printer_dir);
+    fprintf(f, "ext_print_sink          = %s\n\n", sink_to_str(c->ext_print_sink));
 
     fprintf(f, "[advanced]\n");
     fprintf(f, "tinker = %s\n", bool_to_str(c->tinker));

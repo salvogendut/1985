@@ -31,6 +31,15 @@ typedef enum {
     PRINTER_MODE_PRINTING,
 } PrinterMode;
 
+/* Where the finalised PDF lands when the printer extension is on.
+ * PDF leaves it in pdf_output_dir for the user; REAL pipes the
+ * file to the host's default printer via `lp` (Linux/macOS).
+ * Windows falls back to PDF behaviour for now. */
+typedef enum {
+    PRINT_SINK_PDF = 0,
+    PRINT_SINK_REAL,
+} PrintSink;
+
 typedef struct Printer {
     bool connected;
     bool bail_in;
@@ -47,6 +56,7 @@ typedef struct Printer {
     float xdir;
 
     bool pdf_enabled;
+    PrintSink sink;
     char pdf_output_dir[PATH_MAX];
     char pdf_path[PATH_MAX];
     cairo_surface_t *pdf_surface;
@@ -68,6 +78,7 @@ void printer_init(Printer *p);
 void printer_shutdown(Printer *p);
 void printer_set_pdf_output_dir(Printer *p, const char *dir);
 void printer_set_pdf_enabled(Printer *p, bool enabled);
+void printer_set_sink(Printer *p, PrintSink sink);
 u8   printer_read (Printer *p, u8 port);
 void printer_write(Printer *p, u8 port, u8 val);
 void printer_write_centronics(Printer *p, u8 val);

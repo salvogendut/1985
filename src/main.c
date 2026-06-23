@@ -349,6 +349,7 @@ int main(int argc, char **argv) {
     printer_set_pdf_output_dir(&pcw.printer, cfg.ext_pdf_printer_dir);
     printer_set_pdf_enabled(&pcw.printer,
                             cfg.ext_pdf_printer && cfg.ext_pdf_printer_dir[0]);
+    printer_set_sink(&pcw.printer, cfg.ext_print_sink);
     pcw.debug_traces = cfg.debug_traces;
     pcw.trace_io  = cfg.debug_traces && cfg.trace_io;
     pcw.fdc.trace = cfg.debug_traces && cfg.trace_fdc;
