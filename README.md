@@ -84,8 +84,8 @@ FDC command state, AY synth state, and serial / printer buffers are
 not preserved — save at the `A>` prompt for safest results. CLI also
 accepts `--load-sna FILE`.
 
-Still stubbed: RAM-disc M:, 9512 daisywheel fidelity, and most
-game-side hardware extensions.
+Still stubbed: 9512 daisywheel fidelity, and most game-side
+hardware extensions.
 
 <p align="center">
   <img src="screenshots/cpm.png" alt="CP/M+ boot banner and A&gt; prompt" width="380">
