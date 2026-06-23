@@ -1,4 +1,5 @@
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -318,6 +319,15 @@ static int load_raw_image(PCW *pcw, const char *path, u16 base) {
 }
 
 int main(int argc, char **argv) {
+#ifdef _WIN32
+    /* GUI-subsystem build: stderr/stdout have nowhere to go when the
+     * exe is double-clicked. Redirect them to log files next to the
+     * binary so init failures are diagnosable. */
+    freopen("1985.log", "w", stderr);
+    freopen("1985.out", "w", stdout);
+    setvbuf(stderr, NULL, _IONBF, 0);
+#endif
+
     Cli cli;
     if (parse_cli(argc, argv, &cli) < 0) return 1;
 
