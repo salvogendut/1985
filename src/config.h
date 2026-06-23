@@ -43,6 +43,9 @@ typedef struct {
     bool     fullscreen;
     bool     fullscreen_smoothing;
     MonoMode  monochrome;    /* default MONO_GREEN */
+    bool      tint_glow;     /* CRT-style: dim → near-black so the tint
+                              * really pops, like a turned-up brightness
+                              * knob. Applies to all phosphor tints. */
     VideoMode video_mode;    /* default VIDEO_PCW */
 
     /* [extensions] — model-specific add-ons. */
