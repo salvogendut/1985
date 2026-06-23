@@ -68,8 +68,16 @@ real PCW software drives them), ported from ZEsarUX:
 - **EGA** — 4 bpp, classic 16-colour IBM palette, quadrupled
   horizontally.
 
-Still stubbed: RAM-disc M:, snapshot save, 9512 daisywheel fidelity,
-and most game-side hardware extensions.
+Snapshots — F9 ▸ Advanced ▸ **Save snapshot** / **Load snapshot**
+write a `.sna` file containing the full RAM, the Z80 register set,
+and the ASIC / memory-paging state. Loading a snapshot taken on a
+different model triggers a cold-boot to match before restoring.
+FDC command state, AY synth state, and serial / printer buffers are
+not preserved — save at the `A>` prompt for safest results. CLI also
+accepts `--load-sna FILE`.
+
+Still stubbed: RAM-disc M:, 9512 daisywheel fidelity, and most
+game-side hardware extensions.
 
 <p align="center">
   <img src="screenshots/cpm.png" alt="CP/M+ boot banner and A&gt; prompt" width="380">

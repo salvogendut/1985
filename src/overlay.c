@@ -94,7 +94,7 @@ static int row_count(const Overlay *ov, OvSection s) {
             if (ov->cfg->model == PCW_MODEL_8256) n++;
             return n;
         }
-        case OV_TINKER:     return ov->cfg->tinker ? 13 : 0;
+        case OV_TINKER:     return ov->cfg->tinker ? 14 : 0;
         default:            return 0;
     }
 }
@@ -226,8 +226,9 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                         snprintf(val, vsz, "PTY");
                     break;
                 case 10: snprintf(label, lsz, "Show keyboard layout"); snprintf(val, vsz, "...");                              break;
-                case 11: snprintf(label, lsz, "Load snapshot"); snprintf(val, vsz, "...");                                     break;
-                case 12: snprintf(label, lsz, "Version");       snprintf(val, vsz, "1985 v" "0.1.0");                          break;
+                case 11: snprintf(label, lsz, "Save snapshot"); snprintf(val, vsz, "...");                                     break;
+                case 12: snprintf(label, lsz, "Load snapshot"); snprintf(val, vsz, "...");                                     break;
+                case 13: snprintf(label, lsz, "Version");       snprintf(val, vsz, "1985 v" "0.1.0");                          break;
             }
             break;
         default: break;
@@ -276,6 +277,30 @@ static void open_disk_dialog(Overlay *ov, int drive) {
     };
     SDL_ShowOpenFileDialog(overlay_file_callback, ov, NULL,
                            filters, 2, NULL, false);
+}
+
+static void open_snapshot_load_dialog(Overlay *ov) {
+    ov->dialog_kind  = DIALOG_SNAPSHOT_LOAD;
+    ov->dialog_drive = -1;
+    ov->dialog_ready = false;
+    static const SDL_DialogFileFilter filters[] = {
+        { "1985 snapshots", "sna;SNA" },
+        { "All files",      "*"       },
+    };
+    SDL_ShowOpenFileDialog(overlay_file_callback, ov, NULL,
+                           filters, 2, NULL, false);
+}
+
+static void open_snapshot_save_dialog(Overlay *ov) {
+    ov->dialog_kind  = DIALOG_SNAPSHOT_SAVE;
+    ov->dialog_drive = -1;
+    ov->dialog_ready = false;
+    static const SDL_DialogFileFilter filters[] = {
+        { "1985 snapshots", "sna;SNA" },
+        { "All files",      "*"       },
+    };
+    SDL_ShowSaveFileDialog(overlay_file_callback, ov, NULL,
+                           filters, 2, NULL);
 }
 
 static void open_printer_dir_dialog(Overlay *ov) {
@@ -438,9 +463,10 @@ static void activate(Overlay *ov) {
                         ov->dirty = true;
                     }
                     break;
-                case 10: ov->state = OV_STATE_KEYS; break;
-                case 11: ov->dialog_kind = DIALOG_SNAPSHOT_LOAD; break;
-                case 12: break;
+                case 10: ov->state = OV_STATE_KEYS;       break;
+                case 11: open_snapshot_save_dialog(ov);   break;
+                case 12: open_snapshot_load_dialog(ov);   break;
+                case 13: break;
             }
             break;
         default: break;
