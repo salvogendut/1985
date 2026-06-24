@@ -9,11 +9,15 @@
 | `--disk-a PATH` | Mount `.dsk` image in drive A |
 | `--disk-b PATH` | Mount `.dsk` image in drive B |
 | `--paste TEXT` | Type TEXT after boot (`\n` becomes Enter) |
+| `--paste-at N` | Delay `--paste` until frame N |
+| `--paste-event N:TEXT` | Inject TEXT at frame N; repeat for scripted input |
 | `--load-sna PATH` | Load a `.sna` snapshot at init (stubbed) |
 | `--save-sna-at N:PATH` | Save snapshot at frame N (stubbed) |
 | `--screenshot-at N:PATH` | Save PPM at frame N and exit |
 | `--gif-out PATH` | Record GIF from boot until exit |
 | `--exit-after N` | Quit after frame N (headless capture) |
+| `--dump-at N` | Dump CPU, memory and FDC state at frame N |
+| `--unthrottled` | Disable 50 Hz host pacing for diagnostics |
 | `--monitor-pty` | Open a PTY for the F8 monitor |
 | `--kbd-pty` | Open a PTY that injects keystrokes |
 | `--symbols PATH` | Load SDCC `.map` for the F8 disassembler |
