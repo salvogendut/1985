@@ -28,6 +28,7 @@
 #define AY_AUDIO_RATE         44100
 #define AY_SAMPLES_FRAME      (AY_AUDIO_RATE / 50)
 #define AY_CLOCK_HZ           1000000
+#define MAX_PASTE_EVENTS      16
 
 #ifndef PROG_GIT_COMMIT
 #define PROG_GIT_COMMIT "unknown"
@@ -49,12 +50,21 @@ static const char *USAGE =
 "  --boot-ems PATH             load raw EMS/EMT image at 0000h\n"
 "  --auto-space                send SPACE once after boot image appears\n"
 "  --paste TEXT                type TEXT after boot (\\n = Enter)\n"
+"  --paste-at N                start --paste injection at frame N\n"
+"  --paste-event N:TEXT        inject TEXT at frame N (repeatable)\n"
 "  --load-sna PATH             load .sna at init (stub)\n"
 "  --save-sna-at N:PATH        save .sna at frame N (stub)\n"
 "  --screenshot-at N:PATH      save PPM at frame N and exit\n"
 "  --gif-out PATH              record GIF until exit\n"
 "  --exit-after N              quit after frame N\n"
+"  --dump-at N                 dump CPU, memory and FDC state at frame N\n"
+"  --unthrottled               disable 50 Hz frame pacing (diagnostics)\n"
 "  -h, --help                  show this help\n";
+
+typedef struct {
+    int         frame;
+    const char *text;
+} CliPasteEvent;
 
 typedef struct {
     const char *config_path;
@@ -67,7 +77,11 @@ typedef struct {
     const char *screenshot_arg;   /* "N:PATH" */
     const char *gif_out;
     bool        auto_space;
+    bool        unthrottled;
+    CliPasteEvent paste_event[MAX_PASTE_EVENTS];
+    int         paste_event_count;
     int         memory_kb;        /* 0 = leave config alone */
+    int         paste_at;         /* 0 = begin immediately */
     int         exit_after;       /* -1 = run forever */
     int         dump_at;          /* -1 = no dump */
 } Cli;
@@ -85,9 +99,24 @@ static void dump_state(PCW *pcw, int frame) {
             pcw->mem.bank_force);
     fprintf(stderr, "asic ic=%X fdc_irq_mode=%d prev_fdc_irq=%d flyback=%d\n",
             pcw->asic.interrupt_counter, pcw->asic.fdc_irq_mode, pcw->asic.prev_fdc_irq, pcw->asic.flyback);
-    fprintf(stderr, "fdc  phase=%d irq=%d tc=%d motor=%d cur_cyl=[%d %d]\n",
-            pcw->fdc.phase, pcw->fdc.irq, pcw->fdc.tc, pcw->fdc.motor_on,
-            pcw->fdc.cur_cyl[0], pcw->fdc.cur_cyl[1]);
+    fprintf(stderr,
+            "fdc  phase=%d msr=%02X irq=%d arm=%d pulses=%u tc=%d motor=%d "
+            "unit=%d head=%d cyl=[%d %d] int_pending=%d\n",
+            pcw->fdc.phase, pcw->fdc.msr, pcw->fdc.irq,
+            pcw->fdc.irq_arm_ticks, pcw->fdc.irq_pulse_count,
+            pcw->fdc.tc, pcw->fdc.motor_on, pcw->fdc.cur_unit,
+            pcw->fdc.cur_head, pcw->fdc.cur_cyl[0], pcw->fdc.cur_cyl[1],
+            pcw->fdc.int_pending);
+    fprintf(stderr,
+            "fdc  cmd=%02X %02X %02X %02X %02X %02X %02X %02X %02X "
+            "pos=%d/%d exec=%d/%d result=%d/%d st=%02X/%02X/%02X/%02X\n",
+            pcw->fdc.cmd_buf[0], pcw->fdc.cmd_buf[1], pcw->fdc.cmd_buf[2],
+            pcw->fdc.cmd_buf[3], pcw->fdc.cmd_buf[4], pcw->fdc.cmd_buf[5],
+            pcw->fdc.cmd_buf[6], pcw->fdc.cmd_buf[7], pcw->fdc.cmd_buf[8],
+            pcw->fdc.cmd_pos, pcw->fdc.cmd_len,
+            pcw->fdc.exec_pos, pcw->fdc.exec_len,
+            pcw->fdc.result_pos, pcw->fdc.result_len,
+            pcw->fdc.st0, pcw->fdc.st1, pcw->fdc.st2, pcw->fdc.st3);
 
     /* Disassemble 24 instructions around PC. */
     static u8 snap[65536];
@@ -234,6 +263,26 @@ static const char *eq_value(const char *s, const char *flag) {
     return NULL;
 }
 
+static int add_paste_event(Cli *cli, const char *spec) {
+    if (cli->paste_event_count >= MAX_PASTE_EVENTS) {
+        fprintf(stderr, "too many --paste-event options (max %d)\n",
+                MAX_PASTE_EVENTS);
+        return -1;
+    }
+
+    char *end;
+    long frame = strtol(spec, &end, 10);
+    if (end == spec || *end != ':' || frame < 0 || !end[1]) {
+        fprintf(stderr, "invalid --paste-event '%s' (expected N:TEXT)\n", spec);
+        return -1;
+    }
+
+    CliPasteEvent *event = &cli->paste_event[cli->paste_event_count++];
+    event->frame = (int)frame;
+    event->text = end + 1;
+    return 0;
+}
+
 static int parse_cli(int argc, char **argv, Cli *cli) {
     memset(cli, 0, sizeof(*cli));
     cli->exit_after = -1;
@@ -253,6 +302,11 @@ static int parse_cli(int argc, char **argv, Cli *cli) {
         if ((v = eq_value(a, "--disk-b"))      && *v) { cli->disk_b      = v; continue; }
         if ((v = eq_value(a, "--boot-ems"))    && *v) { cli->boot_ems    = v; continue; }
         if ((v = eq_value(a, "--paste"))       && *v) { cli->paste_text  = v; continue; }
+        if ((v = eq_value(a, "--paste-at"))    && *v) { cli->paste_at    = atoi(v); continue; }
+        if ((v = eq_value(a, "--paste-event")) && *v) {
+            if (add_paste_event(cli, v) < 0) return -1;
+            continue;
+        }
         if ((v = eq_value(a, "--load-sna"))    && *v) { cli->load_sna    = v; continue; }
         if ((v = eq_value(a, "--save-sna-at")) && *v) { cli->save_sna_arg = v; continue; }
         if ((v = eq_value(a, "--screenshot-at")) && *v) { cli->screenshot_arg = v; continue; }
@@ -260,6 +314,7 @@ static int parse_cli(int argc, char **argv, Cli *cli) {
         if ((v = eq_value(a, "--exit-after"))  && *v) { cli->exit_after  = atoi(v); continue; }
         if ((v = eq_value(a, "--dump-at"))     && *v) { cli->dump_at     = atoi(v); continue; }
         if (strcmp(a, "--auto-space") == 0) { cli->auto_space = true; continue; }
+        if (strcmp(a, "--unthrottled") == 0) { cli->unthrottled = true; continue; }
 
         /* Two-token form: --flag VALUE */
         if (strcmp(a, "--config")        == 0 && i+1 < argc) { cli->config_path = argv[++i]; continue; }
@@ -268,6 +323,11 @@ static int parse_cli(int argc, char **argv, Cli *cli) {
         if (strcmp(a, "--disk-b")        == 0 && i+1 < argc) { cli->disk_b      = argv[++i]; continue; }
         if (strcmp(a, "--boot-ems")      == 0 && i+1 < argc) { cli->boot_ems    = argv[++i]; continue; }
         if (strcmp(a, "--paste")         == 0 && i+1 < argc) { cli->paste_text  = argv[++i]; continue; }
+        if (strcmp(a, "--paste-at")      == 0 && i+1 < argc) { cli->paste_at    = atoi(argv[++i]); continue; }
+        if (strcmp(a, "--paste-event")   == 0 && i+1 < argc) {
+            if (add_paste_event(cli, argv[++i]) < 0) return -1;
+            continue;
+        }
         if (strcmp(a, "--load-sna")      == 0 && i+1 < argc) { cli->load_sna    = argv[++i]; continue; }
         if (strcmp(a, "--save-sna-at")   == 0 && i+1 < argc) { cli->save_sna_arg = argv[++i]; continue; }
         if (strcmp(a, "--screenshot-at") == 0 && i+1 < argc) { cli->screenshot_arg = argv[++i]; continue; }
@@ -275,6 +335,7 @@ static int parse_cli(int argc, char **argv, Cli *cli) {
         if (strcmp(a, "--exit-after")    == 0 && i+1 < argc) { cli->exit_after  = atoi(argv[++i]); continue; }
         if (strcmp(a, "--dump-at")       == 0 && i+1 < argc) { cli->dump_at     = atoi(argv[++i]); continue; }
         if (strcmp(a, "--auto-space")    == 0) { cli->auto_space = true; continue; }
+        if (strcmp(a, "--unthrottled")   == 0) { cli->unthrottled = true; continue; }
 
         if (starts_with(a, "--")) {
             fprintf(stderr, "unknown option: %s\n%s", a, USAGE);
@@ -437,7 +498,8 @@ int main(int argc, char **argv) {
 
     Paste paste;
     paste_init(&paste);
-    if (cli.paste_text) paste_text(&paste, cli.paste_text);
+    bool paste_pending = cli.paste_text && cli.paste_at > 0;
+    if (cli.paste_text && !paste_pending) paste_text(&paste, cli.paste_text);
     bool auto_space_pending = cli.auto_space && cli.boot_ems;
     int  auto_space_frame = 120;
     bool auto_space_down = false;
@@ -621,6 +683,14 @@ int main(int argc, char **argv) {
             }
         }
 
+        if (paste_pending && frame >= cli.paste_at) {
+            paste_text(&paste, cli.paste_text);
+            paste_pending = false;
+        }
+        for (int i = 0; i < cli.paste_event_count; i++) {
+            if (cli.paste_event[i].frame == frame)
+                paste_text(&paste, cli.paste_event[i].text);
+        }
         paste_tick(&paste, &pcw.kbd);
 
         if (auto_space_pending && frame == auto_space_frame) {
@@ -662,6 +732,7 @@ int main(int argc, char **argv) {
             aysound_set_joystick(&pcw.ay, js);
         }
 
+        cpc_frame_count = frame;
         pcw_frame(&pcw);
         printer_tick(&pcw.printer);
 
@@ -785,11 +856,13 @@ int main(int argc, char **argv) {
         monitor_render(mon);
         monitor_pty_tick(mon);
 
-        /* Frame pacing — aim for 50 Hz. */
-        next_tick_ms += 20;
-        Uint64 now = SDL_GetTicks();
-        if (now < next_tick_ms) SDL_Delay((Uint32)(next_tick_ms - now));
-        else                    next_tick_ms = now;
+        if (!cli.unthrottled) {
+            /* Frame pacing — aim for 50 Hz. */
+            next_tick_ms += 20;
+            Uint64 now = SDL_GetTicks();
+            if (now < next_tick_ms) SDL_Delay((Uint32)(next_tick_ms - now));
+            else                    next_tick_ms = now;
+        }
         frame++;
     }
 

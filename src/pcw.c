@@ -582,8 +582,15 @@ void pcw_frame(PCW *pcw) {
              * in physical RAM block 3 at offset 0x3FF0..0x3FFF. */
             kbd_scan_into_ram(&pcw->kbd,
                 &pcw->mem.ram[MEM_KBD_BLOCK * MEM_BLOCK_SIZE + MEM_KBD_OFFSET]);
-            if (asic_timer_tick(&pcw->asic))
-                z80_interrupt(&pcw->cpu);
+            if (asic_timer_tick(&pcw->asic)) {
+                /* CP/M checks FDC before timer when sources overlap. Keep
+                 * counting timer ticks in F4, but do not queue a competing
+                 * one-shot /INT while the level-held FDC source is active. */
+                bool fdc_busy = pcw->fdc.phase != FDC_PHASE_IDLE
+                             || pcw->fdc.irq
+                             || pcw->fdc.irq_arm_ticks > 0;
+                if (!fdc_busy) z80_interrupt(&pcw->cpu);
+            }
             next_tick += CYCLES_PER_TICK;
         }
     }
