@@ -537,17 +537,24 @@ int main(int argc, char **argv) {
                              * leaked across "resets" and broke
                              * re-launches of the same program. Cold-boot
                              * gives the same behavior as quitting and
-                             * relaunching the emulator, EXCEPT we save and
-                             * restore the host-side serial/PerryFi state
-                             * so an attached PTY peer (e.g. the modem
-                             * stub) keeps its connection. */
+                             * relaunching the emulator.
+                             *
+                             * The raw host-side Serial backend (PTY fd or
+                             * TCP listener) is preserved so an attached
+                             * peer (e.g. tools/pty_modem.py) keeps its
+                             * connection across the reboot. PerryFi is
+                             * deliberately NOT preserved — its modem
+                             * state (online vs command mode, dial-out
+                             * TCP socket) is guest-visible and must look
+                             * like a fresh modem to the rebooted CP/M,
+                             * not a connection to whoever the guest had
+                             * dialed before reset (#90). */
                             pcw.paused = false;
-                            Serial  saved_serial  = pcw.serial;
-                            Perryfi saved_perryfi = pcw.perryfi;
+                            Serial saved_serial = pcw.serial;
+                            perryfi_shutdown(&pcw.perryfi);
                             printer_shutdown(&pcw.printer);
                             pcw_cold_boot(&pcw, cfg.model, cfg.memory_kb);
-                            pcw.serial  = saved_serial;
-                            pcw.perryfi = saved_perryfi;
+                            pcw.serial = saved_serial;
                             apply_runtime_config(&pcw, &cfg);
                             break;
                         }
