@@ -508,7 +508,14 @@ u8 fdc_read(Fdc *f, u8 port) {
             u8 b = (f->result_pos < f->result_len) ? f->result_buf[f->result_pos++] : 0xFF;
             if (f->trace)
                 fprintf(stderr, "fdc data phase=RESULT -> %02X\n", b);
-            f->irq = false;   /* first result byte read drops the IRQ line */
+            f->irq           = false;   /* first result byte read drops the IRQ line */
+            f->irq_arm_ticks = 0;       /* cancel any pending arm-delay so it can't
+                                         * spuriously re-raise IRQ after the host
+                                         * already drained the byte (race that
+                                         * broke level-IRQ boot disks: enter_result
+                                         * armed 64 polls, host read the byte
+                                         * before they expired, then asic_poll
+                                         * fired irq=true with nothing pending). */
             if (f->result_pos >= f->result_len) enter_idle(f);
             return b;
         }
