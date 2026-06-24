@@ -116,6 +116,14 @@ static u8 bus_io_read(void *ctx, u16 port) {
         return v;
     }
 
+    /* Selected PCW mouse protocol: AMX at A0-A3 or Kempston at D0-D4. */
+    if (pcwmouse_handles_port(&pcw->mouse, lo)) {
+        u8 v = pcwmouse_read(&pcw->mouse, lo);
+        if (pcw->trace_io)
+            fprintf(stderr, "        -> %02X (mouse)\n", v);
+        return v;
+    }
+
     /* Expansion port range 0x080-0x0EF. MAME pcw.cpp:580-625 returns
      * specific values for a few ports the firmware probes:
      *   0x85 -> 0xFE   0x87 -> 0xFF
@@ -177,6 +185,12 @@ static void bus_io_write(void *ctx, u16 port, u8 val) {
         aysound_write(&pcw->ay, lo, val);
         return;
     }
+    if ((lo == 0xA2 || lo == 0xA3)
+        && pcw->mouse.present
+        && pcw->mouse.type == MOUSE_TYPE_AMX) {
+        pcwmouse_write(&pcw->mouse, lo, val);
+        return;
+    }
 }
 
 void pcw_init(PCW *pcw, PcwModel model, int memory_kb) {
@@ -211,6 +225,7 @@ void pcw_init(PCW *pcw, PcwModel model, int memory_kb) {
     /* DK'tronics PCW Sound + Joystick — present-state set by main/
      * overlay after init based on cfg + backplane gating. */
     aysound_init(&pcw->ay, false);
+    pcwmouse_init(&pcw->mouse, false, MOUSE_TYPE_AMX);
 
     pcw->bus.mem_read  = bus_mem_read;
     pcw->bus.mem_write = bus_mem_write;
@@ -233,6 +248,8 @@ void pcw_reset(PCW *pcw) {
     fdc_reset(&pcw->fdc);
     crtc_reset(&pcw->crtc);
     asic_reset(&pcw->asic);
+    aysound_reset(&pcw->ay);
+    pcwmouse_reset(&pcw->mouse);
     z80_reset(&pcw->cpu);
 
     /* Copy the boot ROM bytes into BANK 0 RAM at offset 0. The real

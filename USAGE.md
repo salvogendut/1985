@@ -27,8 +27,8 @@
 
 | Key | Action |
 |-----|--------|
-| Click in window | Capture keyboard input for guest |
-| Ctrl+Enter | Release captured keyboard input |
+| Click in window | Capture host mouse input when Input Device is Mouse |
+| Ctrl+Enter | Release captured mouse input |
 | F4  | PPM screenshot |
 | F5  | Warm reset |
 | F8  | Memory monitor / disassembler |
@@ -42,8 +42,9 @@
 - **General** — model (8256 / 8512 / 9512), RAM, Second drive (8256
   only), PCW Backplane, Tinker toggle.
 - **Media** — drive A and B file pickers.
-- **Extensions** (only when the PCW Backplane is enabled) — PDF printer
-  output folder, serial port, PerryFi, DK'tronics sound/joystick.
+- **Extensions** (only when the PCW Backplane is enabled) — serial port,
+  PerryFi, DK'tronics sound, and Input Device (Mouse / Joystick).
 - **Advanced** (hidden unless `tinker=true`) — smoothing, tint
   (green / amber / white), tint mode (normal / glow), video mode,
+  Mouse type (AMX / Kempston), Joystick type (DKsound / Atari),
   printer mode/model, debug toggles, serial mode, snapshot load/save.

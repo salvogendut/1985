@@ -12,6 +12,7 @@
 #include "cps.h"
 #include "perryfi.h"
 #include "aysound.h"
+#include "pcwmouse.h"
 
 /*
  * Top-level Amstrad PCW machine. Owns the Z80, all peripherals, and
@@ -37,6 +38,7 @@ typedef struct PCW {
     Cps        cps;
     Perryfi    perryfi;
     AySound    ay;
+    PcwMouse   mouse;
 
     PcwModel   model;
     int        memory_kb;

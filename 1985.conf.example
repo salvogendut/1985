@@ -26,6 +26,7 @@ ext_serial_backend      = pty
 ext_serial_tcp_port     = 4002
 ext_perryfi             = false
 ext_dktronics           = false
+input_device            = joystick
 ext_pdf_printer         = false
 ext_pdf_printer_dir     =
 
@@ -37,3 +38,7 @@ debug_traces = false
 trace_io = false
 trace_fdc = false
 trace_input = false
+# amx / kempston
+mouse_type = amx
+# dksound / atari
+joystick_type = dksound

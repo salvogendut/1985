@@ -40,9 +40,9 @@ Hardware extensions available through the F9 Extensions menu:
     a host /dev/pts or a TCP listener on localhost:4002.
   * PerryFi — Wemos D1 AT-modem over the serial line, dialling
     out to real host TCP sockets without any WiFi config.
-  * DK'tronics Sound & Joystick — AY-3-8912 PSG + DB9 joystick at
-    ports A9h-ABh, mixed through SDL3 audio with the first SDL
-    gamepad mapping to Port A.
+  * DK'tronics Sound & Joystick — AY-3-8912 PSG with selectable
+    joystick/mouse input, DKsound/Atari gamepad mappings, and
+    AMX/Kempston host-mouse protocols.
 
 The F8 memory monitor / disassembler with PTY interface, F9
 options overlay, F4 PPM screenshot, F6 GIF capture, and Ctrl+V

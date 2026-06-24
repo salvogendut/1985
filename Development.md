@@ -10,6 +10,7 @@ src/
   monitor.c                  F8 monitor / disassembler
   symbols.c                  SDCC .map loader
   display.c                  SDL3 framebuffer + tint
+  pcwmouse.c                 AMX/Kempston host-mouse protocols
   overlay.c                  F9 overlay + file picker
   config.c                   INI loader / saver
   main.c                     Entry, event loop, CLI
