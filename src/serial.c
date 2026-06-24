@@ -68,7 +68,7 @@ static bool tx_pop(Serial *s, u8 *out) {
 bool serial_rx_has(const Serial *s) { return !rb_empty(s->rx_head, s->rx_tail); }
 
 #ifndef _WIN32
-static int open_pty(Serial *s) {
+static int open_pty(Serial *s, const char *link_path) {
     int fd = posix_openpt(O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (fd < 0) { perror("serial: posix_openpt"); return -1; }
     if (grantpt(fd) < 0 || unlockpt(fd) < 0) {
@@ -96,7 +96,26 @@ static int open_pty(Serial *s) {
     }
 
     s->pty_master = fd;
-    fprintf(stderr, "serial: PTY ready at %s\n", s->pty_slave);
+
+    /* Stable host-side alias so the user doesn't have to chase the
+     * randomised /dev/pts/N each launch. Replaces any prior link
+     * (stale from a crashed previous run is harmless). NULL or empty
+     * disables the symlink entirely. */
+    if (link_path && link_path[0]) {
+        unlink(link_path);
+        if (symlink(s->pty_slave, link_path) == 0)
+            snprintf(s->pty_link, sizeof(s->pty_link), "%s", link_path);
+        else
+            s->pty_link[0] = '\0';
+    } else {
+        s->pty_link[0] = '\0';
+    }
+
+    if (s->pty_link[0])
+        fprintf(stderr, "serial: PTY ready at %s (alias %s)\n",
+                s->pty_slave, s->pty_link);
+    else
+        fprintf(stderr, "serial: PTY ready at %s\n", s->pty_slave);
     return 0;
 }
 
@@ -133,7 +152,8 @@ static void close_fd(int *pfd) {
 }
 #endif /* !_WIN32 */
 
-void serial_init(Serial *s, bool enable, const char *backend, int tcp_port) {
+void serial_init(Serial *s, bool enable, const char *backend, int tcp_port,
+                 const char *pty_link_path) {
     memset(s, 0, sizeof(*s));
     s->pty_master = -1;
     s->tcp_listen = -1;
@@ -142,7 +162,7 @@ void serial_init(Serial *s, bool enable, const char *backend, int tcp_port) {
     if (!s->present) return;
 
 #ifdef _WIN32
-    (void)backend; (void)tcp_port;
+    (void)backend; (void)tcp_port; (void)pty_link_path;
     fprintf(stderr, "serial: backend not supported on Windows yet — disabling\n");
     s->present = false;
     return;
@@ -157,7 +177,7 @@ void serial_init(Serial *s, bool enable, const char *backend, int tcp_port) {
         if (open_tcp(s, tcp_port) < 0) s->present = false;
     } else {
         s->backend = SERIAL_BACKEND_PTY;
-        if (open_pty(s) < 0) s->present = false;
+        if (open_pty(s, pty_link_path) < 0) s->present = false;
     }
 #endif
 }
@@ -167,6 +187,10 @@ void serial_shutdown(Serial *s) {
     close_fd(&s->pty_master);
     close_fd(&s->tcp_client);
     close_fd(&s->tcp_listen);
+    if (s->pty_link[0]) {
+        unlink(s->pty_link);
+        s->pty_link[0] = '\0';
+    }
 #endif
     s->present = false;
 }

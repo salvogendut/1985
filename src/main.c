@@ -317,6 +317,53 @@ static int load_raw_image(PCW *pcw, const char *path, u16 base) {
     return 0;
 }
 
+/* Re-apply every config-driven setting that pcw_init/pcw_cold_boot
+ * does NOT cover by itself: printer mode/paths, debug traces, disk
+ * mounts, serial/PerryFi/CPS gating, AY-sound, LED visibility. Called
+ * once at startup (right after pcw_init) and again on F5 (right after
+ * pcw_cold_boot) so a cold reset puts the machine into the exact same
+ * shape as a fresh process launch. */
+static void apply_runtime_config(PCW *pcw, const Config *cfg) {
+    printer_set_pdf_output_dir(&pcw->printer, cfg->ext_pdf_printer_dir);
+    printer_set_pdf_enabled(&pcw->printer,
+                            cfg->ext_pdf_printer && cfg->ext_pdf_printer_dir[0]);
+    printer_set_sink(&pcw->printer, cfg->ext_print_sink);
+    printer_set_kind(&pcw->printer,
+                     cfg->model == PCW_MODEL_9512 ? PRINTER_KIND_DAISYWHEEL
+                                                  : PRINTER_KIND_DOT_MATRIX);
+    pcw->debug_traces = cfg->debug_traces;
+    pcw->trace_io     = cfg->debug_traces && cfg->trace_io;
+    pcw->fdc.trace    = cfg->debug_traces && cfg->trace_fdc;
+
+    if (cfg->drive_a[0]) disk_load(&pcw->fdc.drive[0], cfg->drive_a);
+    if (cfg->drive_b[0]) disk_load(&pcw->fdc.drive[1], cfg->drive_b);
+
+    bool serial_avail = (cfg->model == PCW_MODEL_9512) || cfg->ext_sanpollo_backplane;
+    bool serial_on    = cfg->ext_serial  && serial_avail;
+    bool perryfi_on   = serial_on        && cfg->ext_perryfi;
+    /* Only (re)open the host-side backends if they're not already
+     * alive. F5 cold-reset preserves the Serial/Perryfi structs across
+     * pcw_cold_boot specifically so the user's PTY stays at the same
+     * /dev/pts/N and any attached peer (e.g. tools/pty_modem.py)
+     * keeps working. */
+    if (!pcw->serial.present)
+        serial_init(&pcw->serial, serial_on && !perryfi_on,
+                    cfg->ext_serial_backend, cfg->ext_serial_tcp_port,
+                    cfg->ext_serial_pty_link);
+    if (!pcw->perryfi.present)
+        perryfi_init(&pcw->perryfi, perryfi_on);
+    cps_set_present(&pcw->cps, serial_on);
+    leds_set_enabled(LED_SERIAL, serial_on);
+
+    bool dk_on = cfg->ext_sanpollo_backplane && cfg->ext_dktronics;
+    aysound_init(&pcw->ay, dk_on);
+
+    leds_set_enabled(LED_FDC_A, true);
+    leds_set_enabled(LED_FDC_B,
+                     cfg->model != PCW_MODEL_8256 || cfg->ext_second_drive);
+    leds_set_enabled(LED_PRINTER, cfg->ext_pdf_printer);
+}
+
 int main(int argc, char **argv) {
 #ifdef _WIN32
     /* GUI-subsystem build: stderr/stdout have nowhere to go when the
@@ -346,41 +393,7 @@ int main(int argc, char **argv) {
      * Windows-only crash — see #55.) */
     static PCW pcw;
     pcw_init(&pcw, cfg.model, cfg.memory_kb);
-    printer_set_pdf_output_dir(&pcw.printer, cfg.ext_pdf_printer_dir);
-    printer_set_pdf_enabled(&pcw.printer,
-                            cfg.ext_pdf_printer && cfg.ext_pdf_printer_dir[0]);
-    printer_set_sink(&pcw.printer, cfg.ext_print_sink);
-    printer_set_kind(&pcw.printer,
-                     cfg.model == PCW_MODEL_9512 ? PRINTER_KIND_DAISYWHEEL
-                                                 : PRINTER_KIND_DOT_MATRIX);
-    pcw.debug_traces = cfg.debug_traces;
-    pcw.trace_io  = cfg.debug_traces && cfg.trace_io;
-    pcw.fdc.trace = cfg.debug_traces && cfg.trace_fdc;
-
-    if (cfg.drive_a[0]) disk_load(&pcw.fdc.drive[0], cfg.drive_a);
-    if (cfg.drive_b[0]) disk_load(&pcw.fdc.drive[1], cfg.drive_b);
-
-    /* Serial port — opens a PTY or TCP listener when ext_serial is on
-     * AND the model / backplane state actually exposes it. The CPS8256
-     * I/O port window (0xE0-0xE8) is hooked on the same gate; the
-     * split-LED in the bar tracks live RX/TX traffic. */
-    {
-        bool serial_avail  = (cfg.model == PCW_MODEL_9512) || cfg.ext_sanpollo_backplane;
-        bool serial_on     = cfg.ext_serial  && serial_avail;
-        bool perryfi_on    = serial_on        && cfg.ext_perryfi;
-        /* When PerryFi takes over the serial line, the raw pty/tcp
-         * backend stays dark — the AT modem is what's "plugged in". */
-        serial_init(&pcw.serial,
-                    serial_on && !perryfi_on,
-                    cfg.ext_serial_backend,
-                    cfg.ext_serial_tcp_port);
-        perryfi_init(&pcw.perryfi, perryfi_on);
-        cps_set_present(&pcw.cps, serial_on);
-        leds_set_enabled(LED_SERIAL, serial_on);
-
-        bool dk_on = cfg.ext_sanpollo_backplane && cfg.ext_dktronics;
-        aysound_init(&pcw.ay, dk_on);
-    }
+    apply_runtime_config(&pcw, &cfg);
 
     if (cli.load_sna) snapshot_load(&pcw, cli.load_sna);
     if (cli.boot_ems && load_raw_image(&pcw, cli.boot_ems, 0) < 0) return 1;
@@ -421,15 +434,6 @@ int main(int argc, char **argv) {
         if (ids && count > 0) gamepad = SDL_OpenGamepad(ids[0]);
         if (ids) SDL_free(ids);
     }
-
-    leds_set_enabled(LED_FDC_A, true);
-    /* Drive B only exists on 8512/9512 stock, or on an 8256 with the
-     * Second drive accessory. Hide the LED otherwise. */
-    leds_set_enabled(LED_FDC_B,
-                     cfg.model != PCW_MODEL_8256 || cfg.ext_second_drive);
-    /* LED tracks the PDF printer capture toggle: lit when capture is
-     * armed, hidden when the user has turned it off. */
-    leds_set_enabled(LED_PRINTER, cfg.ext_pdf_printer);
 
     Paste paste;
     paste_init(&paste);
@@ -526,12 +530,27 @@ int main(int argc, char **argv) {
                             printf("screenshot: %s\n", path);
                             break;
                         }
-                        case SDLK_F5:
-                            /* F5: warm reset; also clears the paused state so
-                             * the monitor can be resumed without explicit "G". */
+                        case SDLK_F5: {
+                            /* F5: full cold reset. Earlier this only called
+                             * pcw_reset which left RAM contents untouched —
+                             * stale BIOS / RSX (EMU TSR, etc.) state then
+                             * leaked across "resets" and broke
+                             * re-launches of the same program. Cold-boot
+                             * gives the same behavior as quitting and
+                             * relaunching the emulator, EXCEPT we save and
+                             * restore the host-side serial/PerryFi state
+                             * so an attached PTY peer (e.g. the modem
+                             * stub) keeps its connection. */
                             pcw.paused = false;
-                            pcw_reset(&pcw);
+                            Serial  saved_serial  = pcw.serial;
+                            Perryfi saved_perryfi = pcw.perryfi;
+                            printer_shutdown(&pcw.printer);
+                            pcw_cold_boot(&pcw, cfg.model, cfg.memory_kb);
+                            pcw.serial  = saved_serial;
+                            pcw.perryfi = saved_perryfi;
+                            apply_runtime_config(&pcw, &cfg);
                             break;
+                        }
                         case SDLK_F8: monitor_open(mon); break;
                         case SDLK_F6: {
                             /* Toggle GIF capture. Auto-name in CWD on start;
