@@ -248,6 +248,30 @@ void cps_reset(Cps *c) {
     c->baud_buf  = 0;
     c->parallel_data   = 0;
     c->parallel_strobe = false;
+    c->irq             = false;
+    c->irq_pulse_count = 0;
+    c->prev_rx_avail   = false;
+}
+
+int cps_poll_irq(Cps *c, bool iff1) {
+    if (!c->present) return 0;
+    bool rx = a_rx_has(c);
+    /* Rising edge of RX_AVAIL → raise INT. WR1 bits 3-4 select the
+     * Z80-DART's RX interrupt mode (0 = disabled, 1 = first char only,
+     * 2 = all, 3 = all + special-rx-condition affects vector). We
+     * raise on any nonzero mode; bit-0 case (disabled) we still raise,
+     * because the PCW BIOS ISR is polling-based and benefits from the
+     * extra wake-up either way. Real hardware would gate this. */
+    if (rx && !c->prev_rx_avail) {
+        c->irq = true;
+        c->irq_pulse_count++;
+    }
+    /* Drop the line as soon as RR0.RX_AVAIL clears (the byte was
+     * read). Without this we'd hold INT high forever and starve the
+     * ISR after returning. */
+    if (!rx) c->irq = false;
+    c->prev_rx_avail = rx;
+    return (c->irq && iff1) ? 2 : 0;
 }
 
 void cps_set_present(Cps *c, bool present) {

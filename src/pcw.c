@@ -576,6 +576,12 @@ void pcw_frame(PCW *pcw) {
         if (req == 1)      z80_nmi      (&pcw->cpu);
         else if (req == 2 && pcw->cpu.iff1) z80_interrupt(&pcw->cpu);
 
+        /* CPS8256 SIO: raise INT on RX_AVAIL rising edge so the BIOS
+         * polling ISR sees the byte without waiting for the next 300 Hz
+         * timer tick. Gated on iff1 to avoid re-entrance. */
+        if (cps_poll_irq(&pcw->cps, pcw->cpu.iff1) == 2)
+            z80_interrupt(&pcw->cpu);
+
         while (cycles >= next_tick) {
             kbd_tick(&pcw->kbd);
             /* Joyce-style periodic kbd-MCU scan: refresh the matrix bytes

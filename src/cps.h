@@ -64,6 +64,17 @@ typedef struct Cps {
     struct Serial  *serial;
     struct Perryfi *perryfi;
     struct Printer *printer;
+
+    /* IRQ delivery to the Z80. The DART would normally drive an
+     * INT/IEI/IEO daisy chain in IM2; the PCW BIOS however uses IM1
+     * with a polling ISR at 0x0038. We raise the maskable INT line
+     * whenever channel-A RX has a fresh byte (rising edge of
+     * RR0.RX_AVAIL) so the BIOS ISR fires off-cycle between 300 Hz
+     * timer ticks. `irq_pulse_count` mirrors the FDC's edge counter
+     * so the pcw step loop can detect single events. */
+    bool irq;
+    u32  irq_pulse_count;
+    bool prev_rx_avail;
 } Cps;
 
 /* Borrowed pointers — lifetimes managed by the caller. Pass NULL to
@@ -78,3 +89,10 @@ void cps_set_present(Cps *c, bool present);
  * 0xFF; writes are ignored. */
 u8   cps_read (Cps *c, u8 lo);
 void cps_write(Cps *c, u8 lo, u8 val);
+
+/* IRQ poll, called once per Z80 step from the pcw frame loop.
+ * Returns 2 if the maskable INT line should be asserted this step
+ * (level-triggered, gated on iff1 so the ISR isn't re-entered while
+ * already in flight), 0 otherwise. Edge detection on RX_AVAIL means
+ * one INT per byte rather than continuous re-entry. */
+int  cps_poll_irq(Cps *c, bool iff1);
