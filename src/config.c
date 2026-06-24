@@ -80,13 +80,18 @@ static InputDevice parse_input_device(const char *s, InputDevice fallback) {
 }
 
 static const char *mouse_type_to_str(MouseType type) {
-    return type == MOUSE_TYPE_KEMPSTON ? "kempston" : "amx";
+    switch (type) {
+        case MOUSE_TYPE_KEMPSTON: return "kempston";
+        case MOUSE_TYPE_KEYMOUSE: return "keymouse";
+        default:                  return "amx";
+    }
 }
 
 static MouseType parse_mouse_type(const char *s, MouseType fallback) {
     if (!s) return fallback;
     if (strcasecmp(s, "amx")      == 0) return MOUSE_TYPE_AMX;
     if (strcasecmp(s, "kempston") == 0) return MOUSE_TYPE_KEMPSTON;
+    if (strcasecmp(s, "keymouse") == 0) return MOUSE_TYPE_KEYMOUSE;
     fprintf(stderr, "config: unknown mouse_type '%s' — using default\n", s);
     return fallback;
 }

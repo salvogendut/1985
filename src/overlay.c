@@ -210,7 +210,11 @@ static const char *input_device_str(InputDevice input) {
 }
 
 static const char *mouse_type_str(MouseType type) {
-    return type == MOUSE_TYPE_KEMPSTON ? "Kempston" : "AMX";
+    switch (type) {
+        case MOUSE_TYPE_KEMPSTON: return "Kempston";
+        case MOUSE_TYPE_KEYMOUSE: return "Keymouse";
+        default:                  return "AMX";
+    }
 }
 
 static const char *joystick_type_str(JoystickType type) {
@@ -659,7 +663,13 @@ static void close_overlay(Overlay *ov, bool save) {
                            || (ov->cfg->ext_sanpollo_backplane != ov->saved.ext_sanpollo_backplane)
                            || (ov->cfg->ext_serial           != ov->saved.ext_serial)
                            || (ov->cfg->ext_perryfi          != ov->saved.ext_perryfi)
-                           || (ov->cfg->ext_dktronics        != ov->saved.ext_dktronics);
+                           || (ov->cfg->ext_dktronics        != ov->saved.ext_dktronics)
+                           /* Mouse drivers latch the protocol at boot:
+                            * AMX probes the 8255 once, Keymouse changes
+                            * the keyboard scan window contract. Switching
+                            * without a power cycle leaves stale driver
+                            * state and the new device looks dead. */
+                           || (ov->cfg->mouse_type           != ov->saved.mouse_type);
         config_save(ov->cfg);
         ov->dirty = false;
         if (need_cold_boot && ov->pcw) {
