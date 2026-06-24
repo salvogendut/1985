@@ -22,6 +22,15 @@
 
 typedef enum { PCW_MODEL_8256 = 0, PCW_MODEL_8512, PCW_MODEL_9512 } PcwModel;
 
+/* Live host-joystick state. main.c refreshes it from the gamepad each
+ * frame; pcw.c bus_io_read packs it to the wire format dictated by
+ * `type` when 0x9F (Kempston) or 0xE0 (Cascade) is polled. DKsound
+ * still goes through aysound.c via the AY's port-A register. */
+typedef struct {
+    JoystickType type;
+    bool up, down, left, right, fire1, fire2;
+} Joystick;
+
 #define PCW_MAX_BREAKPOINTS 16
 
 typedef struct PCW {
@@ -39,6 +48,7 @@ typedef struct PCW {
     Perryfi    perryfi;
     AySound    ay;
     PcwMouse   mouse;
+    Joystick   joystick;
 
     PcwModel   model;
     int        memory_kb;

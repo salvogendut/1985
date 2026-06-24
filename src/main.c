@@ -788,35 +788,48 @@ int main(int argc, char **argv) {
         bool was_paused   = pcw.paused;
         bool was_stepping = pcw.step_once;
 
-        /* Poll the first host gamepad and expose the selected joystick
-         * protocol through AY register 14. Mouse mode leaves it idle. */
+        /* Poll the first host gamepad and expose it through whichever
+         * PCW joystick port the user selected. DKsound rides on the
+         * AY's port-A (only meaningful when DK'sound is enabled);
+         * Kempston (0x9F) and Cascade (0xE0) are stand-alone latches
+         * served by pcw.c regardless of the AY's presence. Mouse mode
+         * leaves everything idle. */
+        bool js_up = false, js_down = false, js_left = false, js_right = false;
+        bool js_fire1 = false, js_fire2 = false;
+        if (cfg.input_device == INPUT_DEVICE_JOYSTICK && gamepad) {
+            js_up = SDL_GetGamepadButton(
+                        gamepad, SDL_GAMEPAD_BUTTON_DPAD_UP)
+                 || SDL_GetGamepadAxis(
+                        gamepad, SDL_GAMEPAD_AXIS_LEFTY) < -16000;
+            js_down = SDL_GetGamepadButton(
+                          gamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN)
+                   || SDL_GetGamepadAxis(
+                          gamepad, SDL_GAMEPAD_AXIS_LEFTY) > 16000;
+            js_left = SDL_GetGamepadButton(
+                          gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT)
+                   || SDL_GetGamepadAxis(
+                          gamepad, SDL_GAMEPAD_AXIS_LEFTX) < -16000;
+            js_right = SDL_GetGamepadButton(
+                           gamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT)
+                    || SDL_GetGamepadAxis(
+                           gamepad, SDL_GAMEPAD_AXIS_LEFTX) > 16000;
+            js_fire1 = SDL_GetGamepadButton(
+                           gamepad, SDL_GAMEPAD_BUTTON_SOUTH);
+            js_fire2 = SDL_GetGamepadButton(
+                           gamepad, SDL_GAMEPAD_BUTTON_EAST);
+        }
+        pcw.joystick.type  = cfg.joystick_type;
+        pcw.joystick.up    = js_up;
+        pcw.joystick.down  = js_down;
+        pcw.joystick.left  = js_left;
+        pcw.joystick.right = js_right;
+        pcw.joystick.fire1 = js_fire1;
+        pcw.joystick.fire2 = js_fire2;
         if (pcw.ay.present) {
-            u8 js = 0xFF;
-            if (cfg.input_device == INPUT_DEVICE_JOYSTICK && gamepad) {
-                bool up = SDL_GetGamepadButton(
-                              gamepad, SDL_GAMEPAD_BUTTON_DPAD_UP)
-                       || SDL_GetGamepadAxis(
-                              gamepad, SDL_GAMEPAD_AXIS_LEFTY) < -16000;
-                bool down = SDL_GetGamepadButton(
-                                gamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN)
-                         || SDL_GetGamepadAxis(
-                                gamepad, SDL_GAMEPAD_AXIS_LEFTY) > 16000;
-                bool left = SDL_GetGamepadButton(
-                                gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT)
-                         || SDL_GetGamepadAxis(
-                                gamepad, SDL_GAMEPAD_AXIS_LEFTX) < -16000;
-                bool right = SDL_GetGamepadButton(
-                                 gamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT)
-                          || SDL_GetGamepadAxis(
-                                 gamepad, SDL_GAMEPAD_AXIS_LEFTX) > 16000;
-                bool fire1 = SDL_GetGamepadButton(
-                                 gamepad, SDL_GAMEPAD_BUTTON_SOUTH);
-                bool fire2 = SDL_GetGamepadButton(
-                                 gamepad, SDL_GAMEPAD_BUTTON_EAST);
-                js = aysound_pack_joystick(cfg.joystick_type,
-                                            up, down, left, right,
-                                            fire1, fire2);
-            }
+            u8 js = (cfg.joystick_type == JOYSTICK_TYPE_DKSOUND)
+                  ? aysound_pack_dksound(js_up, js_down, js_left, js_right,
+                                         js_fire1, js_fire2)
+                  : 0xFF;
             aysound_set_joystick(&pcw.ay, js);
         }
 
