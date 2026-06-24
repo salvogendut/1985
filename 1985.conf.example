@@ -40,5 +40,6 @@ trace_fdc = false
 trace_input = false
 # amx / kempston / keymouse (keyboard overlay, MicroDesign 3)
 mouse_type = amx
-# dksound (AY r14 / port A9) / kempston (port 9F) / cascade (port E0)
+# dksound (AY r14 / port A9) / kempston (port 9F)
+# cascade (port E0, active-low) / spectravideo (port E0, active-high)
 joystick_type = dksound

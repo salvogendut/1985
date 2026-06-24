@@ -98,9 +98,10 @@ static MouseType parse_mouse_type(const char *s, MouseType fallback) {
 
 static const char *joystick_type_to_str(JoystickType type) {
     switch (type) {
-        case JOYSTICK_TYPE_KEMPSTON: return "kempston";
-        case JOYSTICK_TYPE_CASCADE:  return "cascade";
-        default:                     return "dksound";
+        case JOYSTICK_TYPE_KEMPSTON:     return "kempston";
+        case JOYSTICK_TYPE_CASCADE:      return "cascade";
+        case JOYSTICK_TYPE_SPECTRAVIDEO: return "spectravideo";
+        default:                         return "dksound";
     }
 }
 
@@ -111,8 +112,9 @@ static JoystickType parse_joystick_type(const char *s,
         || strcasecmp(s, "dk_sound") == 0
         || strcasecmp(s, "dktronics") == 0)
         return JOYSTICK_TYPE_DKSOUND;
-    if (strcasecmp(s, "kempston") == 0) return JOYSTICK_TYPE_KEMPSTON;
-    if (strcasecmp(s, "cascade")  == 0) return JOYSTICK_TYPE_CASCADE;
+    if (strcasecmp(s, "kempston")     == 0) return JOYSTICK_TYPE_KEMPSTON;
+    if (strcasecmp(s, "cascade")      == 0) return JOYSTICK_TYPE_CASCADE;
+    if (strcasecmp(s, "spectravideo") == 0) return JOYSTICK_TYPE_SPECTRAVIDEO;
     /* Legacy alias: the fictional "atari" mode never matched real PCW
      * hardware. Silently migrate it to the closest stand-alone latch. */
     if (strcasecmp(s, "atari") == 0) return JOYSTICK_TYPE_KEMPSTON;
