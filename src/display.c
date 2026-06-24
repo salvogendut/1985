@@ -140,6 +140,13 @@ int display_init(Display *d, const Config *cfg) {
     return 0;
 }
 
+void display_set_smoothing(Display *d, bool smooth) {
+    d->smoothing = smooth;
+    if (d->tex)
+        SDL_SetTextureScaleMode(d->tex,
+            smooth ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST);
+}
+
 void display_quit(Display *d) {
     if (d->tex)      SDL_DestroyTexture(d->tex);
     if (d->renderer) SDL_DestroyRenderer(d->renderer);

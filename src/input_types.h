@@ -28,12 +28,21 @@ typedef enum {
  *                Mutually exclusive with CASCADE on real hardware — same
  *                physical connector, different pinout — so picking either
  *                from the overlay swaps the protocol behind 0xE0.
+ *   KEYBOARD     Not on the I/O bus — the keyboard MCU OR-aggregates
+ *                physical key-state into "fake joystick" chord bits on
+ *                the low 6 bits of 0x3FFC-0x3FFF (Seasip Joyce §10.3,
+ *                PCW MiSTer key_joystick.sv:340-447). Used by Opera Soft
+ *                games and others that want WASD/cursor-style play
+ *                without configuring keys. Selecting it routes the host
+ *                keyboard straight through; gamepad input is ignored.
  *
- * The dispatch lives in pcw.c's bus_io_read; aysound owns 0xA9 only. */
+ * Port dispatch lives in pcw.c's bus_io_read; aysound owns 0xA9 only.
+ * The KEYBOARD chord overlay is handled by kbd_synth_joystick_chords. */
 typedef enum {
     JOYSTICK_TYPE_DKSOUND = 0,
     JOYSTICK_TYPE_KEMPSTON,
     JOYSTICK_TYPE_CASCADE,
     JOYSTICK_TYPE_SPECTRAVIDEO,
+    JOYSTICK_TYPE_KEYBOARD,
     JOYSTICK_TYPE_COUNT,
 } JoystickType;

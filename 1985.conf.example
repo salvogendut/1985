@@ -42,4 +42,5 @@ trace_input = false
 mouse_type = amx
 # dksound (AY r14 / port A9) / kempston (port 9F)
 # cascade (port E0, active-low) / spectravideo (port E0, active-high)
+# keyboard (kbd-MCU chord bytes on 3FFC-3FFF, e.g. Opera Soft games)
 joystick_type = dksound

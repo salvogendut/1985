@@ -647,9 +647,17 @@ void pcw_frame(PCW *pcw) {
             u8 *kbd_window =
                 &pcw->mem.ram[MEM_KBD_BLOCK * MEM_BLOCK_SIZE + MEM_KBD_OFFSET];
             kbd_scan_into_ram(&pcw->kbd, kbd_window);
+            /* "Keyboard" joystick type: the kbd MCU's chord-aggregated
+             * pseudo-joystick bits on 0x3FFC-0x3FFF. Real hardware
+             * always exposes these; we gate on the joystick selector
+             * so the UI has one explicit input mechanism at a time. */
+            if (pcw->joystick.type == JOYSTICK_TYPE_KEYBOARD)
+                kbd_synth_joystick_chords(&pcw->kbd, kbd_window);
             /* Keymouse (Creative Technology, MicroDesign 3): lives in the
              * keyboard matrix, not the I/O bus. Overlays X/Y/buttons on
-             * top of the just-refreshed window. No-op for other types. */
+             * top of the just-refreshed window. No-op for other types.
+             * Runs after the chord synth so Keymouse bits override
+             * where they collide (Keymouse claims rows 11-14). */
             pcwmouse_overlay_kbd(&pcw->mouse, kbd_window);
             if (asic_timer_tick(&pcw->asic)) {
                 /* CP/M checks FDC before timer when sources overlap. Keep
