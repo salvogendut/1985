@@ -116,6 +116,38 @@ static u8 bus_io_read(void *ctx, u16 port) {
         return v;
     }
 
+    /* Stand-alone Kempston joystick latch at port 0x9F, active-high.
+     * R=0 L=1 D=2 U=3 F=4. (ZEsarUX machines/pcw.c:1033.) */
+    if (lo == 0x9F && pcw->joystick.type == JOYSTICK_TYPE_KEMPSTON) {
+        u8 v = 0;
+        if (pcw->joystick.right) v |= 1u << 0;
+        if (pcw->joystick.left)  v |= 1u << 1;
+        if (pcw->joystick.down)  v |= 1u << 2;
+        if (pcw->joystick.up)    v |= 1u << 3;
+        if (pcw->joystick.fire1 || pcw->joystick.fire2) v |= 1u << 4;
+        if (pcw->trace_io)
+            fprintf(stderr, "        -> %02X (kempston)\n", v);
+        return v;
+    }
+
+    /* Cascade joystick at port 0xE0, active-low. L=~0 R=~1 D=~2 U=~4
+     * F=~7. Shares the port with the CPS8256 SIO; when the backplane
+     * is plugged in CPS takes precedence (handled above) and Cascade
+     * is unreachable on real hardware too. */
+    if (lo == 0xE0
+        && pcw->joystick.type == JOYSTICK_TYPE_CASCADE
+        && !pcw->cps.present) {
+        u8 v = 0xFF;
+        if (pcw->joystick.left)  v &= (u8)~(1u << 0);
+        if (pcw->joystick.right) v &= (u8)~(1u << 1);
+        if (pcw->joystick.down)  v &= (u8)~(1u << 2);
+        if (pcw->joystick.up)    v &= (u8)~(1u << 4);
+        if (pcw->joystick.fire1 || pcw->joystick.fire2) v &= (u8)~(1u << 7);
+        if (pcw->trace_io)
+            fprintf(stderr, "        -> %02X (cascade)\n", v);
+        return v;
+    }
+
     /* Selected PCW mouse protocol: AMX at A0-A3 or Kempston at D0-D4. */
     if (pcwmouse_handles_port(&pcw->mouse, lo)) {
         u8 v = pcwmouse_read(&pcw->mouse, lo);

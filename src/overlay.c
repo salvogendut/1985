@@ -214,7 +214,11 @@ static const char *mouse_type_str(MouseType type) {
 }
 
 static const char *joystick_type_str(JoystickType type) {
-    return type == JOYSTICK_TYPE_ATARI ? "Atari" : "DKsound";
+    switch (type) {
+        case JOYSTICK_TYPE_KEMPSTON: return "Kempston";
+        case JOYSTICK_TYPE_CASCADE:  return "Cascade";
+        default:                     return "DKsound";
+    }
 }
 
 static const char *bool_str(bool b) { return b ? "yes" : "no"; }

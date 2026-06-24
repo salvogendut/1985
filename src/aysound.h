@@ -62,8 +62,7 @@ typedef struct AySound {
 void aysound_init    (AySound *a, bool present);
 void aysound_reset   (AySound *a);
 void aysound_set_joystick(AySound *a, u8 active_low_bits);
-u8   aysound_pack_joystick(JoystickType type,
-                           bool up, bool down, bool left, bool right,
+u8   aysound_pack_dksound (bool up, bool down, bool left, bool right,
                            bool fire1, bool fire2);
 
 /* Bus dispatch — `lo` is the I/O port low byte (0xA0..0xA3 in range). */

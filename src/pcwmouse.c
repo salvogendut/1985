@@ -3,6 +3,24 @@
 
 #define AMX_MAX_PENDING 32767.0f
 
+/* Host pixel deltas → AMX encoder pulses. The hardware encoder is a
+ * 4-bit-per-axis delta nibble; the driver polls A0/A1 on every PCW
+ * timer tick (~300 Hz) and rolls the count into the GEM cursor. Two
+ * knobs:
+ *
+ *   AMX_SENSITIVITY  scales raw SDL pixel deltas before they hit the
+ *                    accumulator. Too low and slow movement rounds
+ *                    to zero between polls; too high and the cursor
+ *                    flies. 0.5 keeps fine motion alive.
+ *   AMX_MAX_PER_POLL caps the count drained on one poll. The hardware
+ *                    nibble allows 15, but emitting 15 in one shot
+ *                    makes the driver lurch then sit still ("stutter")
+ *                    when the host moves continuously. A small cap
+ *                    spreads the drain over many polls, which the
+ *                    driver integrates into smooth motion. */
+#define AMX_SENSITIVITY  0.50f
+#define AMX_MAX_PER_POLL 3
+
 static float clamp_pending(float v) {
     if (v >  AMX_MAX_PENDING) return  AMX_MAX_PENDING;
     if (v < -AMX_MAX_PENDING) return -AMX_MAX_PENDING;
@@ -29,8 +47,8 @@ void pcwmouse_configure(PcwMouse *m, bool present, MouseType type) {
 void pcwmouse_add_motion(PcwMouse *m, float dx, float dy) {
     if (!m->present) return;
 
-    m->amx_x = clamp_pending(m->amx_x + dx);
-    m->amx_y = clamp_pending(m->amx_y + dy);
+    m->amx_x = clamp_pending(m->amx_x + dx * AMX_SENSITIVITY);
+    m->amx_y = clamp_pending(m->amx_y + dy * AMX_SENSITIVITY);
 
     m->kempston_frac_x += dx;
     m->kempston_frac_y -= dy;
@@ -63,14 +81,14 @@ void pcwmouse_clear_input(PcwMouse *m) {
 
 static int consume_positive(float *pending) {
     int n = (int)*pending;
-    if (n > 15) n = 15;
+    if (n > AMX_MAX_PER_POLL) n = AMX_MAX_PER_POLL;
     *pending -= (float)n;
     return n;
 }
 
 static int consume_negative(float *pending) {
     int n = (int)-*pending;
-    if (n > 15) n = 15;
+    if (n > AMX_MAX_PER_POLL) n = AMX_MAX_PER_POLL;
     *pending += (float)n;
     return n;
 }
@@ -122,9 +140,12 @@ static u8 read_kempston(PcwMouse *m, u8 lo) {
         case 0xD3:
             return m->kempston_y;
         case 0xD4: {
+            /* Spectrum-Kempston convention: bit 0 = right, bit 1 = left,
+             * active-low. AMX-Art and Mini Office's PCW Kempston drivers
+             * mirror this. (ZEsarUX operaciones.c:7161.) */
             u8 value = 0xFF;
-            if (m->buttons & (1u << 0)) value &= (u8)~(1u << 0);
-            if (m->buttons & (1u << 2)) value &= (u8)~(1u << 1);
+            if (m->buttons & (1u << 2)) value &= (u8)~(1u << 0);
+            if (m->buttons & (1u << 0)) value &= (u8)~(1u << 1);
             return value;
         }
         default:
