@@ -130,22 +130,35 @@ static u8 bus_io_read(void *ctx, u16 port) {
         return v;
     }
 
-    /* Cascade joystick at port 0xE0, active-low. L=~0 R=~1 D=~2 U=~4
-     * F=~7. Shares the port with the CPS8256 SIO; when the backplane
-     * is plugged in CPS takes precedence (handled above) and Cascade
-     * is unreachable on real hardware too. */
-    if (lo == 0xE0
-        && pcw->joystick.type == JOYSTICK_TYPE_CASCADE
-        && !pcw->cps.present) {
-        u8 v = 0xFF;
-        if (pcw->joystick.left)  v &= (u8)~(1u << 0);
-        if (pcw->joystick.right) v &= (u8)~(1u << 1);
-        if (pcw->joystick.down)  v &= (u8)~(1u << 2);
-        if (pcw->joystick.up)    v &= (u8)~(1u << 4);
-        if (pcw->joystick.fire1 || pcw->joystick.fire2) v &= (u8)~(1u << 7);
-        if (pcw->trace_io)
-            fprintf(stderr, "        -> %02X (cascade)\n", v);
-        return v;
+    /* Cascade / Spectravideo joystick at port 0xE0. Two real adaptors
+     * share this port — same connector, incompatible pinouts — so the
+     * user selects one. Both are blocked when CPS8256 is plugged in,
+     * since the backplane owns 0xE0 on real hardware too. */
+    if (lo == 0xE0 && !pcw->cps.present) {
+        if (pcw->joystick.type == JOYSTICK_TYPE_CASCADE) {
+            /* Active-low, L=~0 R=~1 D=~2 U=~4 F=~7. */
+            u8 v = 0xFF;
+            if (pcw->joystick.left)  v &= (u8)~(1u << 0);
+            if (pcw->joystick.right) v &= (u8)~(1u << 1);
+            if (pcw->joystick.down)  v &= (u8)~(1u << 2);
+            if (pcw->joystick.up)    v &= (u8)~(1u << 4);
+            if (pcw->joystick.fire1 || pcw->joystick.fire2) v &= (u8)~(1u << 7);
+            if (pcw->trace_io)
+                fprintf(stderr, "        -> %02X (cascade)\n", v);
+            return v;
+        }
+        if (pcw->joystick.type == JOYSTICK_TYPE_SPECTRAVIDEO) {
+            /* Active-high, D=0 F=1 L=2 U=3 R=4. */
+            u8 v = 0;
+            if (pcw->joystick.down)  v |= 1u << 0;
+            if (pcw->joystick.fire1 || pcw->joystick.fire2) v |= 1u << 1;
+            if (pcw->joystick.left)  v |= 1u << 2;
+            if (pcw->joystick.up)    v |= 1u << 3;
+            if (pcw->joystick.right) v |= 1u << 4;
+            if (pcw->trace_io)
+                fprintf(stderr, "        -> %02X (spectravideo)\n", v);
+            return v;
+        }
     }
 
     /* Selected PCW mouse protocol: AMX at A0-A3 or Kempston at D0-D4. */

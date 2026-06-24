@@ -219,9 +219,10 @@ static const char *mouse_type_str(MouseType type) {
 
 static const char *joystick_type_str(JoystickType type) {
     switch (type) {
-        case JOYSTICK_TYPE_KEMPSTON: return "Kempston";
-        case JOYSTICK_TYPE_CASCADE:  return "Cascade";
-        default:                     return "DKsound";
+        case JOYSTICK_TYPE_KEMPSTON:     return "Kempston";
+        case JOYSTICK_TYPE_CASCADE:      return "Cascade";
+        case JOYSTICK_TYPE_SPECTRAVIDEO: return "Spectravideo";
+        default:                         return "DKsound";
     }
 }
 
@@ -669,7 +670,18 @@ static void close_overlay(Overlay *ov, bool save) {
                             * the keyboard scan window contract. Switching
                             * without a power cycle leaves stale driver
                             * state and the new device looks dead. */
-                           || (ov->cfg->mouse_type           != ov->saved.mouse_type);
+                           || (ov->cfg->mouse_type           != ov->saved.mouse_type)
+                           /* Flipping between Mouse and Joystick re-wires
+                            * what the AY port-A / mouse-port handlers
+                            * report. The guest only probes once at boot,
+                            * so without a cold reset the new device is
+                            * invisible to it. Same rationale for the
+                            * joystick-type swap: each variant lives at
+                            * a different port (DKsound 0xA9, Kempston
+                            * 0x9F, Cascade/Spectravideo 0xE0) and games
+                            * latch the choice on first poll. */
+                           || (ov->cfg->input_device         != ov->saved.input_device)
+                           || (ov->cfg->joystick_type        != ov->saved.joystick_type);
         config_save(ov->cfg);
         ov->dirty = false;
         if (need_cold_boot && ov->pcw) {
