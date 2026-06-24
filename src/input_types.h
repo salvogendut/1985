@@ -8,6 +8,10 @@ typedef enum {
 typedef enum {
     MOUSE_TYPE_AMX = 0,
     MOUSE_TYPE_KEMPSTON,
+    /* Creative Technology Keymouse — sits inline on the keyboard cable
+     * and overlays its X/Y/button bytes onto the keyboard scan window
+     * at 0x3FFB..0x3FFE. Not on the I/O bus. Used by MicroDesign 3. */
+    MOUSE_TYPE_KEYMOUSE,
     MOUSE_TYPE_COUNT,
 } MouseType;
 
@@ -19,6 +23,11 @@ typedef enum {
  *             R=0 L=1 D=2 U=3 F=4.
  *   CASCADE   "Cascade" two-player adaptor at port 0xE0. Active-low.
  *             L=~0 R=~1 D=~2 U=~4 F=~7. (Head Over Heels uses this.)
+ *
+ * TODO: Spectravideo also lives at port 0xE0 — active-high, D=0 F=1
+ *       L=2 U=3 R=4 — mutually exclusive with Cascade on real hardware
+ *       (same connector, different pinout). Add as a fourth type when
+ *       there's a software repro that needs it.
  *
  * The dispatch lives in pcw.c's bus_io_read; aysound owns 0xA9 only. */
 typedef enum {

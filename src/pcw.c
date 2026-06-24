@@ -631,8 +631,13 @@ void pcw_frame(PCW *pcw) {
             kbd_tick(&pcw->kbd);
             /* Joyce-style periodic kbd-MCU scan: refresh the matrix bytes
              * in physical RAM block 3 at offset 0x3FF0..0x3FFF. */
-            kbd_scan_into_ram(&pcw->kbd,
-                &pcw->mem.ram[MEM_KBD_BLOCK * MEM_BLOCK_SIZE + MEM_KBD_OFFSET]);
+            u8 *kbd_window =
+                &pcw->mem.ram[MEM_KBD_BLOCK * MEM_BLOCK_SIZE + MEM_KBD_OFFSET];
+            kbd_scan_into_ram(&pcw->kbd, kbd_window);
+            /* Keymouse (Creative Technology, MicroDesign 3): lives in the
+             * keyboard matrix, not the I/O bus. Overlays X/Y/buttons on
+             * top of the just-refreshed window. No-op for other types. */
+            pcwmouse_overlay_kbd(&pcw->mouse, kbd_window);
             if (asic_timer_tick(&pcw->asic)) {
                 /* CP/M checks FDC before timer when sources overlap. Keep
                  * counting timer ticks in F4, but do not queue a competing
