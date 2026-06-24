@@ -267,7 +267,9 @@ void pcw_frame(PCW *pcw) {
     int next_tick = CYCLES_PER_TICK;
 
     while (cycles < CYCLES_PER_FRAME && !stop_early) {
-        if (pcw->cpu.halted) {
+        if (pcw->cpu.halted
+            && !pcw->cpu.pending_irq
+            && !pcw->cpu.pending_nmi) {
             /* Skip straight to the next tick — IRQ will wake the CPU. */
             cycles = next_tick;
         } else {
