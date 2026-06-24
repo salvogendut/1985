@@ -222,6 +222,7 @@ static const char *joystick_type_str(JoystickType type) {
         case JOYSTICK_TYPE_KEMPSTON:     return "Kempston";
         case JOYSTICK_TYPE_CASCADE:      return "Cascade";
         case JOYSTICK_TYPE_SPECTRAVIDEO: return "Spectravideo";
+        case JOYSTICK_TYPE_KEYBOARD:     return "Keyboard";
         default:                         return "DKsound";
     }
 }
@@ -549,6 +550,8 @@ static void activate(Overlay *ov) {
             switch (ov->row) {
                 case TINK_SMOOTHING:
                     c->fullscreen_smoothing = !c->fullscreen_smoothing;
+                    if (ov->disp)
+                        display_set_smoothing(ov->disp, c->fullscreen_smoothing);
                     ov->dirty = true;
                     break;
                 case TINK_TINT:

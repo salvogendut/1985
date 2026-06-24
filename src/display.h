@@ -52,6 +52,7 @@ void display_quit(Display *d);
 void display_set_monochrome(Display *d, MonoMode m);
 void display_set_tint_glow(Display *d, bool on);
 void display_set_video_mode(Display *d, VideoMode v);
+void display_set_smoothing(Display *d, bool smooth);
 
 /* Plot a colour-indexed pixel (CGA/EGA modes). Index is masked to the
  * palette size in the active video mode (4 in CGA, 16 in EGA). */

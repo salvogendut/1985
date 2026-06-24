@@ -171,6 +171,88 @@ void kbd_scan_into_ram(Keyboard *k, u8 *kbd_window) {
         kbd_window[i] = kbd_matrix_byte(k, (u8)i);
 }
 
+static inline bool key_down(const Keyboard *k, int row, int bit) {
+    return (k->row[row] & (u8)(1 << bit)) != 0;
+}
+
+/* Helper: OR a chord bit into byte `b` if any of N (row,bit) pairs are
+ * currently pressed. The (row,bit) list is the PCW matrix position of
+ * each PC key that participates in this chord. */
+static inline u8 chord_or(const Keyboard *k, u8 b, int bit,
+                          const int (*positions)[2], int n) {
+    for (int i = 0; i < n; i++) {
+        if (key_down(k, positions[i][0], positions[i][1])) {
+            b |= (u8)(1 << bit);
+            return b;
+        }
+    }
+    return b;
+}
+
+void kbd_synth_joystick_chords(const Keyboard *k, u8 *win) {
+    /* PCW keys are at the (row,bit) positions defined in sdl_to_matrix
+     * above. Per PCW MiSTer rtl/key_joystick.sv:340-447 and the Seasip
+     * Joyce hardware doc §10.3. We assume LK1/2/3 absent — so the
+     * shift-as-fire2 chord and the W/A/D/X variant on 0x3FFC are not
+     * synthesised (they require LK2). */
+
+    /* 0x3FFC — inverted T around F1/F3 + ESC + KP_0 + SPACE + KP_ENTER */
+    {
+        u8 b = win[0xC] & 0xC0;     /* preserve b7-b6 (high keys) */
+        if (key_down(k, 0, 0)) b |= 1u << 0;   /* F3/F4 → down */
+        if (key_down(k, 0, 2)) b |= 1u << 1;   /* F1/F2 → up   */
+        if (key_down(k, 1, 0)) b |= 1u << 2;   /* ESC    → left */
+        if (key_down(k, 0, 1)) b |= 1u << 3;   /* KP_0   → right */
+        if (key_down(k, 5, 7)) b |= 1u << 4;   /* SPACE  → fire1 */
+        if (key_down(k,10, 5)) b |= 1u << 5;   /* KP_ENT → fire2 */
+        win[0xC] |= b & 0x3F;
+    }
+
+    /* 0x3FFD — numeric keypad inverted T */
+    {
+        u8 b = 0;
+        if (key_down(k,10, 2)) b |= 1u << 0;   /* KP_PERIOD → down */
+        if (key_down(k, 0, 7)) b |= 1u << 1;   /* KP_5      → up   */
+        if (key_down(k, 2, 4)) b |= 1u << 2;   /* KP_1      → left */
+        if (key_down(k, 0, 4)) b |= 1u << 3;   /* KP_3      → right */
+        if (key_down(k,10, 6)) b |= 1u << 4;   /* KP_2      → fire-ish */
+        if (key_down(k, 5, 7)) b |= 1u << 5;   /* SPACE     → fire1 */
+        win[0xD] |= b & 0x3F;
+    }
+
+    /* 0x3FFE — ASDFGHJ=up, ZXCVBNM=down, QEO[L,/=left, WRP];.\=right */
+    {
+        static const int up_keys[][2]    = {{8,5},{7,4},{7,5},{6,5},{6,4},{5,4},{5,5}};
+        static const int down_keys[][2]  = {{8,7},{7,7},{7,6},{6,7},{6,6},{5,6},{4,6}};
+        static const int left_keys[][2]  = {{8,3},{7,2},{4,2},{3,2},{4,4},{4,7},{3,6}};
+        static const int right_keys[][2] = {{7,3},{6,2},{3,3},{2,1},{3,5},{3,7},{2,6}};
+        u8 b = 0;
+        b = chord_or(k, b, 0, up_keys,    7);
+        b = chord_or(k, b, 1, down_keys,  7);
+        b = chord_or(k, b, 2, left_keys,  7);
+        b = chord_or(k, b, 3, right_keys, 7);
+        if (key_down(k, 5, 7)) b |= 1u << 4;  /* SPACE → fire1 */
+        /* fire2 (bit 5) requires LK2 (=Shift) — not synthesised */
+        win[0xE] |= b & 0x3F;
+    }
+
+    /* 0x3FFF — HJKL;=up, BNM,./\=down, QEO[ADZC=left, WRP]SFXV=right */
+    {
+        static const int up_keys[][2]    = {{5,4},{5,5},{4,5},{4,4},{3,5}};
+        static const int down_keys[][2]  = {{6,6},{5,6},{4,6},{4,7},{3,7},{3,6},{2,6}};
+        static const int left_keys[][2]  = {{8,3},{7,2},{4,2},{3,2},{8,5},{7,5},{8,7},{7,6}};
+        static const int right_keys[][2] = {{7,3},{6,2},{3,3},{2,1},{7,4},{6,5},{7,7},{6,7}};
+        u8 b = 0;
+        b = chord_or(k, b, 0, up_keys,    5);
+        b = chord_or(k, b, 1, down_keys,  7);
+        b = chord_or(k, b, 2, left_keys,  8);
+        b = chord_or(k, b, 3, right_keys, 8);
+        if (key_down(k, 5, 7)) b |= 1u << 4;  /* SPACE → fire1 */
+        /* fire2 (bit 5) requires LK2 — not synthesised */
+        win[0xF] |= b & 0x3F;
+    }
+}
+
 void kbd_press(Keyboard *k, int row, int bit) {
     if (row < 0 || row >= KBD_ROWS || bit < 0 || bit > 7) return;
     k->row[row] |= (u8)(1 << bit);

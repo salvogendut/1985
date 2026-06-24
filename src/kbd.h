@@ -43,6 +43,13 @@ u8   kbd_matrix_byte(Keyboard *k, u8 row);
  * (joyce-style — RAM-backed kbd map that the MCU periodically refreshes). */
 void kbd_scan_into_ram(Keyboard *k, u8 *kbd_window);
 
+/* OR "fake joystick" chord bits into the low 6 bits of 0x3FFC-0x3FFF
+ * (window indices 12-15), per Seasip Joyce §10.3 and PCW MiSTer
+ * key_joystick.sv:340-447. The keyboard MCU does this aggregation on
+ * real hardware; we synthesise it from current key state. Call after
+ * kbd_scan_into_ram so the OR sits on top of the raw matrix bytes. */
+void kbd_synth_joystick_chords(const Keyboard *k, u8 *kbd_window);
+
 /* SDL keyboard event → matrix update. */
 void kbd_handle(Keyboard *k, const SDL_KeyboardEvent *e);
 
