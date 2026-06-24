@@ -29,6 +29,27 @@ void aysound_set_joystick(AySound *a, u8 active_low_bits) {
     a->joystick = active_low_bits;
 }
 
+u8 aysound_pack_joystick(JoystickType type,
+                         bool up, bool down, bool left, bool right,
+                         bool fire1, bool fire2) {
+    u8 value = 0xFF;
+    if (type == JOYSTICK_TYPE_DKSOUND) {
+        if (left)           value &= (u8)~(1u << 2);
+        if (right)          value &= (u8)~(1u << 3);
+        if (down)           value &= (u8)~(1u << 4);
+        if (up)             value &= (u8)~(1u << 5);
+        if (fire1 || fire2) value &= (u8)~(1u << 6);
+    } else {
+        if (up)    value &= (u8)~(1u << 0);
+        if (down)  value &= (u8)~(1u << 1);
+        if (left)  value &= (u8)~(1u << 2);
+        if (right) value &= (u8)~(1u << 3);
+        if (fire1) value &= (u8)~(1u << 4);
+        if (fire2) value &= (u8)~(1u << 5);
+    }
+    return value;
+}
+
 /* Port dispatch. Caller has already filtered to 0xA9..0xAB. */
 u8 aysound_read(AySound *a, u8 lo) {
     if (!a->present) return 0xFF;

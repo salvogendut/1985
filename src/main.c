@@ -378,6 +378,23 @@ static int load_raw_image(PCW *pcw, const char *path, u16 base) {
     return 0;
 }
 
+static bool mouse_input_enabled(const Config *cfg) {
+    return cfg->ext_sanpollo_backplane
+        && cfg->ext_dktronics
+        && cfg->input_device == INPUT_DEVICE_MOUSE;
+}
+
+static void set_mouse_capture(Display *disp, PcwMouse *mouse,
+                              bool *captured, bool enable) {
+    if (*captured == enable) return;
+    if (!SDL_SetWindowRelativeMouseMode(disp->win, enable)) {
+        fprintf(stderr, "mouse capture: %s\n", SDL_GetError());
+        return;
+    }
+    *captured = enable;
+    if (!enable) pcwmouse_clear_input(mouse);
+}
+
 /* Re-apply every config-driven setting that pcw_init/pcw_cold_boot
  * does NOT cover by itself: printer mode/paths, debug traces, disk
  * mounts, serial/PerryFi/CPS gating, AY-sound, LED visibility. Called
@@ -418,6 +435,9 @@ static void apply_runtime_config(PCW *pcw, const Config *cfg) {
 
     bool dk_on = cfg->ext_sanpollo_backplane && cfg->ext_dktronics;
     aysound_init(&pcw->ay, dk_on);
+    pcwmouse_configure(&pcw->mouse,
+                       dk_on && cfg->input_device == INPUT_DEVICE_MOUSE,
+                       cfg->mouse_type);
 
     leds_set_enabled(LED_FDC_A, true);
     leds_set_enabled(LED_FDC_B,
@@ -489,6 +509,7 @@ int main(int argc, char **argv) {
      * shows up; hot-plug handled below via SDL_EVENT_GAMEPAD_ADDED. */
     SDL_InitSubSystem(SDL_INIT_GAMEPAD);
     SDL_Gamepad *gamepad = NULL;
+    bool mouse_captured = false;
     {
         int count = 0;
         SDL_JoystickID *ids = SDL_GetGamepads(&count);
@@ -538,10 +559,21 @@ int main(int argc, char **argv) {
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
             if (monitor_handle_event(mon, &ev)) continue;
-            if (overlay_handle_event(&ov, &ev)) continue;
+            if (overlay_handle_event(&ov, &ev)) {
+                if (mouse_captured
+                    && (ov.visible || !mouse_input_enabled(&cfg)))
+                    set_mouse_capture(&disp, &pcw.mouse,
+                                      &mouse_captured, false);
+                continue;
+            }
             switch (ev.type) {
                 case SDL_EVENT_QUIT:
                     running = false; break;
+                case SDL_EVENT_WINDOW_FOCUS_LOST:
+                    if (ev.window.windowID == SDL_GetWindowID(disp.win))
+                        set_mouse_capture(&disp, &pcw.mouse,
+                                          &mouse_captured, false);
+                    break;
                 case SDL_EVENT_GAMEPAD_ADDED:
                     if (!gamepad) gamepad = SDL_OpenGamepad(ev.gdevice.which);
                     break;
@@ -553,6 +585,15 @@ int main(int argc, char **argv) {
                     }
                     break;
                 case SDL_EVENT_KEY_DOWN:
+                    if (mouse_captured
+                        && (ev.key.mod & SDL_KMOD_CTRL)
+                        && (ev.key.key == SDLK_RETURN
+                            || ev.key.key == SDLK_KP_ENTER)) {
+                        set_mouse_capture(&disp, &pcw.mouse,
+                                          &mouse_captured, false);
+                        kbd_release(&pcw.kbd, 10, 1);
+                        break;
+                    }
                     /* Shift+F1..Shift+F8 are PCW f1..f8 — let the matrix
                      * handler take them before any host shortcut fires. */
                     if (ev.key.scancode >= SDL_SCANCODE_F1
@@ -679,9 +720,46 @@ int main(int argc, char **argv) {
                 case SDL_EVENT_KEY_UP:
                     kbd_handle(&pcw.kbd, &ev.key);
                     break;
+                case SDL_EVENT_MOUSE_MOTION:
+                    if (mouse_captured
+                        && ev.motion.windowID == SDL_GetWindowID(disp.win))
+                        pcwmouse_add_motion(&pcw.mouse,
+                                            ev.motion.xrel, ev.motion.yrel);
+                    break;
+                case SDL_EVENT_MOUSE_BUTTON_DOWN:
+                    if (ev.button.windowID != SDL_GetWindowID(disp.win)
+                        || !mouse_input_enabled(&cfg))
+                        break;
+                    if (!mouse_captured) {
+                        set_mouse_capture(&disp, &pcw.mouse,
+                                          &mouse_captured, true);
+                        break;
+                    }
+                    if (ev.button.button == SDL_BUTTON_LEFT)
+                        pcwmouse_set_button(&pcw.mouse, 0, true);
+                    else if (ev.button.button == SDL_BUTTON_MIDDLE)
+                        pcwmouse_set_button(&pcw.mouse, 1, true);
+                    else if (ev.button.button == SDL_BUTTON_RIGHT)
+                        pcwmouse_set_button(&pcw.mouse, 2, true);
+                    break;
+                case SDL_EVENT_MOUSE_BUTTON_UP:
+                    if (!mouse_captured
+                        || ev.button.windowID != SDL_GetWindowID(disp.win))
+                        break;
+                    if (ev.button.button == SDL_BUTTON_LEFT)
+                        pcwmouse_set_button(&pcw.mouse, 0, false);
+                    else if (ev.button.button == SDL_BUTTON_MIDDLE)
+                        pcwmouse_set_button(&pcw.mouse, 1, false);
+                    else if (ev.button.button == SDL_BUTTON_RIGHT)
+                        pcwmouse_set_button(&pcw.mouse, 2, false);
+                    break;
                 default: break;
             }
         }
+
+        if (mouse_captured
+            && (ov.visible || !mouse_input_enabled(&cfg)))
+            set_mouse_capture(&disp, &pcw.mouse, &mouse_captured, false);
 
         if (paste_pending && frame >= cli.paste_at) {
             paste_text(&paste, cli.paste_text);
@@ -710,25 +788,35 @@ int main(int argc, char **argv) {
         bool was_paused   = pcw.paused;
         bool was_stepping = pcw.step_once;
 
-        /* DK'tronics: poll the host gamepad and pack the AY's Port A
-         * byte (Atari-style, active-low). Reads from the AY when the
-         * guest selects R14 latch the current snapshot. */
-        if (pcw.ay.present && gamepad) {
+        /* Poll the first host gamepad and expose the selected joystick
+         * protocol through AY register 14. Mouse mode leaves it idle. */
+        if (pcw.ay.present) {
             u8 js = 0xFF;
-            if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_UP)    ||
-                SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTY) < -16000)
-                js &= ~(1 << 0);
-            if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN)  ||
-                SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTY) >  16000)
-                js &= ~(1 << 1);
-            if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT)  ||
-                SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTX) < -16000)
-                js &= ~(1 << 2);
-            if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) ||
-                SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTX) >  16000)
-                js &= ~(1 << 3);
-            if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_SOUTH))    js &= ~(1 << 4);
-            if (SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_EAST))     js &= ~(1 << 5);
+            if (cfg.input_device == INPUT_DEVICE_JOYSTICK && gamepad) {
+                bool up = SDL_GetGamepadButton(
+                              gamepad, SDL_GAMEPAD_BUTTON_DPAD_UP)
+                       || SDL_GetGamepadAxis(
+                              gamepad, SDL_GAMEPAD_AXIS_LEFTY) < -16000;
+                bool down = SDL_GetGamepadButton(
+                                gamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN)
+                         || SDL_GetGamepadAxis(
+                                gamepad, SDL_GAMEPAD_AXIS_LEFTY) > 16000;
+                bool left = SDL_GetGamepadButton(
+                                gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT)
+                         || SDL_GetGamepadAxis(
+                                gamepad, SDL_GAMEPAD_AXIS_LEFTX) < -16000;
+                bool right = SDL_GetGamepadButton(
+                                 gamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT)
+                          || SDL_GetGamepadAxis(
+                                 gamepad, SDL_GAMEPAD_AXIS_LEFTX) > 16000;
+                bool fire1 = SDL_GetGamepadButton(
+                                 gamepad, SDL_GAMEPAD_BUTTON_SOUTH);
+                bool fire2 = SDL_GetGamepadButton(
+                                 gamepad, SDL_GAMEPAD_BUTTON_EAST);
+                js = aysound_pack_joystick(cfg.joystick_type,
+                                            up, down, left, right,
+                                            fire1, fire2);
+            }
             aysound_set_joystick(&pcw.ay, js);
         }
 
@@ -766,9 +854,10 @@ int main(int argc, char **argv) {
                 (cfg.model == PCW_MODEL_8512) ? "PCW 8512"
               : (cfg.model == PCW_MODEL_9512) ? "PCW 9512"
               : "PCW 8256";
-            const char *keys =
-                "  F4=screenshot  F5=reset  F6=capture  F8=monitor  "
-                "F9=options  F11=fullscreen  F12=quit";
+            const char *keys = mouse_captured
+                ? "  Mouse captured  Ctrl+Enter=release"
+                : "  F4=screenshot  F5=reset  F6=capture  F8=monitor  "
+                  "F9=options  F11=fullscreen  F12=quit";
 
             SDL_SetRenderLogicalPresentation(disp.renderer, 0, 0,
                                              SDL_LOGICAL_PRESENTATION_DISABLED);
@@ -867,6 +956,7 @@ int main(int argc, char **argv) {
     }
 
     if (gc) gifcap_close(gc);
+    set_mouse_capture(&disp, &pcw.mouse, &mouse_captured, false);
     monitor_destroy(mon);
     if (gamepad)   SDL_CloseGamepad(gamepad);
     if (ay_stream) SDL_DestroyAudioStream(ay_stream);

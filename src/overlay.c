@@ -26,6 +26,7 @@ typedef enum {
     EXT_SERIAL,
     EXT_PERRYFI,
     EXT_DKTRONICS,
+    EXT_INPUT_DEVICE,
 } ExtRow;
 
 static ExtRow ext_row_at(const Config *cfg, int row) {
@@ -34,8 +35,32 @@ static ExtRow ext_row_at(const Config *cfg, int row) {
     if (row == r++) return EXT_SERIAL;
     if (row == r++) return EXT_PERRYFI;
     if (row == r++) return EXT_DKTRONICS;
+    if (row == r++) return EXT_INPUT_DEVICE;
     return EXT_NONE;
 }
+
+typedef enum {
+    TINK_SMOOTHING = 0,
+    TINK_TINT,
+    TINK_TINT_MODE,
+    TINK_VIDEO_MODE,
+    TINK_MOUSE_TYPE,
+    TINK_JOYSTICK_TYPE,
+    TINK_PRINTER_MODE,
+    TINK_PRINTER_MODEL,
+    TINK_DEBUG,
+    TINK_DEBUG_OUTPUT,
+    TINK_TRACE_IO,
+    TINK_TRACE_FDC,
+    TINK_TRACE_INPUT,
+    TINK_SERIAL_MODE,
+    TINK_SERIAL_PATH,
+    TINK_KEYBOARD_LAYOUT,
+    TINK_SAVE_SNAPSHOT,
+    TINK_LOAD_SNAPSHOT,
+    TINK_VERSION,
+    TINK_ROW_COUNT,
+} TinkerRow;
 
 /* General-tab row identity. Same shape as ExtRow: the displayed row
  * index shifts when an 8256-only row is hidden, so navigation routes
@@ -84,6 +109,17 @@ static void apply_pdf_printer(Overlay *ov) {
                                                       : PRINTER_KIND_DOT_MATRIX);
 }
 
+static void apply_input_device(Overlay *ov) {
+    if (!ov->pcw) return;
+    bool board_on = ov->cfg->ext_sanpollo_backplane
+                 && ov->cfg->ext_dktronics;
+    bool mouse_on = board_on
+                 && ov->cfg->input_device == INPUT_DEVICE_MOUSE;
+    pcwmouse_configure(&ov->pcw->mouse, mouse_on, ov->cfg->mouse_type);
+    if (mouse_on)
+        aysound_set_joystick(&ov->pcw->ay, 0xFF);
+}
+
 static const char *section_title(OvSection s) {
     switch (s) {
         case OV_GENERAL:    return "General";
@@ -116,15 +152,16 @@ static int row_count(const Overlay *ov, OvSection s) {
              *   Serial port
              *   PerryFi                 (AT-modem; lives on the serial line)
              *   DK'TRONICS Sound & Joystick
+             *   Input Device
              *
              * The Serial backend toggle (pty/tcp) lives under Advanced —
              * it's a developer convenience, not a hardware option.
              * Second drive and PDF printer moved to General — both are
              * stock-PCW features that don't need the backplane. */
             if (!ov->cfg->ext_sanpollo_backplane) return 0;
-            return 3;
+            return 4;
         }
-        case OV_TINKER:     return ov->cfg->tinker ? 17 : 0;
+        case OV_TINKER:     return ov->cfg->tinker ? TINK_ROW_COUNT : 0;
         default:            return 0;
     }
 }
@@ -166,6 +203,18 @@ static const char *printer_hw_str(const Config *cfg) {
     if (cfg->model == PCW_MODEL_9512)
         return cfg->printer_centronics_9512 ? "Centronics" : "Daisywheel";
     return "Dot-matrix";
+}
+
+static const char *input_device_str(InputDevice input) {
+    return input == INPUT_DEVICE_MOUSE ? "Mouse" : "Joystick";
+}
+
+static const char *mouse_type_str(MouseType type) {
+    return type == MOUSE_TYPE_KEMPSTON ? "Kempston" : "AMX";
+}
+
+static const char *joystick_type_str(JoystickType type) {
+    return type == JOYSTICK_TYPE_ATARI ? "Atari" : "DKsound";
 }
 
 static const char *bool_str(bool b) { return b ? "yes" : "no"; }
@@ -219,23 +268,30 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                     snprintf(label, lsz, "DK'sound");
                     snprintf(val, vsz, "%s", bool_str(cfg->ext_dktronics));
                     break;
+                case EXT_INPUT_DEVICE:
+                    snprintf(label, lsz, "Input Device");
+                    snprintf(val, vsz, "%s",
+                             input_device_str(cfg->input_device));
+                    break;
                 default: break;
             }
             break;
         case OV_TINKER:
             switch (row) {
-                case 0: snprintf(label, lsz, "Smoothing");      snprintf(val, vsz, "%s", bool_str(cfg->fullscreen_smoothing)); break;
-                case 1: snprintf(label, lsz, "Tint");           snprintf(val, vsz, "%s", mono_str(cfg->monochrome));           break;
-                case 2: snprintf(label, lsz, "Tint mode");      snprintf(val, vsz, "%s", cfg->tint_glow ? "glow" : "normal");  break;
-                case 3: snprintf(label, lsz, "Video mode");     snprintf(val, vsz, "%s", video_str(cfg->video_mode));          break;
-                case 4: snprintf(label, lsz, "Printer mode");   snprintf(val, vsz, "%s", sink_str(cfg->ext_print_sink));       break;
-                case 5: snprintf(label, lsz, "Printer model");  snprintf(val, vsz, "%s", printer_hw_str(cfg));                 break;
-                case 6: snprintf(label, lsz, "Debugging");      snprintf(val, vsz, "%s", bool_str(cfg->debug));                break;
-                case 7: snprintf(label, lsz, "Debug output");   snprintf(val, vsz, "%s", bool_str(cfg->debug_traces));         break;
-                case 8: snprintf(label, lsz, "Trace IO");       snprintf(val, vsz, "%s", bool_str(cfg->trace_io));             break;
-                case 9: snprintf(label, lsz, "Trace FDC");      snprintf(val, vsz, "%s", bool_str(cfg->trace_fdc));            break;
-                case 10: snprintf(label, lsz, "Trace Input");   snprintf(val, vsz, "%s", bool_str(cfg->trace_input));          break;
-                case 11:
+                case TINK_SMOOTHING: snprintf(label, lsz, "Smoothing"); snprintf(val, vsz, "%s", bool_str(cfg->fullscreen_smoothing)); break;
+                case TINK_TINT: snprintf(label, lsz, "Tint"); snprintf(val, vsz, "%s", mono_str(cfg->monochrome)); break;
+                case TINK_TINT_MODE: snprintf(label, lsz, "Tint mode"); snprintf(val, vsz, "%s", cfg->tint_glow ? "glow" : "normal"); break;
+                case TINK_VIDEO_MODE: snprintf(label, lsz, "Video mode"); snprintf(val, vsz, "%s", video_str(cfg->video_mode)); break;
+                case TINK_MOUSE_TYPE: snprintf(label, lsz, "Mouse type"); snprintf(val, vsz, "%s", mouse_type_str(cfg->mouse_type)); break;
+                case TINK_JOYSTICK_TYPE: snprintf(label, lsz, "Joystick type"); snprintf(val, vsz, "%s", joystick_type_str(cfg->joystick_type)); break;
+                case TINK_PRINTER_MODE: snprintf(label, lsz, "Printer mode"); snprintf(val, vsz, "%s", sink_str(cfg->ext_print_sink)); break;
+                case TINK_PRINTER_MODEL: snprintf(label, lsz, "Printer model"); snprintf(val, vsz, "%s", printer_hw_str(cfg)); break;
+                case TINK_DEBUG: snprintf(label, lsz, "Debugging"); snprintf(val, vsz, "%s", bool_str(cfg->debug)); break;
+                case TINK_DEBUG_OUTPUT: snprintf(label, lsz, "Debug output"); snprintf(val, vsz, "%s", bool_str(cfg->debug_traces)); break;
+                case TINK_TRACE_IO: snprintf(label, lsz, "Trace IO"); snprintf(val, vsz, "%s", bool_str(cfg->trace_io)); break;
+                case TINK_TRACE_FDC: snprintf(label, lsz, "Trace FDC"); snprintf(val, vsz, "%s", bool_str(cfg->trace_fdc)); break;
+                case TINK_TRACE_INPUT: snprintf(label, lsz, "Trace Input"); snprintf(val, vsz, "%s", bool_str(cfg->trace_input)); break;
+                case TINK_SERIAL_MODE:
                     snprintf(label, lsz, "Serial mode");
                     if (!ext_serial_available(cfg))
                         snprintf(val, vsz, "[needs PCW Backplane]");
@@ -248,17 +304,18 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                     else
                         snprintf(val, vsz, "PTY");
                     break;
-                case 12:
+                case TINK_SERIAL_PATH:
                     snprintf(label, lsz, "Serial PATH");
                     snprintf(val, vsz, "%s",
                              cfg->ext_serial_pty_link[0]
                                  ? cfg->ext_serial_pty_link
                                  : "/tmp/1985-serial");
                     break;
-                case 13: snprintf(label, lsz, "Show keyboard layout"); snprintf(val, vsz, "...");                              break;
-                case 14: snprintf(label, lsz, "Save snapshot"); snprintf(val, vsz, "...");                                     break;
-                case 15: snprintf(label, lsz, "Load snapshot"); snprintf(val, vsz, "...");                                     break;
-                case 16: snprintf(label, lsz, "Version");       snprintf(val, vsz, "1985 v" "0.4.0");                          break;
+                case TINK_KEYBOARD_LAYOUT: snprintf(label, lsz, "Show keyboard layout"); snprintf(val, vsz, "..."); break;
+                case TINK_SAVE_SNAPSHOT: snprintf(label, lsz, "Save snapshot"); snprintf(val, vsz, "..."); break;
+                case TINK_LOAD_SNAPSHOT: snprintf(label, lsz, "Load snapshot"); snprintf(val, vsz, "..."); break;
+                case TINK_VERSION: snprintf(label, lsz, "Version"); snprintf(val, vsz, "1985 v" "0.4.0"); break;
+                case TINK_ROW_COUNT: break;
             }
             break;
         default: break;
@@ -427,6 +484,7 @@ static void activate(Overlay *ov) {
                             leds_set_enabled(LED_SERIAL, false);
                         }
                     }
+                    apply_input_device(ov);
                     ov->dirty = true;
                     break;
                 case GEN_TINKER:
@@ -463,6 +521,14 @@ static void activate(Overlay *ov) {
                     break;
                 case EXT_DKTRONICS:
                     c->ext_dktronics = !c->ext_dktronics;
+                    apply_input_device(ov);
+                    ov->dirty = true;
+                    break;
+                case EXT_INPUT_DEVICE:
+                    c->input_device =
+                        c->input_device == INPUT_DEVICE_MOUSE
+                        ? INPUT_DEVICE_JOYSTICK : INPUT_DEVICE_MOUSE;
+                    apply_input_device(ov);
                     ov->dirty = true;
                     break;
                 case EXT_NONE:
@@ -472,29 +538,45 @@ static void activate(Overlay *ov) {
             break;
         case OV_TINKER:
             switch (ov->row) {
-                case 0: c->fullscreen_smoothing = !c->fullscreen_smoothing; ov->dirty = true; break;
-                case 1:
+                case TINK_SMOOTHING:
+                    c->fullscreen_smoothing = !c->fullscreen_smoothing;
+                    ov->dirty = true;
+                    break;
+                case TINK_TINT:
                     cycle_mono(&c->monochrome);
                     if (ov->disp) display_set_monochrome(ov->disp, c->monochrome);
                     ov->dirty = true;
                     break;
-                case 2:
+                case TINK_TINT_MODE:
                     c->tint_glow = !c->tint_glow;
                     if (ov->disp) display_set_tint_glow(ov->disp, c->tint_glow);
                     ov->dirty = true;
                     break;
-                case 3:
+                case TINK_VIDEO_MODE:
                     cycle_video(&c->video_mode);
                     if (ov->disp) display_set_video_mode(ov->disp, c->video_mode);
                     ov->dirty = true;
                     break;
-                case 4:
+                case TINK_MOUSE_TYPE:
+                    c->mouse_type =
+                        (MouseType)(((int)c->mouse_type + 1)
+                                    % MOUSE_TYPE_COUNT);
+                    apply_input_device(ov);
+                    ov->dirty = true;
+                    break;
+                case TINK_JOYSTICK_TYPE:
+                    c->joystick_type =
+                        (JoystickType)(((int)c->joystick_type + 1)
+                                       % JOYSTICK_TYPE_COUNT);
+                    ov->dirty = true;
+                    break;
+                case TINK_PRINTER_MODE:
                     c->ext_print_sink = (c->ext_print_sink == PRINT_SINK_REAL)
                                       ? PRINT_SINK_PDF : PRINT_SINK_REAL;
                     apply_pdf_printer(ov);
                     ov->dirty = true;
                     break;
-                case 5:
+                case TINK_PRINTER_MODEL:
                     /* Toggle daisywheel ↔ Centronics — only meaningful on
                      * the 9512. On 8256/8512 the row reads "Dot-matrix"
                      * and the toggle is a no-op. */
@@ -504,12 +586,12 @@ static void activate(Overlay *ov) {
                         ov->dirty = true;
                     }
                     break;
-                case 6: c->debug        = !c->debug;        ov->dirty = true; break;
-                case 7: c->debug_traces = !c->debug_traces; ov->dirty = true; break;
-                case 8: c->trace_io     = !c->trace_io;     ov->dirty = true; break;
-                case 9: c->trace_fdc    = !c->trace_fdc;    ov->dirty = true; break;
-                case 10: c->trace_input = !c->trace_input;  ov->dirty = true; break;
-                case 11:
+                case TINK_DEBUG: c->debug = !c->debug; ov->dirty = true; break;
+                case TINK_DEBUG_OUTPUT: c->debug_traces = !c->debug_traces; ov->dirty = true; break;
+                case TINK_TRACE_IO: c->trace_io = !c->trace_io; ov->dirty = true; break;
+                case TINK_TRACE_FDC: c->trace_fdc = !c->trace_fdc; ov->dirty = true; break;
+                case TINK_TRACE_INPUT: c->trace_input = !c->trace_input; ov->dirty = true; break;
+                case TINK_SERIAL_MODE:
                     /* Serial mode — flip pty ↔ tcp and re-initialise the
                      * backend so the row value updates immediately. */
                     if (ext_serial_available(c) && c->ext_serial) {
@@ -530,7 +612,7 @@ static void activate(Overlay *ov) {
                         ov->dirty = true;
                     }
                     break;
-                case 12:
+                case TINK_SERIAL_PATH:
                     /* Serial PATH — open inline editor. Pre-fill with
                      * the current value (or default if empty). */
                     snprintf(ov->edit_buf, sizeof(ov->edit_buf), "%s",
@@ -543,10 +625,12 @@ static void activate(Overlay *ov) {
                     ov->state = OV_STATE_EDIT;
                     if (ov->disp) SDL_StartTextInput(ov->disp->win);
                     break;
-                case 13: ov->state = OV_STATE_KEYS;       break;
-                case 14: open_snapshot_save_dialog(ov);   break;
-                case 15: open_snapshot_load_dialog(ov);   break;
-                case 16: break;
+                case TINK_KEYBOARD_LAYOUT: ov->state = OV_STATE_KEYS; break;
+                case TINK_SAVE_SNAPSHOT: open_snapshot_save_dialog(ov); break;
+                case TINK_LOAD_SNAPSHOT: open_snapshot_load_dialog(ov); break;
+                case TINK_VERSION:
+                case TINK_ROW_COUNT:
+                    break;
             }
             break;
         default: break;
@@ -594,11 +678,16 @@ static void close_overlay(Overlay *ov, bool save) {
 
             bool dk_on = ov->cfg->ext_sanpollo_backplane && ov->cfg->ext_dktronics;
             aysound_init(&ov->pcw->ay, dk_on);
+            pcwmouse_configure(&ov->pcw->mouse,
+                               dk_on
+                               && ov->cfg->input_device == INPUT_DEVICE_MOUSE,
+                               ov->cfg->mouse_type);
             apply_pdf_printer(ov);
         }
     } else if (!save) {
         *ov->cfg = ov->saved;
         apply_pdf_printer(ov);
+        apply_input_device(ov);
         /* Undo any live tint / glow / video-mode preview the user
          * cycled. Glow must come after monochrome — display_set_*
          * both write d->bg, glow needs to win. */
@@ -796,9 +885,13 @@ static void draw_rect_outline(SDL_Renderer *r, float x, float y, float w, float 
 void overlay_render(Overlay *ov, SDL_Renderer *r) {
     if (!ov->visible) return;
 
+    int rc = row_count(ov, ov->section);
+    int footer_y = ORIGIN_Y + rc * LINE_H + 6;
+    int panel_h = footer_y + 22;
+
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, 0, 0, 0, 200);
-    SDL_FRect bg = { 8, 8, 600, 280 };
+    SDL_FRect bg = { 8, 8, 600, (float)panel_h };
     SDL_RenderFillRect(r, &bg);
 
     /* Tabs row. */
@@ -811,7 +904,6 @@ void overlay_render(Overlay *ov, SDL_Renderer *r) {
         tx += (int)strlen(section_title((OvSection)s)) * 8 + 16;
     }
 
-    int rc = row_count(ov, ov->section);
     for (int i = 0; i < rc; i++) {
         char label[64], val[PATH_MAX + 64];
         item_text(ov, i, label, sizeof(label), val, sizeof(val));
@@ -823,7 +915,7 @@ void overlay_render(Overlay *ov, SDL_Renderer *r) {
         draw_text(r, VAL_X,    y, val,   R, G, B);
     }
 
-    draw_text(r, ORIGIN_X, 260,
+    draw_text(r, ORIGIN_X, footer_y,
               "\x1B \x1A: tabs   \x18 \x19: row   Enter: change   Esc: close",
               140, 140, 140);
 

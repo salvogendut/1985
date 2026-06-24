@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <limits.h>
 #include "pcw.h"
+#include "input_types.h"
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
@@ -27,7 +28,6 @@ typedef enum {
     VIDEO_CGA2,      /* 2 bpp, CGA palette 1 hi: black/cyan/magenta/white */
     VIDEO_EGA,       /* 4 bpp, 180×256 quadrupled, 16-colour palette  */
 } VideoMode;
-
 
 typedef struct {
     /* [machine] */
@@ -89,6 +89,9 @@ typedef struct {
     bool     trace_io;
     bool     trace_fdc;
     bool     trace_input;
+    InputDevice input_device;
+    MouseType mouse_type;
+    JoystickType joystick_type;
 
     /* Path actually used at load/save time. */
     char     path[PATH_MAX];

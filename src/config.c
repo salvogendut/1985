@@ -67,6 +67,46 @@ static VideoMode parse_video(const char *s, VideoMode fallback) {
     return fallback;
 }
 
+static const char *input_device_to_str(InputDevice input) {
+    return input == INPUT_DEVICE_MOUSE ? "mouse" : "joystick";
+}
+
+static InputDevice parse_input_device(const char *s, InputDevice fallback) {
+    if (!s) return fallback;
+    if (strcasecmp(s, "joystick") == 0) return INPUT_DEVICE_JOYSTICK;
+    if (strcasecmp(s, "mouse")    == 0) return INPUT_DEVICE_MOUSE;
+    fprintf(stderr, "config: unknown input_device '%s' — using default\n", s);
+    return fallback;
+}
+
+static const char *mouse_type_to_str(MouseType type) {
+    return type == MOUSE_TYPE_KEMPSTON ? "kempston" : "amx";
+}
+
+static MouseType parse_mouse_type(const char *s, MouseType fallback) {
+    if (!s) return fallback;
+    if (strcasecmp(s, "amx")      == 0) return MOUSE_TYPE_AMX;
+    if (strcasecmp(s, "kempston") == 0) return MOUSE_TYPE_KEMPSTON;
+    fprintf(stderr, "config: unknown mouse_type '%s' — using default\n", s);
+    return fallback;
+}
+
+static const char *joystick_type_to_str(JoystickType type) {
+    return type == JOYSTICK_TYPE_ATARI ? "atari" : "dksound";
+}
+
+static JoystickType parse_joystick_type(const char *s,
+                                        JoystickType fallback) {
+    if (!s) return fallback;
+    if (strcasecmp(s, "dksound") == 0
+        || strcasecmp(s, "dk_sound") == 0
+        || strcasecmp(s, "dktronics") == 0)
+        return JOYSTICK_TYPE_DKSOUND;
+    if (strcasecmp(s, "atari") == 0) return JOYSTICK_TYPE_ATARI;
+    fprintf(stderr, "config: unknown joystick_type '%s' — using default\n", s);
+    return fallback;
+}
+
 static const char *model_to_str(PcwModel m) {
     switch (m) {
         case PCW_MODEL_8512: return "8512";
@@ -126,6 +166,9 @@ void config_defaults(Config *c) {
     c->fullscreen           = false;
     c->fullscreen_smoothing = true;
     c->monochrome           = MONO_GREEN;
+    c->input_device         = INPUT_DEVICE_JOYSTICK;
+    c->mouse_type           = MOUSE_TYPE_AMX;
+    c->joystick_type        = JOYSTICK_TYPE_DKSOUND;
     c->tinker               = false;
     c->debug                = false;
     snprintf(c->ext_serial_backend, sizeof(c->ext_serial_backend), "pty");
@@ -194,6 +237,7 @@ void config_load(Config *c, const char *path) {
         }
         else if (strcmp(k, "ext_perryfi")             == 0) c->ext_perryfi             = parse_bool(v, c->ext_perryfi);
         else if (strcmp(k, "ext_dktronics")           == 0) c->ext_dktronics           = parse_bool(v, c->ext_dktronics);
+        else if (strcmp(k, "input_device")             == 0) c->input_device = parse_input_device(v, c->input_device);
         else if (strcmp(k, "ext_pdf_printer")         == 0) c->ext_pdf_printer         = parse_bool(v, c->ext_pdf_printer);
         else if (strcmp(k, "ext_pdf_printer_dir")     == 0) snprintf(c->ext_pdf_printer_dir,
                                                                       sizeof(c->ext_pdf_printer_dir), "%s", v);
@@ -205,6 +249,15 @@ void config_load(Config *c, const char *path) {
         else if (strcmp(k, "trace_io")             == 0) c->trace_io    = parse_bool(v, c->trace_io);
         else if (strcmp(k, "trace_fdc")            == 0) c->trace_fdc   = parse_bool(v, c->trace_fdc);
         else if (strcmp(k, "trace_input")          == 0) c->trace_input = parse_bool(v, c->trace_input);
+        else if (strcmp(k, "mouse_type")           == 0) c->mouse_type = parse_mouse_type(v, c->mouse_type);
+        else if (strcmp(k, "joystick_type")        == 0) c->joystick_type = parse_joystick_type(v, c->joystick_type);
+        /* Compatibility with the short-lived development key. */
+        else if (strcmp(k, "dksound_input")        == 0) {
+            c->input_device = (strcasecmp(v, "amx_mouse") == 0
+                               || strcasecmp(v, "amx") == 0
+                               || strcasecmp(v, "mouse") == 0)
+                            ? INPUT_DEVICE_MOUSE : INPUT_DEVICE_JOYSTICK;
+        }
     }
     fclose(f);
 
@@ -246,6 +299,7 @@ int config_save(const Config *c) {
     fprintf(f, "ext_serial_pty_link     = %s\n",   c->ext_serial_pty_link);
     fprintf(f, "ext_perryfi             = %s\n",   bool_to_str(c->ext_perryfi));
     fprintf(f, "ext_dktronics           = %s\n",   bool_to_str(c->ext_dktronics));
+    fprintf(f, "input_device            = %s\n",   input_device_to_str(c->input_device));
     fprintf(f, "ext_pdf_printer         = %s\n",   bool_to_str(c->ext_pdf_printer));
     fprintf(f, "ext_pdf_printer_dir     = %s\n",   c->ext_pdf_printer_dir);
     fprintf(f, "ext_print_sink          = %s\n",   sink_to_str(c->ext_print_sink));
@@ -258,6 +312,8 @@ int config_save(const Config *c) {
     fprintf(f, "trace_io = %s\n", bool_to_str(c->trace_io));
     fprintf(f, "trace_fdc = %s\n", bool_to_str(c->trace_fdc));
     fprintf(f, "trace_input = %s\n", bool_to_str(c->trace_input));
+    fprintf(f, "mouse_type = %s\n", mouse_type_to_str(c->mouse_type));
+    fprintf(f, "joystick_type = %s\n", joystick_type_to_str(c->joystick_type));
 
     fclose(f);
     return 0;

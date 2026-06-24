@@ -22,6 +22,7 @@ dist_man1_MANS = 1985.1
 	src/paste.c \
 	src/pcw.c \
 	src/perryfi.c \
+	src/pcwmouse.c \
 	src/printer.c \
 	src/roller.c \
 	src/serial.c \
@@ -50,12 +51,14 @@ noinst_HEADERS = \
 	src/paste.h \
 	src/pcw.h \
 	src/perryfi.h \
+	src/pcwmouse.h \
 	src/printer.h \
 	src/roller.h \
 	src/serial.h \
 	src/snapshot.h \
 	src/startup_debug.h \
 	src/symbols.h \
+	src/input_types.h \
 	src/types.h \
 	src/z80.h \
 	src/z80dis.h
