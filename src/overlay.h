@@ -12,9 +12,11 @@ typedef enum {
 } OvSection;
 
 typedef enum {
-    OV_STATE_MENU    = 0,
-    OV_STATE_CONFIRM = 1,
-    OV_STATE_KEYS    = 2,
+    OV_STATE_MENU         = 0,
+    OV_STATE_CONFIRM      = 1,
+    OV_STATE_KEYS         = 2,
+    OV_STATE_EDIT         = 3,
+    OV_STATE_EDIT_CONFIRM = 4,
 } OvState;
 
 typedef enum {
@@ -44,6 +46,11 @@ typedef struct {
     char        dialog_path[PATH_MAX];
     bool        dialog_ready;
     bool        needs_cold_boot;
+    /* Inline text editor state (OV_STATE_EDIT). The target field a
+     * commit writes back to is identified by `edit_target`. */
+    char        edit_buf [PATH_MAX];
+    char        edit_orig[PATH_MAX];
+    int         edit_target;     /* e.g. 1 = ext_serial_pty_link */
 } Overlay;
 
 void overlay_init(Overlay *ov, Config *cfg, struct PCW *pcw, struct Display *disp);

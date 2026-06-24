@@ -130,6 +130,8 @@ void config_defaults(Config *c) {
     c->debug                = false;
     snprintf(c->ext_serial_backend, sizeof(c->ext_serial_backend), "pty");
     c->ext_serial_tcp_port  = 4002;
+    snprintf(c->ext_serial_pty_link, sizeof(c->ext_serial_pty_link),
+             "/tmp/1985-serial");
 }
 
 void config_load(Config *c, const char *path) {
@@ -182,6 +184,14 @@ void config_load(Config *c, const char *path) {
             int p = atoi(v);
             if (p > 0 && p < 65536) c->ext_serial_tcp_port = p;
         }
+        else if (strcmp(k, "ext_serial_pty_link")     == 0) {
+            /* Blank value → fall back to the default already stashed
+             * by config_defaults so users don't accidentally disable
+             * the symlink by clearing the field. */
+            if (v[0])
+                snprintf(c->ext_serial_pty_link,
+                         sizeof(c->ext_serial_pty_link), "%s", v);
+        }
         else if (strcmp(k, "ext_perryfi")             == 0) c->ext_perryfi             = parse_bool(v, c->ext_perryfi);
         else if (strcmp(k, "ext_dktronics")           == 0) c->ext_dktronics           = parse_bool(v, c->ext_dktronics);
         else if (strcmp(k, "ext_pdf_printer")         == 0) c->ext_pdf_printer         = parse_bool(v, c->ext_pdf_printer);
@@ -233,6 +243,7 @@ int config_save(const Config *c) {
     fprintf(f, "ext_serial              = %s\n",   bool_to_str(c->ext_serial));
     fprintf(f, "ext_serial_backend      = %s\n",   c->ext_serial_backend);
     fprintf(f, "ext_serial_tcp_port     = %d\n",   c->ext_serial_tcp_port);
+    fprintf(f, "ext_serial_pty_link     = %s\n",   c->ext_serial_pty_link);
     fprintf(f, "ext_perryfi             = %s\n",   bool_to_str(c->ext_perryfi));
     fprintf(f, "ext_dktronics           = %s\n",   bool_to_str(c->ext_dktronics));
     fprintf(f, "ext_pdf_printer         = %s\n",   bool_to_str(c->ext_pdf_printer));

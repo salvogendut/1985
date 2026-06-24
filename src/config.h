@@ -60,6 +60,11 @@ typedef struct {
                                          * backplane to expose it. */
     char     ext_serial_backend[8];     /* "pty" or "tcp" */
     int      ext_serial_tcp_port;       /* default 4002 */
+    char     ext_serial_pty_link[PATH_MAX]; /* host-side alias symlinked to
+                                             * the PTY slave; default
+                                             * /tmp/1985-serial. Empty
+                                             * string in config means
+                                             * "use the default". */
     bool     ext_perryfi;               /* SanPollo PerryFi: AT-modem to
                                          * the host network. Plugs onto
                                          * the serial port, so it's only

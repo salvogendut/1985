@@ -29,6 +29,7 @@ typedef struct Serial {
     /* PTY backend */
     int  pty_master;          /* -1 when closed */
     char pty_slave[64];       /* /dev/pts/N for the overlay */
+    char pty_link[64];        /* stable host-side alias, e.g. /tmp/1985-serial */
 
     /* TCP backend */
     int  tcp_listen;          /* -1 when closed */
@@ -42,8 +43,11 @@ typedef struct Serial {
     size_t tx_head, tx_tail;  /* head=push (guest),   tail=pop (backend) */
 } Serial;
 
-/* `backend` is "pty" or "tcp"; `tcp_port` is ignored for PTY. */
-void serial_init    (Serial *s, bool enable, const char *backend, int tcp_port);
+/* `backend` is "pty" or "tcp"; `tcp_port` is ignored for PTY.
+ * `pty_link_path` is the stable host-side symlink to create for PTY
+ * backends (e.g. "/tmp/1985-serial"); NULL or empty disables the link. */
+void serial_init    (Serial *s, bool enable, const char *backend,
+                     int tcp_port, const char *pty_link_path);
 void serial_shutdown(Serial *s);
 
 /* Drain backend → RX, push TX → backend. Call once per frame. */

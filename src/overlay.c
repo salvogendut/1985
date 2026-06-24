@@ -124,7 +124,7 @@ static int row_count(const Overlay *ov, OvSection s) {
             if (!ov->cfg->ext_sanpollo_backplane) return 0;
             return 3;
         }
-        case OV_TINKER:     return ov->cfg->tinker ? 16 : 0;
+        case OV_TINKER:     return ov->cfg->tinker ? 17 : 0;
         default:            return 0;
     }
 }
@@ -248,10 +248,17 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                     else
                         snprintf(val, vsz, "PTY");
                     break;
-                case 12: snprintf(label, lsz, "Show keyboard layout"); snprintf(val, vsz, "...");                              break;
-                case 13: snprintf(label, lsz, "Save snapshot"); snprintf(val, vsz, "...");                                     break;
-                case 14: snprintf(label, lsz, "Load snapshot"); snprintf(val, vsz, "...");                                     break;
-                case 15: snprintf(label, lsz, "Version");       snprintf(val, vsz, "1985 v" "0.4.0");                          break;
+                case 12:
+                    snprintf(label, lsz, "Serial PATH");
+                    snprintf(val, vsz, "%s",
+                             cfg->ext_serial_pty_link[0]
+                                 ? cfg->ext_serial_pty_link
+                                 : "/tmp/1985-serial");
+                    break;
+                case 13: snprintf(label, lsz, "Show keyboard layout"); snprintf(val, vsz, "...");                              break;
+                case 14: snprintf(label, lsz, "Save snapshot"); snprintf(val, vsz, "...");                                     break;
+                case 15: snprintf(label, lsz, "Load snapshot"); snprintf(val, vsz, "...");                                     break;
+                case 16: snprintf(label, lsz, "Version");       snprintf(val, vsz, "1985 v" "0.4.0");                          break;
             }
             break;
         default: break;
@@ -441,7 +448,8 @@ static void activate(Overlay *ov) {
                         serial_init(&ov->pcw->serial,
                                     c->ext_serial,
                                     c->ext_serial_backend,
-                                    c->ext_serial_tcp_port);
+                                    c->ext_serial_tcp_port,
+                                    c->ext_serial_pty_link);
                         cps_set_present(&ov->pcw->cps, c->ext_serial);
                     }
                     leds_set_enabled(LED_SERIAL, c->ext_serial);
@@ -516,15 +524,29 @@ static void activate(Overlay *ov) {
                             serial_init(&ov->pcw->serial,
                                         c->ext_serial,
                                         c->ext_serial_backend,
-                                        c->ext_serial_tcp_port);
+                                        c->ext_serial_tcp_port,
+                                        c->ext_serial_pty_link);
                         }
                         ov->dirty = true;
                     }
                     break;
-                case 12: ov->state = OV_STATE_KEYS;       break;
-                case 13: open_snapshot_save_dialog(ov);   break;
-                case 14: open_snapshot_load_dialog(ov);   break;
-                case 15: break;
+                case 12:
+                    /* Serial PATH — open inline editor. Pre-fill with
+                     * the current value (or default if empty). */
+                    snprintf(ov->edit_buf, sizeof(ov->edit_buf), "%s",
+                             c->ext_serial_pty_link[0]
+                                 ? c->ext_serial_pty_link
+                                 : "/tmp/1985-serial");
+                    snprintf(ov->edit_orig, sizeof(ov->edit_orig),
+                             "%s", ov->edit_buf);
+                    ov->edit_target = 1;        /* ext_serial_pty_link */
+                    ov->state = OV_STATE_EDIT;
+                    if (ov->disp) SDL_StartTextInput(ov->disp->win);
+                    break;
+                case 13: ov->state = OV_STATE_KEYS;       break;
+                case 14: open_snapshot_save_dialog(ov);   break;
+                case 15: open_snapshot_load_dialog(ov);   break;
+                case 16: break;
             }
             break;
         default: break;
@@ -564,7 +586,8 @@ static void close_overlay(Overlay *ov, bool save) {
             bool p_on   = s_on && ov->cfg->ext_perryfi;
             serial_init(&ov->pcw->serial, s_on && !p_on,
                         ov->cfg->ext_serial_backend,
-                        ov->cfg->ext_serial_tcp_port);
+                        ov->cfg->ext_serial_tcp_port,
+                        ov->cfg->ext_serial_pty_link);
             perryfi_init(&ov->pcw->perryfi, p_on);
             cps_set_present(&ov->pcw->cps, s_on);
             leds_set_enabled(LED_SERIAL, s_on);
@@ -607,6 +630,94 @@ bool overlay_handle_event(Overlay *ov, SDL_Event *ev) {
 
     /* Never swallow window-close — the user must always be able to quit. */
     if (ev->type == SDL_EVENT_QUIT) return false;
+
+    /* Inline text editor for Serial PATH (and any future text fields).
+     * Eats raw TEXT_INPUT events for printable characters; key-down
+     * handles control keys (Enter/Esc/Del/Backspace). */
+    if (ov->state == OV_STATE_EDIT) {
+        if (ev->type == SDL_EVENT_TEXT_INPUT) {
+            size_t len = strlen(ov->edit_buf);
+            const char *t = ev->text.text;
+            while (*t && len + 1 < sizeof(ov->edit_buf)) {
+                ov->edit_buf[len++] = *t++;
+            }
+            ov->edit_buf[len] = '\0';
+            return true;
+        }
+        if (ev->type != SDL_EVENT_KEY_DOWN) return true;
+        SDL_Keycode k = ev->key.key;
+        if (k == SDLK_RETURN || k == SDLK_KP_ENTER) {
+            /* Commit: copy buffer into the target config field and
+             * re-apply. Empty value falls back to the default. */
+            const char *v = ov->edit_buf[0] ? ov->edit_buf : "/tmp/1985-serial";
+            if (ov->edit_target == 1) {
+                snprintf(ov->cfg->ext_serial_pty_link,
+                         sizeof(ov->cfg->ext_serial_pty_link), "%s", v);
+                if (ov->pcw) {
+                    bool savail = (ov->cfg->model == PCW_MODEL_9512)
+                               || ov->cfg->ext_sanpollo_backplane;
+                    bool s_on   = ov->cfg->ext_serial && savail;
+                    bool p_on   = s_on && ov->cfg->ext_perryfi;
+                    serial_shutdown(&ov->pcw->serial);
+                    serial_init(&ov->pcw->serial, s_on && !p_on,
+                                ov->cfg->ext_serial_backend,
+                                ov->cfg->ext_serial_tcp_port,
+                                ov->cfg->ext_serial_pty_link);
+                }
+            }
+            ov->dirty = true;
+            if (ov->disp) SDL_StopTextInput(ov->disp->win);
+            ov->state = OV_STATE_MENU;
+        } else if (k == SDLK_ESCAPE) {
+            /* If unchanged, just leave. Otherwise prompt save/discard. */
+            if (strcmp(ov->edit_buf, ov->edit_orig) == 0) {
+                if (ov->disp) SDL_StopTextInput(ov->disp->win);
+                ov->state = OV_STATE_MENU;
+            } else {
+                ov->state = OV_STATE_EDIT_CONFIRM;
+            }
+        } else if (k == SDLK_DELETE) {
+            /* Restore the default. */
+            snprintf(ov->edit_buf, sizeof(ov->edit_buf), "%s",
+                     "/tmp/1985-serial");
+        } else if (k == SDLK_BACKSPACE) {
+            size_t len = strlen(ov->edit_buf);
+            if (len > 0) ov->edit_buf[len - 1] = '\0';
+        }
+        return true;
+    }
+
+    if (ov->state == OV_STATE_EDIT_CONFIRM) {
+        if (ev->type != SDL_EVENT_KEY_DOWN) return true;
+        SDL_Keycode k = ev->key.key;
+        if (k == SDLK_RETURN || k == SDLK_KP_ENTER || k == SDLK_Y) {
+            /* Save: commit edit_buf (same path as RETURN in EDIT). */
+            const char *v = ov->edit_buf[0] ? ov->edit_buf : "/tmp/1985-serial";
+            if (ov->edit_target == 1) {
+                snprintf(ov->cfg->ext_serial_pty_link,
+                         sizeof(ov->cfg->ext_serial_pty_link), "%s", v);
+                if (ov->pcw) {
+                    bool savail = (ov->cfg->model == PCW_MODEL_9512)
+                               || ov->cfg->ext_sanpollo_backplane;
+                    bool s_on   = ov->cfg->ext_serial && savail;
+                    bool p_on   = s_on && ov->cfg->ext_perryfi;
+                    serial_shutdown(&ov->pcw->serial);
+                    serial_init(&ov->pcw->serial, s_on && !p_on,
+                                ov->cfg->ext_serial_backend,
+                                ov->cfg->ext_serial_tcp_port,
+                                ov->cfg->ext_serial_pty_link);
+                }
+            }
+            ov->dirty = true;
+            if (ov->disp) SDL_StopTextInput(ov->disp->win);
+            ov->state = OV_STATE_MENU;
+        } else if (k == SDLK_N || k == SDLK_ESCAPE) {
+            /* Discard. */
+            if (ov->disp) SDL_StopTextInput(ov->disp->win);
+            ov->state = OV_STATE_MENU;
+        }
+        return true;
+    }
 
     if (ev->type != SDL_EVENT_KEY_DOWN) return true;
 
@@ -771,6 +882,64 @@ void overlay_render(Overlay *ov, SDL_Renderer *r) {
         }
         draw_text(r, (int)(bx + 16), (int)(by + box_h - FONT_H - 6),
                   "Press any key to return.", 140, 140, 140);
+        return;
+    }
+
+    /* Inline text editor — a small modal that shows the current edit
+     * buffer with a cursor and the available commands. */
+    if (ov->state == OV_STATE_EDIT) {
+        int ww = DISPLAY_LOGICAL_W;
+        int wh = DISPLAY_LOGICAL_H;
+        const int FONT_W = 8, FONT_H = 8;
+        const char *title = "Serial PATH";
+        const char *help  = "Enter=Save  Esc=Cancel  Del=Default";
+        int max_w = (int)strlen(help) * FONT_W;
+        int buf_w = ((int)strlen(ov->edit_buf) + 1) * FONT_W;
+        if (buf_w > max_w) max_w = buf_w;
+        int box_w = max_w + 24;
+        int box_h = FONT_H * 4 + 32;
+        float bx = (ww - box_w) / 2.0f;
+        float by = (wh - box_h) / 2.0f;
+
+        fill_rect(r, 0, 0, (float)ww, (float)wh, 0, 0, 0, 140);
+        fill_rect(r, bx, by, (float)box_w, (float)box_h, 25, 25, 60, 255);
+        draw_rect_outline(r, bx, by, (float)box_w, (float)box_h, 70, 90, 200);
+
+        draw_text(r, (int)(bx + 12), (int)(by + 6),
+                  title, 255, 255, 255);
+
+        /* Edit field on its own line, with a trailing underscore as a
+         * cursor so users can see where input lands. */
+        char shown[PATH_MAX + 2];
+        snprintf(shown, sizeof(shown), "%s_", ov->edit_buf);
+        draw_text(r, (int)(bx + 12), (int)(by + 6 + FONT_H + 8),
+                  shown, 180, 240, 180);
+
+        draw_text(r, (int)(bx + 12), (int)(by + 6 + (FONT_H + 8) * 2 + 8),
+                  help, 200, 200, 100);
+        return;
+    }
+    if (ov->state == OV_STATE_EDIT_CONFIRM) {
+        int ww = DISPLAY_LOGICAL_W;
+        int wh = DISPLAY_LOGICAL_H;
+        const int FONT_W = 8, FONT_H = 8;
+        const char *line1 = "Save changes to Serial PATH?";
+        const char *line2 = "Enter/Y = Save    Esc/N = Discard";
+        int l1w = (int)strlen(line1) * FONT_W;
+        int l2w = (int)strlen(line2) * FONT_W;
+        int box_w = l2w + 24;
+        int box_h = FONT_H * 2 + 24;
+        float bx = (ww - box_w) / 2.0f;
+        float by = (wh - box_h) / 2.0f;
+
+        fill_rect(r, 0, 0, (float)ww, (float)wh, 0, 0, 0, 140);
+        fill_rect(r, bx, by, (float)box_w, (float)box_h, 25, 25, 60, 255);
+        draw_rect_outline(r, bx, by, (float)box_w, (float)box_h, 70, 90, 200);
+
+        draw_text(r, (int)(bx + (box_w - l1w) / 2.0f), (int)(by + 6),
+                  line1, 255, 255, 255);
+        draw_text(r, (int)(bx + (box_w - l2w) / 2.0f), (int)(by + 6 + FONT_H + 8),
+                  line2, 200, 200, 100);
         return;
     }
 

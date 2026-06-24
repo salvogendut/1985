@@ -49,3 +49,4 @@ roms/*
 /aclocal.m4
 /configure
 /configure~
+tools/snap_analyze
