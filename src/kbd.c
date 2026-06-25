@@ -157,9 +157,16 @@ u8 kbd_matrix_byte(Keyboard *k, u8 row) {
         return (u8)(k->row[13] | 0x80);
     }
     if (row == 15) {
+        /* Seasip Joyce §10:
+         *   bit 7 = 1 if the keyboard is currently transmitting state
+         *   bit 6 toggles with each update from kbd to PCW
+         * In emulation we're always "transmitting" (no MCU silence
+         * window), so bit 7 is sticky. Bit 6 toggles at the ASIC
+         * timer cadence — that's the heartbeat CP/M+ watches.
+         * (Matches PCW MiSTer rtl/key_joystick.sv:484-485.) */
         u8 v = k->row[15] & 0x3F;
-        if (k->ticker & 1) v |= 0x80;
-        if (k->ticker & 2) v |= 0x40;
+        v |= 0x80;
+        if (k->ticker & 1) v |= 0x40;
         return v;
     }
     return k->row[row];
