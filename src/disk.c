@@ -13,9 +13,11 @@ void disk_eject(Disk *d) {
             free(d->track[t][s].data);
     int cur_track = d->cur_track;
     bool dd = d->is_dd_drive;
+    DiskType t = d->type;
     memset(d, 0, sizeof(*d));
     d->cur_track = cur_track;   /* preserve head position across eject */
     d->is_dd_drive = dd;        /* drive type is a hardware property, not media */
+    d->type = t;                /* per-drive format override persists across swaps */
 }
 
 static int load_track(DiskTrack *tr, FILE *f, int track_size) {
@@ -256,7 +258,7 @@ err:
     return -1;
 }
 
-int disk_create_blank(const char *path) {
+int disk_create_blank(const char *path, DiskType type) {
     if (!path || !path[0]) return -1;
     FILE *f = fopen(path, "wb");
     if (!f) {
@@ -264,95 +266,82 @@ int disk_create_blank(const char *path) {
         return -1;
     }
 
-    /* Pre-formatted PCW data-CF2 disk: 40 tracks × 1 side × 9 sectors
-     * of 512 bytes, sector IDs in standard skew order, filler 0xE5,
-     * disc-spec at track 0 sector R=1.
+    /* Pre-formatted PCW data disk; sector IDs in standard skew order,
+     * filler 0xE5, disc-spec at track 0 side 0 sector R=1. OFF=0 (no
+     * reserved tracks) so BIOS reads/writes match the recorded C
+     * field (= physical track). See issue #114 for the analysis.
      *
-     * Why pre-format here rather than relying on DISCKIT3 inside the
-     * guest? DISCKIT3 only offers system-format CF2 with OFF=1; PCW
-     * CP/M+ BIOS then derives `cp/m_track = physical - OFF` for drive
-     * B and commands sector reads with C = cp/m_track, which never
-     * matches the C = physical_track DISCKIT3 wrote into the sector
-     * IDs. The result is "MAKE FILE NONRECOVERABLE" on any write —
-     * see issue #114 for the full analysis (Joyce reproduces it too).
-     *
-     * The format here uses OFF=0 (no reserved tracks) and writes the
-     * sector C field as the physical track. With OFF=0, BIOS commands
-     * C = physical_track on every access; the IDs match; writes work.
-     *
-     * Tracks 0–39 in the standard PCW interleave (1, 6, 2, 7, 3, 8,
-     * 4, 9, 5) so seek-stride behaviour matches a real PCW data disk. */
+     * CF2:   40 tracks × 1 side  × 9 sec/track × 512 bytes = 180k
+     * CF2DD: 80 tracks × 2 sides × 9 sec/track × 512 bytes = 720k */
 
-    const int TRACKS   = 40;
+    const bool is_dd = (type == DISK_TYPE_CF2DD);
+    const int TRACKS   = is_dd ? 80 : 40;
+    const int SIDES    = is_dd ? 2  : 1;
     const int SPT      = 9;
     const int SEC_SIZE = 512;
     const int N_CODE   = 2;   /* 128 << 2 = 512 */
     static const uint8_t SKEW[9] = { 1, 6, 2, 7, 3, 8, 4, 9, 5 };
     const int TRACK_SIZE = 256 + SPT * SEC_SIZE;   /* 4864 bytes/track */
 
-    /* Disk-Info: 40 tracks × 1 side, all track sizes = TRACK_SIZE/256. */
     uint8_t track_table[256 - 0x34];
     memset(track_table, 0, sizeof(track_table));
-    for (int t = 0; t < TRACKS; t++)
-        track_table[t] = (uint8_t)(TRACK_SIZE / 256);
+    for (int i = 0; i < TRACKS * SIDES; i++)
+        track_table[i] = (uint8_t)(TRACK_SIZE / 256);
     uint8_t disk_info[256];
-    build_disk_info(disk_info, TRACKS, 1, track_table);
+    build_disk_info(disk_info, TRACKS, SIDES, track_table);
     if (fwrite(disk_info, 1, 256, f) != 256) goto err;
 
-    /* PCW disc specification, written into track 0 sector R=1's first
-     * 16 bytes. Matches the format DISCKIT3 writes for CF2 *except*
-     * byte 5 (reserved tracks) = 0 instead of 1. */
+    /* PCW disc specification, written into track 0 side 0 sector R=1.
+     * CF2 data: format=0, sided=0, OFF=0, BSH=3 (1k blocks), 2 dir blocks
+     * CF2DD data: format=3, sided=1, OFF=0, BSH=4 (2k blocks), 4 dir blocks */
     uint8_t spec[16] = {
-        0x00,       /* format byte: PCW SS DD CF2 */
-        0x00,       /* sided: single-sided */
+        (uint8_t)(is_dd ? 0x03 : 0x00),  /* format byte */
+        (uint8_t)(is_dd ? 0x01 : 0x00),  /* sided (1 = double-sided alternating) */
         (uint8_t)TRACKS,
         (uint8_t)SPT,
         (uint8_t)N_CODE,
-        0x00,       /* reserved (system) tracks — DATA disk, no boot */
-        0x03,       /* BSH = 3 → block size 1024 */
-        0x02,       /* directory blocks */
+        0x00,                             /* reserved tracks */
+        (uint8_t)(is_dd ? 0x04 : 0x03),  /* BSH */
+        (uint8_t)(is_dd ? 0x04 : 0x02),  /* directory blocks */
         0x00, 0x00,
         0x2A,       /* GAP3 read/write */
         0x52,       /* GAP3 format */
         0x00, 0x00, 0x00, 0x00,
     };
 
-    /* Each track: Track-Info header + SPT × SEC_SIZE bytes of filler. */
     for (int t = 0; t < TRACKS; t++) {
-        uint8_t hdr[256];
-        memset(hdr, 0, 256);
-        memcpy(hdr, "Track-Info\r\n", 12);
-        hdr[0x10] = (uint8_t)t;
-        hdr[0x11] = 0;            /* side 0 */
-        hdr[0x12] = 0x02;         /* data rate = 250 kbps */
-        hdr[0x13] = 0x02;         /* recording mode = MFM */
-        hdr[0x14] = (uint8_t)N_CODE;
-        hdr[0x15] = (uint8_t)SPT;
-        hdr[0x16] = 0x4E;         /* GAP3 */
-        hdr[0x17] = 0xE5;         /* filler */
-        for (int i = 0; i < SPT; i++) {
-            uint8_t *si = hdr + 0x18 + i * 8;
-            si[0] = (uint8_t)t;             /* C = physical track */
-            si[1] = 0;                       /* H */
-            si[2] = SKEW[i];                 /* R */
-            si[3] = (uint8_t)N_CODE;
-            si[4] = 0;                       /* ST1 */
-            si[5] = 0;                       /* ST2 */
-            si[6] = (uint8_t)(SEC_SIZE & 0xFF);
-            si[7] = (uint8_t)((SEC_SIZE >> 8) & 0xFF);
-        }
-        if (fwrite(hdr, 1, 256, f) != 256) goto err;
+        for (int side = 0; side < SIDES; side++) {
+            uint8_t hdr[256];
+            memset(hdr, 0, 256);
+            memcpy(hdr, "Track-Info\r\n", 12);
+            hdr[0x10] = (uint8_t)t;
+            hdr[0x11] = (uint8_t)side;
+            hdr[0x12] = 0x02;         /* data rate = 250 kbps */
+            hdr[0x13] = 0x02;         /* recording mode = MFM */
+            hdr[0x14] = (uint8_t)N_CODE;
+            hdr[0x15] = (uint8_t)SPT;
+            hdr[0x16] = 0x4E;         /* GAP3 */
+            hdr[0x17] = 0xE5;         /* filler */
+            for (int i = 0; i < SPT; i++) {
+                uint8_t *si = hdr + 0x18 + i * 8;
+                si[0] = (uint8_t)t;
+                si[1] = (uint8_t)side;
+                si[2] = SKEW[i];
+                si[3] = (uint8_t)N_CODE;
+                si[4] = 0;
+                si[5] = 0;
+                si[6] = (uint8_t)(SEC_SIZE & 0xFF);
+                si[7] = (uint8_t)((SEC_SIZE >> 8) & 0xFF);
+            }
+            if (fwrite(hdr, 1, 256, f) != 256) goto err;
 
-        /* Sector data, in record order (R=1, R=6, R=2, ...). The
-         * spec sector (track 0 R=1, which is record 0) gets the
-         * 16-byte spec then fills with 0xE5; all other sectors are
-         * pure filler. */
-        for (int i = 0; i < SPT; i++) {
-            uint8_t sec[SEC_SIZE];
-            memset(sec, 0xE5, SEC_SIZE);
-            if (t == 0 && SKEW[i] == 1)
-                memcpy(sec, spec, sizeof(spec));
-            if (fwrite(sec, 1, SEC_SIZE, f) != SEC_SIZE) goto err;
+            for (int i = 0; i < SPT; i++) {
+                uint8_t sec[SEC_SIZE];
+                memset(sec, 0xE5, SEC_SIZE);
+                if (t == 0 && side == 0 && SKEW[i] == 1)
+                    memcpy(sec, spec, sizeof(spec));
+                if (fwrite(sec, 1, SEC_SIZE, f) != SEC_SIZE) goto err;
+            }
         }
     }
 

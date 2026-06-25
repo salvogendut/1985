@@ -260,8 +260,8 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
             break;
         case OV_MEDIA:
             switch (row) {
-                case 0: snprintf(label, lsz, "Drive A"); snprintf(val, vsz, "%s", cfg->drive_a[0] ? cfg->drive_a : "(empty — N for new blank)"); break;
-                case 1: snprintf(label, lsz, "Drive B"); snprintf(val, vsz, "%s", cfg->drive_b[0] ? cfg->drive_b : "(empty — N for new blank)"); break;
+                case 0: snprintf(label, lsz, "Drive A"); snprintf(val, vsz, "%s", cfg->drive_a[0] ? cfg->drive_a : "(empty — N=new CF2 blank)"); break;
+                case 1: snprintf(label, lsz, "Drive B"); snprintf(val, vsz, "%s", cfg->drive_b[0] ? cfg->drive_b : "(empty — N=new CF2DD, Shift+N=CF2)"); break;
             }
             break;
         case OV_EXTENSIONS:
@@ -383,10 +383,11 @@ static void open_disk_dialog(Overlay *ov, int drive) {
                            filters, 2, NULL, false);
 }
 
-static void open_disk_new_dialog(Overlay *ov, int drive) {
-    ov->dialog_kind  = DIALOG_DISK_NEW;
-    ov->dialog_drive = drive;
-    ov->dialog_ready = false;
+static void open_disk_new_dialog(Overlay *ov, int drive, DiskType type) {
+    ov->dialog_kind      = DIALOG_DISK_NEW;
+    ov->dialog_drive     = drive;
+    ov->dialog_disk_type = type;
+    ov->dialog_ready     = false;
     static const SDL_DialogFileFilter filters[] = {
         { "DSK images", "dsk;DSK" },
         { "All files",  "*"       },
@@ -935,8 +936,15 @@ bool overlay_handle_event(Overlay *ov, SDL_Event *ev) {
                 eject_disk(ov, ov->row);
             break;
         case SDLK_N:
-            if (ov->section == OV_MEDIA && (ov->row == 0 || ov->row == 1))
-                open_disk_new_dialog(ov, ov->row);
+            if (ov->section == OV_MEDIA && (ov->row == 0 || ov->row == 1)) {
+                /* Default format by drive slot: drive A = CF2 (180k SS),
+                 * drive B = CF2DD (720k DS). Shift+N inverts the choice
+                 * so the user can still create the other format. */
+                bool shift = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
+                DiskType t = (ov->row == 1) ? DISK_TYPE_CF2DD : DISK_TYPE_CF2;
+                if (shift) t = (t == DISK_TYPE_CF2) ? DISK_TYPE_CF2DD : DISK_TYPE_CF2;
+                open_disk_new_dialog(ov, ov->row, t);
+            }
             break;
     }
     return true;
@@ -1171,7 +1179,7 @@ void overlay_tick(Overlay *ov) {
                        ? ov->cfg->drive_a : ov->cfg->drive_b;
             Disk *d = &ov->pcw->fdc.drive[ov->dialog_drive];
             if (d->dirty && slot[0]) disk_save(d, slot);
-            if (disk_create_blank(ov->dialog_path) == 0) {
+            if (disk_create_blank(ov->dialog_path, ov->dialog_disk_type) == 0) {
                 snprintf(slot,
                          ov->dialog_drive == 0
                              ? sizeof(ov->cfg->drive_a)
