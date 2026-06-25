@@ -29,10 +29,22 @@ typedef enum {
     VIDEO_EGA,       /* 4 bpp, 180×256 quadrupled, 16-colour palette  */
 } VideoMode;
 
+/* Real PCWs shipped as separate regional models. UK / EU 8256/8512/9512
+ * are PAL — 50 Hz frame, full 256 visible lines. US PcW10 / PcW256-NA /
+ * PCW9512N are NTSC — 60 Hz frame, top 200 lines visible, F8 read bit 4
+ * set to 1 (per Seasip §4.1). The 300 Hz interrupt timer is independent
+ * of frame rate on real hardware; only frame cadence and the visible
+ * window differ. */
+typedef enum {
+    REGION_PAL = 0,
+    REGION_NTSC,
+} Region;
+
 typedef struct {
     /* [machine] */
     PcwModel model;          /* default PCW_MODEL_8256 */
     int      memory_kb;      /* 256 / 512 / 2048; default 256 */
+    Region   region;         /* default REGION_PAL */
 
     /* [storage] */
     char     drive_a[PATH_MAX];

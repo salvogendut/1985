@@ -36,14 +36,15 @@ bool asic_timer_tick(Asic *a) {
      * the interrupt counter, saturating at 0x0F, and asserts /INT.
      *
      * Use the tick to drive a coarse flyback signal too: 6 ticks per
-     * 50 Hz frame, flyback HIGH only on the LAST tick (≈17 % duty —
-     * still too long for a real CRT retrace but much closer to the
-     * "briefly high during vertical retrace" model than the previous
-     * 50 % toggle, and enough for firmware timing loops that watch
-     * for the rising edge of F8 bit 6). */
+     * PAL frame (50 Hz × 6 = 300), 5 ticks per NTSC frame (60 Hz × 5
+     * = 300). flyback HIGH only on the LAST tick — ≈17 % (PAL) or
+     * 20 % (NTSC) duty. Still too long for a real CRT retrace but
+     * close enough for firmware timing loops that watch for the
+     * rising edge of F8 bit 6. */
     if (a->interrupt_counter < 0x0F) a->interrupt_counter++;
-    a->flyback_tick = (a->flyback_tick + 1) % 6;
-    a->flyback = (a->flyback_tick == 5);
+    int ticks_per_frame = a->refresh_60hz ? 5 : 6;
+    a->flyback_tick = (a->flyback_tick + 1) % ticks_per_frame;
+    a->flyback = (a->flyback_tick == ticks_per_frame - 1);
     return true;
 }
 
@@ -88,6 +89,7 @@ static u8 sys_status(const Asic *a) {
      * it implicitly by draining the FDC result phase (which causes the
      * FDC to drop its IRQ line). */
     u8 v = (a->interrupt_counter & 0x0F);
+    if (a->refresh_60hz)                  v |= 0x10;  /* Seasip §4.1 */
     if (a->flyback)                       v |= 0x40;
     if (a->fdc && a->fdc->irq)            v |= 0x20;
     return v;

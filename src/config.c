@@ -142,6 +142,18 @@ static PcwModel parse_model(const char *s, PcwModel fallback) {
     return fallback;
 }
 
+static const char *region_to_str(Region r) {
+    return r == REGION_NTSC ? "ntsc" : "pal";
+}
+
+static Region parse_region(const char *s, Region fallback) {
+    if (!s) return fallback;
+    if (strcasecmp(s, "pal")  == 0) return REGION_PAL;
+    if (strcasecmp(s, "ntsc") == 0) return REGION_NTSC;
+    fprintf(stderr, "config: unknown region '%s' — using default\n", s);
+    return fallback;
+}
+
 static bool parse_bool(const char *s, bool fallback) {
     if (!s) return fallback;
     if (strcasecmp(s, "true")  == 0 || strcmp(s, "1") == 0) return true;
@@ -179,6 +191,7 @@ void config_defaults(Config *c) {
     memset(c, 0, sizeof(*c));
     c->model                = PCW_MODEL_8256;
     c->memory_kb            = 256;
+    c->region               = REGION_PAL;
     c->scale                = 1;
     c->fullscreen           = false;
     c->fullscreen_smoothing = true;
@@ -225,6 +238,7 @@ void config_load(Config *c, const char *path) {
 
         if      (strcmp(k, "model")                == 0) c->model = parse_model(v, c->model);
         else if (strcmp(k, "memory_kb")            == 0) c->memory_kb = atoi(v);
+        else if (strcmp(k, "region")               == 0) c->region = parse_region(v, c->region);
         else if (strcmp(k, "drive_a")              == 0) snprintf(c->drive_a, sizeof(c->drive_a), "%s", v);
         else if (strcmp(k, "drive_b")              == 0) snprintf(c->drive_b, sizeof(c->drive_b), "%s", v);
         else if (strcmp(k, "scale")                == 0) c->scale = atoi(v);
@@ -293,7 +307,8 @@ int config_save(const Config *c) {
 
     fprintf(f, "[machine]\n");
     fprintf(f, "model = %s\n", model_to_str(c->model));
-    fprintf(f, "memory_kb = %d\n\n", c->memory_kb);
+    fprintf(f, "memory_kb = %d\n", c->memory_kb);
+    fprintf(f, "region = %s\n\n", region_to_str(c->region));
 
     fprintf(f, "[storage]\n");
     fprintf(f, "drive_a = %s\n", c->drive_a);

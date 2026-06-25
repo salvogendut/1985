@@ -6,6 +6,8 @@
 [machine]
 model = 8256
 memory_kb = 256
+# pal (50 Hz, 256 lines) / ntsc (60 Hz, top 200 lines, F8 bit 4 set)
+region = pal
 
 [storage]
 drive_a =

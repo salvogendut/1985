@@ -52,8 +52,20 @@ void roller_render(struct Mem *m, struct Asic *a, struct Display *d) {
     int base    = roller_base_addr(a->roller_base) & 0x3FFFF;
     int scroll  = a->scroll_y;
     int invert  = a->inverse_video ? 1 : 0;
+    /* Seasip §4.1: NTSC PCWs only display the top 200 lines; the rest
+     * of the frame falls in vertical blanking. We render the rest as
+     * background so the bottom strip is visibly off, not garbage. */
+    int visible_rows = a->refresh_60hz ? 200 : SCREEN_ROWS;
 
     for (int y = 0; y < SCREEN_ROWS; y++) {
+        if (y >= visible_rows) {
+            for (int col = 0; col < SCREEN_COLS; col++) {
+                int xbase = col * 8;
+                for (int b = 0; b < 8; b++)
+                    display_put_pixel(d, xbase + b, y, false);
+            }
+            continue;
+        }
         int idx = (y + scroll) & 0xFF;
         int tbl_off = (base + idx * 2) & 0x3FFFF;
 
