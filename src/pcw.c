@@ -561,21 +561,82 @@ void pcw_frame(PCW *pcw) {
             }
             /* BIOS jumpblock trace: CP/M+ BIOS jumpblock lives in the
              * high common area. Catch CALL/JP instructions whose
-             * immediate destination is in the FCxx..FFxx range. */
+             * immediate destination is in the FCxx..FFxx range, and
+             * mirror their returns by remembering (ret_pc, ret_sp)
+             * for every unconditional CALL and matching when the
+             * CPU lands back at that PC with SP+2 (RET semantics).
+             * Logs A on return so we can see which BIOS sub-call
+             * introduces a non-zero result code (drive-B SELECT
+             * investigation — see project_drive_b_write_bug memory). */
             {
+                #define BIOS_RET_RING 64
+                static struct {
+                    u16 ret_pc;
+                    u16 target;
+                    u16 ret_sp;
+                    bool used;
+                } bios_ret_ring[BIOS_RET_RING];
+
+                /* Match returns first (do this every step before any
+                 * new CALL pushes, so a CALL-then-immediate-RET
+                 * doesn't self-match). */
+                for (int i = 0; i < BIOS_RET_RING; i++) {
+                    if (!bios_ret_ring[i].used) continue;
+                    if (pcw->cpu.pc == bios_ret_ring[i].ret_pc &&
+                        pcw->cpu.sp == (u16)(bios_ret_ring[i].ret_sp + 2)) {
+                        fprintf(stderr,
+                            "bios return tgt=%04X -> ret_pc=%04X A=%02X HL=%04X (C=%02X BC=%04X DE=%04X)\n",
+                            bios_ret_ring[i].target, bios_ret_ring[i].ret_pc,
+                            (u8)(pcw->cpu.af >> 8), pcw->cpu.hl,
+                            pcw->cpu.c, pcw->cpu.bc, pcw->cpu.de);
+                        bios_ret_ring[i].used = false;
+                    }
+                }
+
                 u8 op = mem_read(&pcw->mem, pcw->cpu.pc);
                 if (op == 0xCD || op == 0xC3 || op == 0xC4 || op == 0xCC
                     || op == 0xD4 || op == 0xDC || op == 0xE4 || op == 0xEC
                     || op == 0xF4 || op == 0xFC) {
                     u16 tgt = mem_read(&pcw->mem, (u16)(pcw->cpu.pc+1))
                             | (mem_read(&pcw->mem, (u16)(pcw->cpu.pc+2)) << 8);
-                    if (tgt >= 0xFC00) {
+                    /* Trap CALLs to the BIOS jumptable AND to known
+                     * XBIOS working regions (routine_4a, routine_4a20,
+                     * b8_coro, fg_hot, seldsk_target, seldsk_bc — see
+                     * commit 2f1a822 for context). This catches the
+                     * internal CALL chains that the JP F8D9->FC51 ->
+                     * JP FD2D path delegates to. */
+                    bool trap = (tgt >= 0xFC00) ||
+                                (tgt >= 0x4960 && tgt <  0x4AE0) ||
+                                (tgt >= 0x49D0 && tgt <  0x4A60) ||
+                                (tgt >= 0x4D00 && tgt <  0x4E50) ||
+                                (tgt >= 0x5170 && tgt <  0x51B0) ||
+                                (tgt >= 0x9A00 && tgt <  0x9B00) ||
+                                (tgt >= 0xBB80 && tgt <  0xBC80);
+                    if (trap) {
                         static u16 last_pc = 0; static u16 last_tgt = 0;
                         if (pcw->cpu.pc != last_pc || tgt != last_tgt) {
                             fprintf(stderr, "bios call op=%02X pc=%04X -> %04X (C=%02X HL=%04X DE=%04X BC=%04X)\n",
                                     op, pcw->cpu.pc, tgt,
                                     pcw->cpu.c, pcw->cpu.hl, pcw->cpu.de, pcw->cpu.bc);
                             last_pc = pcw->cpu.pc; last_tgt = tgt;
+                        }
+                        /* Only unconditional CALL (CD) pushes a return PC
+                         * reliably. cc CALLs (C4/CC/...) may not push if
+                         * the condition is false; JP (C3) never pushes.
+                         * We accept the simplification — most XBIOS calls
+                         * are unconditional CD. */
+                        if (op == 0xCD) {
+                            for (int i = 0; i < BIOS_RET_RING; i++) {
+                                if (bios_ret_ring[i].used) continue;
+                                bios_ret_ring[i].used   = true;
+                                bios_ret_ring[i].ret_pc = (u16)(pcw->cpu.pc + 3);
+                                bios_ret_ring[i].target = tgt;
+                                /* SP recorded BEFORE the CALL executes;
+                                 * RET will pop and SP will become
+                                 * (this) + 2. */
+                                bios_ret_ring[i].ret_sp = (u16)(pcw->cpu.sp - 2);
+                                break;
+                            }
                         }
                     }
                 }
