@@ -84,7 +84,7 @@ static MatrixPos sdl_to_matrix(SDL_Scancode s) {
         case SDL_SCANCODE_END:          return (MatrixPos){10, 2};
         case SDL_SCANCODE_PAGEUP:       return (MatrixPos){0, 3};
         case SDL_SCANCODE_PAGEDOWN:     return (MatrixPos){1, 4};
-        case SDL_SCANCODE_CAPSLOCK:     return (MatrixPos){10, 5};
+        case SDL_SCANCODE_CAPSLOCK:     return (MatrixPos){8, 6};
         case SDL_SCANCODE_PRINTSCREEN:  return (MatrixPos){1, 1};   /* PTR */
 
         /* Numeric keypad — Joyce mapping. The PCW's keypad doubles as
@@ -148,6 +148,14 @@ void kbd_init(Keyboard *k) {
 
 u8 kbd_matrix_byte(Keyboard *k, u8 row) {
     if (row >= KBD_ROWS) return 0;
+    if (row == 13) {
+        /* Seasip Joyce §10.2: 0x3FFD bit 7 = 0 if LK2 jumper present,
+         * 1 if not. We don't model the motherboard links, so report
+         * "absent" (= 1) — which is also the factory default on a
+         * stock PCW. Bit 6 (Shift Lock LED) is left to whatever the
+         * MCU has placed in the row; we don't track LED state. */
+        return (u8)(k->row[13] | 0x80);
+    }
     if (row == 15) {
         u8 v = k->row[15] & 0x3F;
         if (k->ticker & 1) v |= 0x80;
