@@ -332,15 +332,13 @@ static void finish_read_data(Fdc *f) {
     u8 R   = f->cmd_buf[4];
     u8 N   = f->cmd_buf[5];
     u8 EOT = f->cmd_buf[6];
-    /* PCW CP/M+ BIOS expects the C++/R=1 end-of-track behaviour
-     * (not lib765's R++/no-wrap) — it uses the result-phase C to
-     * decide whether to advance the head to a new track. */
-    if (R == EOT) {
-        R = 1;
-        C++;
-    } else {
-        R++;
-    }
+    /* uPD765A datasheet (MT=0): R becomes EOT+1, C/H/N unchanged.
+     * lib765 (Joyce) does the same. We previously did C++, R=1 on
+     * R==EOT — but PCW XBIOS treats a mismatch between the result C
+     * and the commanded C as "disc has been changed" (see seasip
+     * Cpm/xbios.html), which kills writes after the first directory
+     * read. Keep C as commanded. */
+    R++;
     push_rw_result(f, build_st0(f, ST0_IC_NORMAL), 0, 0, C, H, R, N);
 }
 
@@ -413,7 +411,11 @@ static void finish_write_data(Fdc *f) {
     /* Same R-increment semantics as finish_read_data — see comment there. */
     u8 C = f->cmd_buf[2], H = f->cmd_buf[3];
     u8 R = f->cmd_buf[4], N = f->cmd_buf[5], EOT = f->cmd_buf[6];
-    if (R == EOT) { R = 1; C++; } else { R++; }
+    /* Same end-of-track semantics as finish_read_data — R becomes
+     * EOT+1, C unchanged. The result C must equal commanded C or
+     * PCW XBIOS treats the disc as having been changed and refuses
+     * subsequent writes. */
+    R++;
     push_rw_result(f, build_st0(f, ST0_IC_NORMAL), 0, 0, C, H, R, N);
 }
 
