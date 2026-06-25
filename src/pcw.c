@@ -589,6 +589,47 @@ void pcw_frame(PCW *pcw) {
                             bios_ret_ring[i].target, bios_ret_ring[i].ret_pc,
                             (u8)(pcw->cpu.af >> 8), pcw->cpu.hl,
                             pcw->cpu.c, pcw->cpu.bc, pcw->cpu.de);
+                        /* SELDSK (FC1B) returns HL = DPH pointer. Dump
+                         * 24 bytes so we can compare the per-drive DPH
+                         * (XLT, scratch, DPB, CSV, ALV, DIRBCB, DTABCB,
+                         * HASH, HBANK) byte-for-byte between drives A
+                         * and B and see which field SELDSK B initialises
+                         * differently. See project_drive_b_write_bug. */
+                        if (bios_ret_ring[i].target == 0xFC1B && pcw->cpu.hl) {
+                            u16 dph = pcw->cpu.hl;
+                            fprintf(stderr, "  DPH@%04X:", dph);
+                            for (int b = 0; b < 24; b++)
+                                fprintf(stderr, " %02X", mem_read(&pcw->mem, (u16)(dph + b)));
+                            fputc('\n', stderr);
+                            /* Also dump the XLT (TRANS) table — first 16
+                             * bytes — if it points anywhere. XLT is at
+                             * DPH offset 0..1, little-endian. */
+                            u16 xlt = mem_read(&pcw->mem, dph)
+                                    | (mem_read(&pcw->mem, (u16)(dph+1)) << 8);
+                            if (xlt) {
+                                fprintf(stderr, "  XLT@%04X:", xlt);
+                                for (int b = 0; b < 16; b++)
+                                    fprintf(stderr, " %02X", mem_read(&pcw->mem, (u16)(xlt + b)));
+                                fputc('\n', stderr);
+                            } else {
+                                fprintf(stderr, "  XLT=0000 (identity translation)\n");
+                            }
+                            /* CP/M 3 DPH layout: XLT(2) + scratch(9) +
+                             * mflag(1) + DPB(2) + CSV(2) + ALV(2) +
+                             * DIRBCB(2) + DTABCB(2) + HASH(2) + HBANK(1)
+                             * = 25 bytes. DPB pointer is at offset 12. */
+                            u16 dpb = mem_read(&pcw->mem, (u16)(dph+12))
+                                    | (mem_read(&pcw->mem, (u16)(dph+13)) << 8);
+                            if (dpb) {
+                                fprintf(stderr, "  DPB@%04X:", dpb);
+                                /* DPB is 17 bytes: SPT(2), BSH(1), BLM(1),
+                                 * EXM(1), DSM(2), DRM(2), AL0(1), AL1(1),
+                                 * CKS(2), OFF(2), PSH(1), PHM(1). */
+                                for (int b = 0; b < 17; b++)
+                                    fprintf(stderr, " %02X", mem_read(&pcw->mem, (u16)(dpb + b)));
+                                fputc('\n', stderr);
+                            }
+                        }
                         bios_ret_ring[i].used = false;
                     }
                 }
