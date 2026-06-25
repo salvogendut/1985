@@ -292,15 +292,19 @@ int disk_create_blank(const char *path, DiskType type) {
     if (fwrite(disk_info, 1, 256, f) != 256) goto err;
 
     /* PCW disc specification, written into track 0 side 0 sector R=1.
-     * CF2 data: format=0, sided=0, OFF=0, BSH=3 (1k blocks), 2 dir blocks
-     * CF2DD data: format=3, sided=1, OFF=0, BSH=4 (2k blocks), 4 dir blocks */
+     * Track 0 is RESERVED (OFF=1) so the directory does not overlap the
+     * spec sector — matches every real PCW data disk and the boot-disk
+     * format. With OFF=0 the dir's first sector lands on top of the spec
+     * and BDOS aborts MAKE FILE on a fresh blank (verified with PIP).
+     * CF2 data: format=0, sided=0, OFF=1, BSH=3 (1k blocks), 2 dir blocks
+     * CF2DD data: format=3, sided=1, OFF=1, BSH=4 (2k blocks), 4 dir blocks */
     uint8_t spec[16] = {
         (uint8_t)(is_dd ? 0x03 : 0x00),  /* format byte */
         (uint8_t)(is_dd ? 0x01 : 0x00),  /* sided (1 = double-sided alternating) */
         (uint8_t)TRACKS,
         (uint8_t)SPT,
         (uint8_t)N_CODE,
-        0x00,                             /* reserved tracks */
+        0x01,                             /* reserved tracks (skip track 0) */
         (uint8_t)(is_dd ? 0x04 : 0x03),  /* BSH */
         (uint8_t)(is_dd ? 0x04 : 0x02),  /* directory blocks */
         0x00, 0x00,
