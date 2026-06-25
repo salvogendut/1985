@@ -4,8 +4,13 @@
 
 u32 g_after_open_count = 0;
 
-/* 4 MHz Z80, 50 Hz frame → 80,000 T-states per frame. */
-#define CYCLES_PER_FRAME  80000
+/* 4 MHz Z80. Frame rate depends on region: PAL/50 Hz → 80,000 T-states
+ * per frame, NTSC/60 Hz → 66,667 (4_000_000 / 60). The 300 Hz timer is
+ * fixed by hardware on real PCWs, so CYCLES_PER_TICK stays constant
+ * (= 4_000_000 / 300 = 13,333) and the per-frame tick count drops from
+ * 6 (PAL) to 5 (NTSC). */
+#define CYCLES_PER_FRAME_PAL   80000
+#define CYCLES_PER_FRAME_NTSC  66667
 
 static u8 bus_mem_read(void *ctx, u16 addr) {
     return mem_read(&((PCW *)ctx)->mem, addr);
@@ -308,8 +313,9 @@ void pcw_reset(PCW *pcw) {
 
 /* 4 MHz / 300 Hz ≈ 13_333 cycles per timer tick. The PCW asserts /INT
  * 300 times per second from a periodic timer (MAME pcw.cpp:1297); the
- * BIOS polls the F8 interrupt counter to schedule its per-frame work. */
-#define CYCLES_PER_TICK   (CYCLES_PER_FRAME / 6)
+ * BIOS polls the F8 interrupt counter to schedule its per-frame work.
+ * Constant across PAL/NTSC — the timer is independent of frame rate. */
+#define CYCLES_PER_TICK   13333
 
 void pcw_frame(PCW *pcw) {
     /* Drain the serial backend(s) once per emulated frame — same
@@ -327,8 +333,11 @@ void pcw_frame(PCW *pcw) {
 
     int cycles = 0;
     int next_tick = CYCLES_PER_TICK;
+    int cycles_per_frame = pcw->asic.refresh_60hz
+                         ? CYCLES_PER_FRAME_NTSC
+                         : CYCLES_PER_FRAME_PAL;
 
-    while (cycles < CYCLES_PER_FRAME && !stop_early) {
+    while (cycles < cycles_per_frame && !stop_early) {
         if (pcw->cpu.halted
             && !pcw->cpu.pending_irq
             && !pcw->cpu.pending_nmi) {

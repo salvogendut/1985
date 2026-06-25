@@ -402,6 +402,11 @@ static void set_mouse_capture(Display *disp, PcwMouse *mouse,
  * pcw_cold_boot) so a cold reset puts the machine into the exact same
  * shape as a fresh process launch. */
 static void apply_runtime_config(PCW *pcw, const Config *cfg) {
+    /* Region (PAL/NTSC) drives frame cadence, ticks-per-frame, and
+     * the visible-window clamp. Sampled at frame-loop entry, so the
+     * caller will normally have cold-booted before getting here. */
+    pcw->asic.refresh_60hz = (cfg->region == REGION_NTSC);
+
     printer_set_pdf_output_dir(&pcw->printer, cfg->ext_pdf_printer_dir);
     printer_set_pdf_enabled(&pcw->printer,
                             cfg->ext_pdf_printer && cfg->ext_pdf_printer_dir[0]);
@@ -620,7 +625,7 @@ int main(int argc, char **argv) {
                                 cfg.scale  = s;
                                 SDL_SetWindowSize(disp.win,
                                                   DISPLAY_LOGICAL_W * s,
-                                                  DISPLAY_LOGICAL_H * s);
+                                                  disp.logical_h * s);
                             }
                             break;
                         }
@@ -882,11 +887,11 @@ int main(int argc, char **argv) {
              * on top of it. Letterbox uses the smaller of the two axis
              * scales, and centres the content vertically. */
             float scale_x = (float)ww / (float)DISPLAY_LOGICAL_W;
-            float scale_y = (float)wh / (float)DISPLAY_LOGICAL_H;
+            float scale_y = (float)wh / (float)disp.logical_h;
             float scale   = scale_x < scale_y ? scale_x : scale_y;
-            float scaled_h = (float)DISPLAY_LOGICAL_H * scale;
+            float scaled_h = (float)disp.logical_h * scale;
             float letterbox_top = ((float)wh - scaled_h) * 0.5f;
-            float led_top = letterbox_top + (float)DISPLAY_SCREEN_H * scale;
+            float led_top = letterbox_top + (float)disp.screen_h * scale;
             float strip_y = led_top - strip_h;
             float text_y  = strip_y + 4.0f;
             SDL_FRect strip = { 0.0f, strip_y, (float)ww, strip_h };
@@ -906,7 +911,7 @@ int main(int argc, char **argv) {
             SDL_RenderDebugText(disp.renderer, keys_x, text_y, keys);
 
             SDL_SetRenderLogicalPresentation(disp.renderer,
-                                             DISPLAY_LOGICAL_W, DISPLAY_LOGICAL_H,
+                                             DISPLAY_LOGICAL_W, disp.logical_h,
                                              SDL_LOGICAL_PRESENTATION_LETTERBOX);
         }
 
@@ -930,7 +935,7 @@ int main(int argc, char **argv) {
             snprintf(buf, sizeof(buf), "DBG  %.1f fps", (double)fps_smooth);
             /* Sit just above the bottom status strip (16 px), in
              * logical coords (renderer uses LogicalPresentation). */
-            const float lh = (float)DISPLAY_LOGICAL_H;
+            const float lh = (float)disp.logical_h;
             const float strip_h = 16.0f;
             SDL_SetRenderDrawColor(disp.renderer, 0, 0, 0, 255);
             SDL_RenderDebugText(disp.renderer, 7.0f, lh - strip_h - 12.0f, buf);

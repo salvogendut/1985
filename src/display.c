@@ -92,6 +92,10 @@ int display_init(Display *d, const Config *cfg) {
     d->fullscreen = cfg->fullscreen;
     d->smoothing  = cfg->fullscreen_smoothing;
     d->tint_glow = cfg->tint_glow;
+    d->ntsc          = (cfg->region == REGION_NTSC);
+    d->visible_lines = d->ntsc ? DISPLAY_NTSC_LINES    : DISPLAY_PAL_LINES;
+    d->screen_h      = d->ntsc ? DISPLAY_NTSC_SCREEN_H : DISPLAY_PAL_SCREEN_H;
+    d->logical_h     = d->ntsc ? DISPLAY_NTSC_LOGICAL_H: DISPLAY_PAL_LOGICAL_H;
     display_set_monochrome(d, cfg->monochrome);
     display_set_video_mode(d, cfg->video_mode);
 
@@ -101,7 +105,7 @@ int display_init(Display *d, const Config *cfg) {
     }
 
     int win_w = DISPLAY_LOGICAL_W * d->scale;
-    int win_h = DISPLAY_LOGICAL_H * d->scale;
+    int win_h = d->logical_h     * d->scale;
 
     SDL_WindowFlags wf = SDL_WINDOW_RESIZABLE;
     if (d->fullscreen) wf |= SDL_WINDOW_FULLSCREEN;
@@ -123,7 +127,7 @@ int display_init(Display *d, const Config *cfg) {
         return -1;
     }
     SDL_SetRenderLogicalPresentation(d->renderer,
-                                     DISPLAY_LOGICAL_W, DISPLAY_LOGICAL_H,
+                                     DISPLAY_LOGICAL_W, d->logical_h,
                                      SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
     d->tex = SDL_CreateTexture(d->renderer, SDL_PIXELFORMAT_XRGB8888,
@@ -145,6 +149,23 @@ void display_set_smoothing(Display *d, bool smooth) {
     if (d->tex)
         SDL_SetTextureScaleMode(d->tex,
             smooth ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST);
+}
+
+void display_set_region(Display *d, Region region) {
+    bool ntsc = (region == REGION_NTSC);
+    if (d->ntsc == ntsc) return;
+    d->ntsc          = ntsc;
+    d->visible_lines = ntsc ? DISPLAY_NTSC_LINES    : DISPLAY_PAL_LINES;
+    d->screen_h      = ntsc ? DISPLAY_NTSC_SCREEN_H : DISPLAY_PAL_SCREEN_H;
+    d->logical_h     = ntsc ? DISPLAY_NTSC_LOGICAL_H: DISPLAY_PAL_LOGICAL_H;
+    if (d->renderer)
+        SDL_SetRenderLogicalPresentation(d->renderer,
+                                         DISPLAY_LOGICAL_W, d->logical_h,
+                                         SDL_LOGICAL_PRESENTATION_LETTERBOX);
+    if (d->win && !d->fullscreen)
+        SDL_SetWindowSize(d->win,
+                          DISPLAY_LOGICAL_W * d->scale,
+                          d->logical_h     * d->scale);
 }
 
 void display_quit(Display *d) {
@@ -173,11 +194,16 @@ void display_draw_framebuffer(Display *d) {
     SDL_SetRenderDrawColor(d->renderer, 0, 0, 0, 255);
     SDL_RenderClear(d->renderer);
 
-    SDL_FRect screen = { 0.0f, 0.0f,
-                         (float)DISPLAY_LOGICAL_W, (float)DISPLAY_SCREEN_H };
-    SDL_RenderTexture(d->renderer, d->tex, NULL, &screen);
+    /* NTSC: sample only the top 200 framebuffer rows. PAL: full 256.
+     * The dst rect is the shrunk image area; SDL letterboxes the
+     * whole window cleanly because logical_h was set to match. */
+    SDL_FRect src = { 0.0f, 0.0f,
+                      (float)DISPLAY_W, (float)d->visible_lines };
+    SDL_FRect dst = { 0.0f, 0.0f,
+                      (float)DISPLAY_LOGICAL_W, (float)d->screen_h };
+    SDL_RenderTexture(d->renderer, d->tex, &src, &dst);
 
-    leds_render(d->renderer, 0, DISPLAY_SCREEN_H,
+    leds_render(d->renderer, 0, d->screen_h,
                 DISPLAY_LOGICAL_W, DISPLAY_LED_BAR_H);
 }
 

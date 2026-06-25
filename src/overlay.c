@@ -44,6 +44,7 @@ typedef enum {
     TINK_TINT,
     TINK_TINT_MODE,
     TINK_VIDEO_MODE,
+    TINK_REGION,
     TINK_MOUSE_TYPE,
     TINK_JOYSTICK_TYPE,
     TINK_PRINTER_MODE,
@@ -195,6 +196,11 @@ static const char *video_str(VideoMode v) {
     }
 }
 
+static const char *region_str(Region r) {
+    return r == REGION_NTSC ? "NTSC (60 Hz, 200 lines)"
+                            : "PAL (50 Hz, 256 lines)";
+}
+
 static const char *sink_str(PrintSink s) {
     return (s == PRINT_SINK_REAL) ? "Real printer" : "PDF file";
 }
@@ -292,6 +298,7 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                 case TINK_TINT: snprintf(label, lsz, "Tint"); snprintf(val, vsz, "%s", mono_str(cfg->monochrome)); break;
                 case TINK_TINT_MODE: snprintf(label, lsz, "Tint mode"); snprintf(val, vsz, "%s", cfg->tint_glow ? "glow" : "normal"); break;
                 case TINK_VIDEO_MODE: snprintf(label, lsz, "Video mode"); snprintf(val, vsz, "%s", video_str(cfg->video_mode)); break;
+                case TINK_REGION: snprintf(label, lsz, "Region"); snprintf(val, vsz, "%s", region_str(cfg->region)); break;
                 case TINK_MOUSE_TYPE: snprintf(label, lsz, "Mouse type"); snprintf(val, vsz, "%s", mouse_type_str(cfg->mouse_type)); break;
                 case TINK_JOYSTICK_TYPE: snprintf(label, lsz, "Joystick type"); snprintf(val, vsz, "%s", joystick_type_str(cfg->joystick_type)); break;
                 case TINK_PRINTER_MODE: snprintf(label, lsz, "Printer mode"); snprintf(val, vsz, "%s", sink_str(cfg->ext_print_sink)); break;
@@ -569,6 +576,11 @@ static void activate(Overlay *ov) {
                     if (ov->disp) display_set_video_mode(ov->disp, c->video_mode);
                     ov->dirty = true;
                     break;
+                case TINK_REGION:
+                    c->region = (c->region == REGION_PAL)
+                              ? REGION_NTSC : REGION_PAL;
+                    ov->dirty = true;
+                    break;
                 case TINK_MOUSE_TYPE:
                     c->mouse_type =
                         (MouseType)(((int)c->mouse_type + 1)
@@ -684,12 +696,26 @@ static void close_overlay(Overlay *ov, bool save) {
                             * 0x9F, Cascade/Spectravideo 0xE0) and games
                             * latch the choice on first poll. */
                            || (ov->cfg->input_device         != ov->saved.input_device)
-                           || (ov->cfg->joystick_type        != ov->saved.joystick_type);
+                           || (ov->cfg->joystick_type        != ov->saved.joystick_type)
+                           /* Region (PAL/NTSC) changes the frame
+                            * cadence and visible-line count — both
+                            * are sampled at frame-loop entry, so a
+                            * warm reset would tear the next frame.
+                            * Boot ROMs probe F8 bit 4 to decide the
+                            * visible window too. */
+                           || (ov->cfg->region               != ov->saved.region);
         config_save(ov->cfg);
         ov->dirty = false;
         if (need_cold_boot && ov->pcw) {
             printer_shutdown(&ov->pcw->printer);
             pcw_cold_boot(ov->pcw, ov->cfg->model, ov->cfg->memory_kb);
+            /* Mirror region into the freshly-reset ASIC before the
+             * first new frame runs, so cycles_per_frame / ticks-per-
+             * frame are already correct on the first tick. Also
+             * resize the SDL window so the visible image area shrinks
+             * (NTSC) or grows (PAL) to match. */
+            ov->pcw->asic.refresh_60hz = (ov->cfg->region == REGION_NTSC);
+            if (ov->disp) display_set_region(ov->disp, ov->cfg->region);
             /* pcw_init zeroed the FDC — re-mount the disk images so
              * the machine boots from them just like at first launch. */
             if (ov->cfg->drive_a[0]) disk_load(&ov->pcw->fdc.drive[0], ov->cfg->drive_a);
@@ -981,7 +1007,7 @@ void overlay_render(Overlay *ov, SDL_Renderer *r) {
         int n = (int)(sizeof(rows) / sizeof(rows[0]));
 
         int ww = DISPLAY_LOGICAL_W;
-        int wh = DISPLAY_LOGICAL_H;
+        int wh = ov->disp ? ov->disp->logical_h : DISPLAY_LOGICAL_H;
         const int FONT_H = 8;
         int box_w = 520;
         int box_h = FONT_H + 12 + n * (FONT_H + 4) + 20;
@@ -1010,7 +1036,7 @@ void overlay_render(Overlay *ov, SDL_Renderer *r) {
      * buffer with a cursor and the available commands. */
     if (ov->state == OV_STATE_EDIT) {
         int ww = DISPLAY_LOGICAL_W;
-        int wh = DISPLAY_LOGICAL_H;
+        int wh = ov->disp ? ov->disp->logical_h : DISPLAY_LOGICAL_H;
         const int FONT_W = 8, FONT_H = 8;
         const char *title = "Serial PATH";
         const char *help  = "Enter=Save  Esc=Cancel  Del=Default";
@@ -1042,7 +1068,7 @@ void overlay_render(Overlay *ov, SDL_Renderer *r) {
     }
     if (ov->state == OV_STATE_EDIT_CONFIRM) {
         int ww = DISPLAY_LOGICAL_W;
-        int wh = DISPLAY_LOGICAL_H;
+        int wh = ov->disp ? ov->disp->logical_h : DISPLAY_LOGICAL_H;
         const int FONT_W = 8, FONT_H = 8;
         const char *line1 = "Save changes to Serial PATH?";
         const char *line2 = "Enter/Y = Save    Esc/N = Discard";
@@ -1071,7 +1097,7 @@ void overlay_render(Overlay *ov, SDL_Renderer *r) {
      * rather than the physical output. */
     if (ov->state == OV_STATE_CONFIRM) {
         int ww = DISPLAY_LOGICAL_W;
-        int wh = DISPLAY_LOGICAL_H;
+        int wh = ov->disp ? ov->disp->logical_h : DISPLAY_LOGICAL_H;
         /* SDL3 debug font cell is ~8 logical pixels wide / tall. */
         const int FONT_W = 8, FONT_H = 8;
         const char *line1 = "Save changes?";

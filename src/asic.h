@@ -46,7 +46,9 @@ typedef struct Asic {
     bool screen_enabled;    /* port 0xF7 bit 6 — video-control gate */
     bool inverse_video;     /* port 0xF7 bit 7 */
     bool flyback;           /* port 0xF8 read bit 6 — pulses high near end of frame */
-    int  flyback_tick;      /* 0..5 within current 50 Hz frame */
+    int  flyback_tick;      /* 0..5 (PAL) or 0..4 (NTSC) within current frame */
+    bool refresh_60hz;      /* false = PAL/50 Hz/256 lines, true = NTSC/60 Hz/200 lines
+                             * mirrors cfg.region; set from main/overlay after init */
     u8  interrupt_counter;  /* port 0xF8 read bits 0-3; cleared by F4-read */
     int fdc_irq_mode;       /* 0=ignore, 1=NMI, 2=IRQ */
     bool prev_fdc_irq;      /* previous FDC IRQ line state (debug/state only) */
