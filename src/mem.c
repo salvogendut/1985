@@ -42,9 +42,18 @@ void mem_bank_write(Mem *m, u8 port, u8 val) {
          * The PCW firmware only relies on the 0-7 bank range here. */
         u8 read_bank = (val >> 4) & 0x07;
         m->write_bank[slot] =  val       & 0x07;
-        /* F4 lock bit per slot, matching MAME pcw.cpp:295-318:
-         * slot 0 -> b6, slot 1 -> b4, slot 2 -> b5, slot 3 -> b7
-         * (systemed.net hardware.html: b7-b4 = &C000/&0000/&8000/&4000). */
+        /* F4 lock bit per slot:
+         *   slot 0 -> b6, slot 1 -> b4, slot 2 -> b5, slot 3 -> b7.
+         * Confirmed against three independent emulators:
+         *   MAME amstrad/pcw.cpp:295-318  (Batman / Opera-Soft regression
+         *                                  cited at pcw.cpp:992 — sets
+         *                                  m_bank_force = 0xF0 explicitly)
+         *   ZEsarUX machines/pcw.c:241-251
+         *   Joyce JoyceMemory.cxx:213-216
+         *
+         * The Seasip Joyce hardware PDF §3.2 lists an orderly {4,5,6,7}
+         * mapping (slot 0/1/2/3 → b4/b5/b6/b7) — but that contradicts the
+         * PDF author's own Joyce emulator. PDF table is a typo. */
         static const u8 force_bit[4] = { 6, 4, 5, 7 };
         if ((m->bank_force >> force_bit[slot]) & 1)
             read_bank = m->write_bank[slot];

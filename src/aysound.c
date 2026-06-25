@@ -93,11 +93,15 @@ static int ay_tick(AySound *a) {
     }
     int noise_out = (int)(a->noise_lfsr & 1);
 
-    /* Envelope: 32 steps. */
+    /* Envelope: 32 steps. AY-3-8912 datasheet ambiguity aside, MAME's
+     * authoritative model (sound/ay8910.cpp:643-665, `STEP_AY = 2`)
+     * gives 2 master cycles per envelope-counter step. We previously
+     * used 8, making envelopes run 4× too slow. (1984/src/psg.c has
+     * the same bug — fix there too if anyone cares about CPC envelopes.) */
     if (!a->env_hold) {
         u16 ep = (u16)((a->reg[12] << 8) | a->reg[11]);
         if (!ep) ep = 1;
-        if (++a->env_counter >= (u32)ep * 8) {
+        if (++a->env_counter >= (u32)ep * 2) {
             a->env_counter = 0;
             a->env_step++;
             if (a->env_step >= 32) {
