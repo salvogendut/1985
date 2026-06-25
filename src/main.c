@@ -658,6 +658,14 @@ int main(int argc, char **argv) {
                              * not a connection to whoever the guest had
                              * dialed before reset (#90). */
                             pcw.paused = false;
+                            /* Flush in-memory disk writes before the
+                             * cold boot discards the FDC's drive[]
+                             * structs. apply_runtime_config will
+                             * re-load the .dsk files afterwards. */
+                            if (pcw.fdc.drive[0].dirty && cfg.drive_a[0])
+                                disk_save(&pcw.fdc.drive[0], cfg.drive_a);
+                            if (pcw.fdc.drive[1].dirty && cfg.drive_b[0])
+                                disk_save(&pcw.fdc.drive[1], cfg.drive_b);
                             Serial saved_serial = pcw.serial;
                             perryfi_shutdown(&pcw.perryfi);
                             printer_shutdown(&pcw.printer);
@@ -972,6 +980,14 @@ int main(int argc, char **argv) {
         }
         frame++;
     }
+
+    /* Flush any in-memory disk writes (WRITE DATA / FORMAT TRACK)
+     * back to the host .dsk files before exit. dirty=false makes
+     * this a no-op for clean disks. */
+    if (pcw.fdc.drive[0].dirty && cfg.drive_a[0])
+        disk_save(&pcw.fdc.drive[0], cfg.drive_a);
+    if (pcw.fdc.drive[1].dirty && cfg.drive_b[0])
+        disk_save(&pcw.fdc.drive[1], cfg.drive_b);
 
     if (gc) gifcap_close(gc);
     set_mouse_capture(&disp, &pcw.mouse, &mouse_captured, false);

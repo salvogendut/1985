@@ -260,8 +260,8 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
             break;
         case OV_MEDIA:
             switch (row) {
-                case 0: snprintf(label, lsz, "Drive A"); snprintf(val, vsz, "%s", cfg->drive_a[0] ? cfg->drive_a : "(empty)"); break;
-                case 1: snprintf(label, lsz, "Drive B"); snprintf(val, vsz, "%s", cfg->drive_b[0] ? cfg->drive_b : "(empty)"); break;
+                case 0: snprintf(label, lsz, "Drive A"); snprintf(val, vsz, "%s", cfg->drive_a[0] ? cfg->drive_a : "(empty — N for new blank)"); break;
+                case 1: snprintf(label, lsz, "Drive B"); snprintf(val, vsz, "%s", cfg->drive_b[0] ? cfg->drive_b : "(empty — N for new blank)"); break;
             }
             break;
         case OV_EXTENSIONS:
@@ -383,6 +383,18 @@ static void open_disk_dialog(Overlay *ov, int drive) {
                            filters, 2, NULL, false);
 }
 
+static void open_disk_new_dialog(Overlay *ov, int drive) {
+    ov->dialog_kind  = DIALOG_DISK_NEW;
+    ov->dialog_drive = drive;
+    ov->dialog_ready = false;
+    static const SDL_DialogFileFilter filters[] = {
+        { "DSK images", "dsk;DSK" },
+        { "All files",  "*"       },
+    };
+    SDL_ShowSaveFileDialog(overlay_file_callback, ov, NULL,
+                           filters, 2, NULL);
+}
+
 static void open_snapshot_load_dialog(Overlay *ov) {
     ov->dialog_kind  = DIALOG_SNAPSHOT_LOAD;
     ov->dialog_drive = -1;
@@ -421,8 +433,12 @@ static void eject_disk(Overlay *ov, int drive) {
     Config *c = ov->cfg;
     char *slot = (drive == 0) ? c->drive_a : c->drive_b;
     if (slot[0] == 0) return;
+    /* Persist any pending in-memory writes back to the host file
+     * before throwing the in-RAM image away. */
+    Disk *d = &ov->pcw->fdc.drive[drive];
+    if (d->dirty) disk_save(d, slot);
     slot[0] = 0;
-    disk_eject(&ov->pcw->fdc.drive[drive]);
+    disk_eject(d);
     ov->dirty = true;
 }
 
@@ -707,6 +723,12 @@ static void close_overlay(Overlay *ov, bool save) {
         config_save(ov->cfg);
         ov->dirty = false;
         if (need_cold_boot && ov->pcw) {
+            /* Flush in-memory disk writes before pcw_cold_boot
+             * discards the FDC drive arrays. */
+            if (ov->pcw->fdc.drive[0].dirty && ov->cfg->drive_a[0])
+                disk_save(&ov->pcw->fdc.drive[0], ov->cfg->drive_a);
+            if (ov->pcw->fdc.drive[1].dirty && ov->cfg->drive_b[0])
+                disk_save(&ov->pcw->fdc.drive[1], ov->cfg->drive_b);
             printer_shutdown(&ov->pcw->printer);
             pcw_cold_boot(ov->pcw, ov->cfg->model, ov->cfg->memory_kb);
             /* Mirror region into the freshly-reset ASIC before the
@@ -911,6 +933,10 @@ bool overlay_handle_event(Overlay *ov, SDL_Event *ev) {
         case SDLK_BACKSPACE:
             if (ov->section == OV_MEDIA && (ov->row == 0 || ov->row == 1))
                 eject_disk(ov, ov->row);
+            break;
+        case SDLK_N:
+            if (ov->section == OV_MEDIA && (ov->row == 0 || ov->row == 1))
+                open_disk_new_dialog(ov, ov->row);
             break;
     }
     return true;
@@ -1126,11 +1152,34 @@ void overlay_tick(Overlay *ov) {
     ov->dialog_ready = false;
     switch (ov->dialog_kind) {
         case DIALOG_DISK: {
-            if (ov->dialog_drive == 0) snprintf(ov->cfg->drive_a, sizeof(ov->cfg->drive_a), "%s", ov->dialog_path);
-            else                       snprintf(ov->cfg->drive_b, sizeof(ov->cfg->drive_b), "%s", ov->dialog_path);
+            char *slot = ov->dialog_drive == 0
+                       ? ov->cfg->drive_a : ov->cfg->drive_b;
             Disk *d = &ov->pcw->fdc.drive[ov->dialog_drive];
+            /* If the user is swapping a disk that has unsaved writes,
+             * flush them to the old path before mounting the new file. */
+            if (d->dirty && slot[0]) disk_save(d, slot);
+            snprintf(slot,
+                     ov->dialog_drive == 0
+                         ? sizeof(ov->cfg->drive_a) : sizeof(ov->cfg->drive_b),
+                     "%s", ov->dialog_path);
             disk_load(d, ov->dialog_path);
             ov->dirty = true;
+            break;
+        }
+        case DIALOG_DISK_NEW: {
+            char *slot = ov->dialog_drive == 0
+                       ? ov->cfg->drive_a : ov->cfg->drive_b;
+            Disk *d = &ov->pcw->fdc.drive[ov->dialog_drive];
+            if (d->dirty && slot[0]) disk_save(d, slot);
+            if (disk_create_blank(ov->dialog_path) == 0) {
+                snprintf(slot,
+                         ov->dialog_drive == 0
+                             ? sizeof(ov->cfg->drive_a)
+                             : sizeof(ov->cfg->drive_b),
+                         "%s", ov->dialog_path);
+                disk_load(d, ov->dialog_path);
+                ov->dirty = true;
+            }
             break;
         }
         case DIALOG_SNAPSHOT_LOAD: snapshot_load(ov->pcw, ov->dialog_path); break;

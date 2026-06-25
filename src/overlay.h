@@ -25,6 +25,7 @@ typedef enum {
     DIALOG_SNAPSHOT_LOAD = 2,
     DIALOG_SNAPSHOT_SAVE = 3,
     DIALOG_PRINT_DIR     = 4,
+    DIALOG_DISK_NEW      = 5,   /* save dialog → disk_create_blank */
 } DialogKind;
 
 struct PCW;

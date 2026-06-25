@@ -37,6 +37,15 @@ void disk_eject(Disk *d);
 /* Returns 0 on success, -1 on error. */
 int  disk_load(Disk *d, const char *path);
 
+/* Serialize the in-memory disk to an EXTENDED CPC DSK file at `path`.
+ * Returns 0 on success, -1 on error. Clears Disk.dirty on success. */
+int  disk_save(Disk *d, const char *path);
+
+/* Create a freshly-formatted blank EXTENDED DSK file at `path` with
+ * 0 tracks (the guest will FORMAT TRACK to populate it). Returns 0
+ * on success, -1 on error. Does not modify any in-memory Disk. */
+int  disk_create_blank(const char *path);
+
 /* Find a sector by CHRN on the current track. Returns NULL if not found. */
 DiskSector *disk_find_sector(Disk *d, int side, uint8_t C, uint8_t H,
                              uint8_t R, uint8_t N);
