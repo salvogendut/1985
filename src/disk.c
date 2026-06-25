@@ -12,8 +12,10 @@ void disk_eject(Disk *d) {
         for (int s = 0; s < DISK_MAX_SIDES; s++)
             free(d->track[t][s].data);
     int cur_track = d->cur_track;
+    bool dd = d->is_dd_drive;
     memset(d, 0, sizeof(*d));
     d->cur_track = cur_track;   /* preserve head position across eject */
+    d->is_dd_drive = dd;        /* drive type is a hardware property, not media */
 }
 
 static int load_track(DiskTrack *tr, FILE *f, int track_size) {
@@ -374,7 +376,7 @@ DiskSector *disk_find_sector(Disk *d, int side, uint8_t C, uint8_t H,
      * disk's sector-ID C differs from the BIOS's CP/M-relative track
      * (e.g. data-format disks with non-zero reserved-track offsets). */
     if (!d->inserted || side >= d->sides) return NULL;
-    int t = d->cur_track;
+    int t = disk_media_track(d);
     if (t >= d->track_count) return NULL;
     DiskTrack *tr = &d->track[t][side];
     for (int i = 0; i < tr->sector_count; i++) {
