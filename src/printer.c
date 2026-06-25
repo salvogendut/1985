@@ -393,6 +393,14 @@ static void printer_obey_matrix_command(Printer *p, u8 port) {
              * as the trailer after every print burst, so swallow it
              * silently to keep diagnostic builds quiet. */
             return;
+        case 0xA1:
+            /* PDF §6.1.2: short head-move, no C0,00 terminator.
+             * cmd1 is the distance in ticks/12 (so the actual move
+             * is cmd1 * 12 ticks). CP/M only uses this for moves
+             * below 156 ticks (i.e. cmd1 < 13). Stays in the current
+             * direction; doesn't enter PRINTING mode. */
+            printer_move_head(p, (float)(cmd1 ? cmd1 : 256) * 12.0f);
+            return;
         case 0xA4:
             p->y += cmd1;
             printer_check_end_form(p);
@@ -425,7 +433,13 @@ static void printer_obey_matrix_command(Printer *p, u8 port) {
 
 u8 printer_read(Printer *p, u8 port) {
     if (!p->connected) {
-        if (port == 0xFC) return 0x01;
+        /* Seasip §6.1: FC returns a controller error number; F8 means
+         * "Normal operation", any other value triggers "No printer".
+         * With no controller attached the bus floats — real hardware
+         * reads 0xFF here. Returning 0x01 worked but mis-reported as
+         * "Printer RAM fault" rather than the natural absent-device
+         * signal. */
+        if (port == 0xFC) return 0xFF;
         return 0x21;    /* bail in + no printer */
     }
 
