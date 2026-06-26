@@ -164,6 +164,22 @@ static bool parse_bool(const char *s, bool fallback) {
 static const char *bool_to_str(bool b) { return b ? "true" : "false"; }
 
 static void default_path(char *out, size_t out_size) {
+#ifdef _WIN32
+    /* Windows: HOME is typically unset; use the canonical per-user
+     * roaming-config location at %APPDATA%\1985\1985.conf, falling
+     * back to %LOCALAPPDATA% and finally to %USERPROFILE% so we never
+     * end up writing the config next to the .exe (the previous
+     * fallback to "." was usually non-writable and didn't survive a
+     * reinstall — see #118). Win file APIs accept '/' alongside '\',
+     * so we keep the unix-style separator the rest of config.c uses. */
+    const char *base = getenv("APPDATA");
+    if (!base || !base[0]) base = getenv("LOCALAPPDATA");
+    if (!base || !base[0]) base = getenv("USERPROFILE");
+    if (base && base[0]) {
+        snprintf(out, out_size, "%s/1985/1985.conf", base);
+        return;
+    }
+#endif
     const char *home = getenv("HOME");
     if (!home) home = ".";
     snprintf(out, out_size, "%s/.config/1985/1985.conf", home);
