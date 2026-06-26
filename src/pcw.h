@@ -12,6 +12,7 @@
 #include "cps.h"
 #include "perryfi.h"
 #include "aysound.h"
+#include "beeper.h"
 #include "pcwmouse.h"
 
 /*
@@ -47,6 +48,7 @@ typedef struct PCW {
     Cps        cps;
     Perryfi    perryfi;
     AySound    ay;
+    Beeper     beeper;            /* PCW built-in 3.75 kHz beeper (F8 cmd 0x0B/0x0C) */
     PcwMouse   mouse;
     Joystick   joystick;
 

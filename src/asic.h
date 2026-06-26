@@ -33,6 +33,7 @@
 struct Mem;
 struct Bootstrap;
 struct Fdc;
+struct Beeper;
 
 typedef struct Asic {
     u8  roller_base;        /* port 0xF5 */
@@ -56,9 +57,11 @@ typedef struct Asic {
 
     struct Bootstrap *bootstrap;
     struct Fdc       *fdc;
+    struct Beeper    *beeper;       /* PCW internal beeper — gated by F8 cmd 0x0B/0x0C */
 } Asic;
 
-void asic_init(Asic *a, struct Bootstrap *boot, struct Fdc *fdc);
+void asic_init(Asic *a, struct Bootstrap *boot, struct Fdc *fdc,
+               struct Beeper *beeper);
 void asic_reset(Asic *a);
 
 /* Called once per emulated frame (50 Hz) — toggles flyback bit. */
