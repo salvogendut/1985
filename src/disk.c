@@ -301,14 +301,7 @@ int disk_create_blank(const char *path, DiskType type) {
      * CF2DD data: format=3, sided=1, OFF=1, BSH=4 (2k blocks), 4 dir blocks */
     uint8_t spec[16] = {
         (uint8_t)(is_dd ? 0x03 : 0x00),  /* [0] format */
-        (uint8_t)(is_dd ? 0x81 : 0x00),  /* [1] sided (bit 0 = DS, bit 7 =
-                                          * alternating-sides flag). PCW
-                                          * XBIOS's BIOS WRITE slow path
-                                          * (49F7 → 4BEA → RLA on this byte)
-                                          * needs bit 7 set or writes abort
-                                          * silently with no FDC commands.
-                                          * Joyce/LibDsk reference CF2DD
-                                          * boot sector also uses 0x81. */
+        (uint8_t)(is_dd ? 0x01 : 0x00),  /* [1] sided (1 = DS alternating) */
         (uint8_t)TRACKS,                 /* [2] tracks per side */
         (uint8_t)SPT,                    /* [3] sectors per track */
         (uint8_t)N_CODE,                 /* [4] psh */
