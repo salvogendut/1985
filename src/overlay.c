@@ -346,7 +346,15 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                                  ? ov->pcw->boot.source
                                  : "embedded");
                     break;
-                case TINK_VERSION: snprintf(label, lsz, "Version"); snprintf(val, vsz, "1985 v" "0.4.1"); break;
+                case TINK_VERSION:
+                    snprintf(label, lsz, "Version");
+                    /* PROG_GIT_COMMIT comes from configure.ac via -D;
+                     * falls back to "unknown" if the macro isn't set. */
+#ifndef PROG_GIT_COMMIT
+#define PROG_GIT_COMMIT "unknown"
+#endif
+                    snprintf(val, vsz, "1985 v" "0.4.1" " (git %s)", PROG_GIT_COMMIT);
+                    break;
                 case TINK_ROW_COUNT: break;
             }
             break;
