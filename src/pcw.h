@@ -13,6 +13,7 @@
 #include "perryfi.h"
 #include "aysound.h"
 #include "beeper.h"
+#include "multilink.h"
 #include "pcwmouse.h"
 
 /*
@@ -49,6 +50,7 @@ typedef struct PCW {
     Perryfi    perryfi;
     AySound    ay;
     Beeper     beeper;            /* PCW built-in 3.75 kHz beeper (F8 cmd 0x0B/0x0C) */
+    Multilink  multilink;         /* Multilink probe-stub on ports 0xA6/0xA7 */
     PcwMouse   mouse;
     Joystick   joystick;
 

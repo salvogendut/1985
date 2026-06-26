@@ -121,6 +121,16 @@ static u8 bus_io_read(void *ctx, u16 port) {
         return v;
     }
 
+    /* Multilink probe-stub at ports 0xA6/0xA7 (Seasip §14.1). Returns
+     * the fixed "ring broken" 4-byte sequence so Multilink-aware
+     * software stops looping on probe. See multilink.h, audit M8. */
+    if (lo == 0xA6 || lo == 0xA7) {
+        u8 v = multilink_read(&pcw->multilink, lo);
+        if (pcw->trace_io)
+            fprintf(stderr, "        -> %02X (multilink)\n", v);
+        return v;
+    }
+
     /* Stand-alone Kempston joystick latch at port 0x9F, active-high.
      * R=0 L=1 D=2 U=3 F=4. (ZEsarUX machines/pcw.c:1033.) */
     if (lo == 0x9F && pcw->joystick.type == JOYSTICK_TYPE_KEMPSTON) {
@@ -235,6 +245,11 @@ static void bus_io_write(void *ctx, u16 port, u8 val) {
         aysound_write(&pcw->ay, lo, val);
         return;
     }
+    /* Multilink probe-stub — accept and drop writes to 0xA6/0xA7. */
+    if (lo == 0xA6 || lo == 0xA7) {
+        multilink_write(&pcw->multilink, lo, val);
+        return;
+    }
     if ((lo == 0xA2 || lo == 0xA3)
         && pcw->mouse.present
         && pcw->mouse.type == MOUSE_TYPE_AMX) {
@@ -264,6 +279,7 @@ void pcw_init(PCW *pcw, PcwModel model, int memory_kb) {
      * The audio rate is set later by main.c via beeper_init() once the
      * SDL audio stream is open. */
     beeper_init (&pcw->beeper, 0);
+    multilink_init(&pcw->multilink);
     asic_init   (&pcw->asic, &pcw->boot, &pcw->fdc, &pcw->beeper);
     /* Backend lifecycle is unconditional; the actual pty/tcp setup
      * is wired by main/overlay based on the live config. */
@@ -305,6 +321,7 @@ void pcw_reset(PCW *pcw) {
     asic_reset(&pcw->asic);
     aysound_reset(&pcw->ay);
     beeper_reset(&pcw->beeper);
+    multilink_reset(&pcw->multilink);
     pcwmouse_reset(&pcw->mouse);
     z80_reset(&pcw->cpu);
 
