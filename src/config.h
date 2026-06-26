@@ -108,6 +108,10 @@ typedef struct {
 
     /* [advanced] */
     bool     tinker;
+    char     boot_rom_dir[PATH_MAX];    /* user-picked dir checked first
+                                         * for pcw_boot.rom (overrides the
+                                         * default XDG / cwd search chain).
+                                         * Empty = no override. */
     bool     debug;
     bool     debug_traces;   /* master gate for all stderr noise -- default OFF */
     bool     trace_io;

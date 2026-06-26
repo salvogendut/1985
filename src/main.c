@@ -481,6 +481,11 @@ int main(int argc, char **argv) {
      * Windows-only crash — see #55.) */
     static PCW pcw;
     pcw_init(&pcw, cfg.model, cfg.memory_kb);
+    /* Apply the user's boot-ROM override (if any) and re-run reset so
+     * the bootstrap stream reflects it. pcw_init already called
+     * bootstrap_reset once with no override; re-running is cheap. */
+    bootstrap_set_override_dir(&pcw.boot, cfg.boot_rom_dir);
+    bootstrap_reset(&pcw.boot);
     apply_runtime_config(&pcw, &cfg);
 
     if (cli.load_sna) snapshot_load(&pcw, cli.load_sna);
@@ -676,6 +681,8 @@ int main(int argc, char **argv) {
                             perryfi_shutdown(&pcw.perryfi);
                             printer_shutdown(&pcw.printer);
                             pcw_cold_boot(&pcw, cfg.model, cfg.memory_kb);
+                            bootstrap_set_override_dir(&pcw.boot, cfg.boot_rom_dir);
+                            bootstrap_reset(&pcw.boot);
                             pcw.serial = saved_serial;
                             apply_runtime_config(&pcw, &cfg);
                             break;

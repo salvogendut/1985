@@ -64,9 +64,16 @@ static int try_rom(const char *path, u8 *out, int max_len,
  * Lets users drop a custom ROM in a stable, per-user location without
  * needing to launch from the source tree. */
 static int load_rom_file(u8 *out, int max_len,
-                         char *chosen, size_t chosen_cap) {
+                         char *chosen, size_t chosen_cap,
+                         const char *override_dir) {
     char buf[1024];
     int n;
+
+    /* User-specified override directory wins over everything. */
+    if (override_dir && override_dir[0]) {
+        snprintf(buf, sizeof(buf), "%s/pcw_boot.rom", override_dir);
+        if ((n = try_rom(buf, out, max_len, chosen, chosen_cap)) > 0) return n;
+    }
 
 #ifdef _WIN32
     const char *appdata = getenv("APPDATA");
@@ -103,7 +110,8 @@ void bootstrap_reset(Bootstrap *b) {
      * embedded copy so a stock checkout still boots out of the box. */
     b->source[0] = '\0';
     int n = load_rom_file(b->stream, (int)sizeof(b->stream),
-                          b->source, sizeof(b->source));
+                          b->source, sizeof(b->source),
+                          b->override_dir);
     if (n <= 0) {
         n = (int)sizeof(PCW_BOOT_ROM);
         memcpy(b->stream, PCW_BOOT_ROM, (size_t)n);
@@ -111,6 +119,13 @@ void bootstrap_reset(Bootstrap *b) {
     }
     b->len    = n;
     b->active = true;
+}
+
+void bootstrap_set_override_dir(Bootstrap *b, const char *dir) {
+    if (dir && dir[0])
+        snprintf(b->override_dir, sizeof(b->override_dir), "%s", dir);
+    else
+        b->override_dir[0] = '\0';
 }
 
 bool bootstrap_active(const Bootstrap *b) {
