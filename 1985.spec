@@ -1,5 +1,5 @@
 Name:           1985
-Version:        0.4.0
+Version:        0.4.1
 Release:        1%{?dist}
 Summary:        Amstrad PCW 8256 / 8512 / 9512 emulator
 
@@ -78,6 +78,14 @@ appstream-util validate-relax --nonet %{buildroot}%{_datadir}/metainfo/io.github
 %{_datadir}/icons/hicolor/*/apps/io.github.salvogendut.Emulator1985.png
 
 %changelog
+* Fri Jun 26 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.1-1
+- CF2DD blank disc spec byte 1 = 0x81 — drive-B writes now work on
+  PCW 8512/9512 and on 8256 with the Second drive accessory (#114).
+- Overlay file pickers (Drive A/B, blank create, snapshot Load/Save)
+  remember the last directory used; persisted in ~/.config/1985 (#116).
+- Windows build now persists config under %APPDATA%/1985 instead of
+  next to the .exe (#118).
+
 * Tue Jun 23 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.0-1
 - F9 ▸ General reorganised: PCW Backplane now lives here and gates
   the whole Extensions tab; Second drive moved here too (8256 only)

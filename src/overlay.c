@@ -331,7 +331,7 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                 case TINK_KEYBOARD_LAYOUT: snprintf(label, lsz, "Show keyboard layout"); snprintf(val, vsz, "..."); break;
                 case TINK_SAVE_SNAPSHOT: snprintf(label, lsz, "Save snapshot"); snprintf(val, vsz, "..."); break;
                 case TINK_LOAD_SNAPSHOT: snprintf(label, lsz, "Load snapshot"); snprintf(val, vsz, "..."); break;
-                case TINK_VERSION: snprintf(label, lsz, "Version"); snprintf(val, vsz, "1985 v" "0.4.0"); break;
+                case TINK_VERSION: snprintf(label, lsz, "Version"); snprintf(val, vsz, "1985 v" "0.4.1"); break;
                 case TINK_ROW_COUNT: break;
             }
             break;
