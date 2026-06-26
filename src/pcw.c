@@ -561,123 +561,21 @@ void pcw_frame(PCW *pcw) {
             }
             /* BIOS jumpblock trace: CP/M+ BIOS jumpblock lives in the
              * high common area. Catch CALL/JP instructions whose
-             * immediate destination is in the FCxx..FFxx range, and
-             * mirror their returns by remembering (ret_pc, ret_sp)
-             * for every unconditional CALL and matching when the
-             * CPU lands back at that PC with SP+2 (RET semantics).
-             * Logs A on return so we can see which BIOS sub-call
-             * introduces a non-zero result code (drive-B SELECT
-             * investigation — see project_drive_b_write_bug memory). */
+             * immediate destination is in the FCxx..FFxx range. */
             {
-                #define BIOS_RET_RING 64
-                static struct {
-                    u16 ret_pc;
-                    u16 target;
-                    u16 ret_sp;
-                    bool used;
-                } bios_ret_ring[BIOS_RET_RING];
-
-                /* Match returns first (do this every step before any
-                 * new CALL pushes, so a CALL-then-immediate-RET
-                 * doesn't self-match). */
-                for (int i = 0; i < BIOS_RET_RING; i++) {
-                    if (!bios_ret_ring[i].used) continue;
-                    if (pcw->cpu.pc == bios_ret_ring[i].ret_pc &&
-                        pcw->cpu.sp == (u16)(bios_ret_ring[i].ret_sp + 2)) {
-                        fprintf(stderr,
-                            "bios return tgt=%04X -> ret_pc=%04X A=%02X HL=%04X (C=%02X BC=%04X DE=%04X)\n",
-                            bios_ret_ring[i].target, bios_ret_ring[i].ret_pc,
-                            (u8)(pcw->cpu.af >> 8), pcw->cpu.hl,
-                            pcw->cpu.c, pcw->cpu.bc, pcw->cpu.de);
-                        /* SELDSK (FC1B) returns HL = DPH pointer. Dump
-                         * 24 bytes so we can compare the per-drive DPH
-                         * (XLT, scratch, DPB, CSV, ALV, DIRBCB, DTABCB,
-                         * HASH, HBANK) byte-for-byte between drives A
-                         * and B and see which field SELDSK B initialises
-                         * differently. See project_drive_b_write_bug. */
-                        if (bios_ret_ring[i].target == 0xFC1B && pcw->cpu.hl) {
-                            u16 dph = pcw->cpu.hl;
-                            fprintf(stderr, "  DPH@%04X:", dph);
-                            for (int b = 0; b < 24; b++)
-                                fprintf(stderr, " %02X", mem_read(&pcw->mem, (u16)(dph + b)));
-                            fputc('\n', stderr);
-                            /* Also dump the XLT (TRANS) table — first 16
-                             * bytes — if it points anywhere. XLT is at
-                             * DPH offset 0..1, little-endian. */
-                            u16 xlt = mem_read(&pcw->mem, dph)
-                                    | (mem_read(&pcw->mem, (u16)(dph+1)) << 8);
-                            if (xlt) {
-                                fprintf(stderr, "  XLT@%04X:", xlt);
-                                for (int b = 0; b < 16; b++)
-                                    fprintf(stderr, " %02X", mem_read(&pcw->mem, (u16)(xlt + b)));
-                                fputc('\n', stderr);
-                            } else {
-                                fprintf(stderr, "  XLT=0000 (identity translation)\n");
-                            }
-                            /* CP/M 3 DPH layout: XLT(2) + scratch(9) +
-                             * mflag(1) + DPB(2) + CSV(2) + ALV(2) +
-                             * DIRBCB(2) + DTABCB(2) + HASH(2) + HBANK(1)
-                             * = 25 bytes. DPB pointer is at offset 12. */
-                            u16 dpb = mem_read(&pcw->mem, (u16)(dph+12))
-                                    | (mem_read(&pcw->mem, (u16)(dph+13)) << 8);
-                            if (dpb) {
-                                fprintf(stderr, "  DPB@%04X:", dpb);
-                                /* DPB is 17 bytes: SPT(2), BSH(1), BLM(1),
-                                 * EXM(1), DSM(2), DRM(2), AL0(1), AL1(1),
-                                 * CKS(2), OFF(2), PSH(1), PHM(1). */
-                                for (int b = 0; b < 17; b++)
-                                    fprintf(stderr, " %02X", mem_read(&pcw->mem, (u16)(dpb + b)));
-                                fputc('\n', stderr);
-                            }
-                        }
-                        bios_ret_ring[i].used = false;
-                    }
-                }
-
                 u8 op = mem_read(&pcw->mem, pcw->cpu.pc);
                 if (op == 0xCD || op == 0xC3 || op == 0xC4 || op == 0xCC
                     || op == 0xD4 || op == 0xDC || op == 0xE4 || op == 0xEC
                     || op == 0xF4 || op == 0xFC) {
                     u16 tgt = mem_read(&pcw->mem, (u16)(pcw->cpu.pc+1))
                             | (mem_read(&pcw->mem, (u16)(pcw->cpu.pc+2)) << 8);
-                    /* Trap CALLs to the BIOS jumptable AND to known
-                     * XBIOS working regions (routine_4a, routine_4a20,
-                     * b8_coro, fg_hot, seldsk_target, seldsk_bc — see
-                     * commit 2f1a822 for context). This catches the
-                     * internal CALL chains that the JP F8D9->FC51 ->
-                     * JP FD2D path delegates to. */
-                    bool trap = (tgt >= 0xFC00) ||
-                                (tgt >= 0x4960 && tgt <  0x4AE0) ||
-                                (tgt >= 0x49D0 && tgt <  0x4A60) ||
-                                (tgt >= 0x4D00 && tgt <  0x4E50) ||
-                                (tgt >= 0x5170 && tgt <  0x51B0) ||
-                                (tgt >= 0x9A00 && tgt <  0x9B00) ||
-                                (tgt >= 0xBB80 && tgt <  0xBC80);
-                    if (trap) {
+                    if (tgt >= 0xFC00) {
                         static u16 last_pc = 0; static u16 last_tgt = 0;
                         if (pcw->cpu.pc != last_pc || tgt != last_tgt) {
                             fprintf(stderr, "bios call op=%02X pc=%04X -> %04X (C=%02X HL=%04X DE=%04X BC=%04X)\n",
                                     op, pcw->cpu.pc, tgt,
                                     pcw->cpu.c, pcw->cpu.hl, pcw->cpu.de, pcw->cpu.bc);
                             last_pc = pcw->cpu.pc; last_tgt = tgt;
-                        }
-                        /* Only unconditional CALL (CD) pushes a return PC
-                         * reliably. cc CALLs (C4/CC/...) may not push if
-                         * the condition is false; JP (C3) never pushes.
-                         * We accept the simplification — most XBIOS calls
-                         * are unconditional CD. */
-                        if (op == 0xCD) {
-                            for (int i = 0; i < BIOS_RET_RING; i++) {
-                                if (bios_ret_ring[i].used) continue;
-                                bios_ret_ring[i].used   = true;
-                                bios_ret_ring[i].ret_pc = (u16)(pcw->cpu.pc + 3);
-                                bios_ret_ring[i].target = tgt;
-                                /* SP recorded BEFORE the CALL executes;
-                                 * RET will pop and SP will become
-                                 * (this) + 2. */
-                                bios_ret_ring[i].ret_sp = (u16)(pcw->cpu.sp - 2);
-                                break;
-                            }
                         }
                     }
                 }

@@ -25,8 +25,8 @@ SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
         --config "$ROOT/tests/test.conf" \
         --disk-a "$OUT/boot-a.dsk" \
         --paste-event "900:ERA A:RPED.SUB\n" \
-        --paste-event "1500:PIP A:HELLO.TXT=A:TEST.TXT\n" \
-        --paste-event "2400:DIR A:HELLO.TXT\n" \
+        --paste-event "1500:PIP A:HELLO.COM=A:DIR.COM\n" \
+        --paste-event "2400:DIR A:HELLO.*\n" \
         --screenshot-at "2700:$OUT/drive_a.ppm" \
         --exit-after 2800 \
         2> "$OUT/fdc_a.log" || true
