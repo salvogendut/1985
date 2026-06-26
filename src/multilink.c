@@ -13,6 +13,12 @@ void multilink_init(Multilink *m) {
 
 void multilink_reset(Multilink *m) {
     m->idx = 0;
+    /* present persists across warm reset — same as cps.present. */
+}
+
+void multilink_set_present(Multilink *m, bool present) {
+    if (m->present != present) m->idx = 0;
+    m->present = present;
 }
 
 u8 multilink_read(Multilink *m, u8 port) {

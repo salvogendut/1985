@@ -286,6 +286,7 @@ void config_load(Config *c, const char *path) {
         }
         else if (strcmp(k, "ext_perryfi")             == 0) c->ext_perryfi             = parse_bool(v, c->ext_perryfi);
         else if (strcmp(k, "ext_dktronics")           == 0) c->ext_dktronics           = parse_bool(v, c->ext_dktronics);
+        else if (strcmp(k, "ext_multilink")           == 0) c->ext_multilink           = parse_bool(v, c->ext_multilink);
         else if (strcmp(k, "input_device")             == 0) c->input_device = parse_input_device(v, c->input_device);
         else if (strcmp(k, "ext_pdf_printer")         == 0) c->ext_pdf_printer         = parse_bool(v, c->ext_pdf_printer);
         else if (strcmp(k, "ext_pdf_printer_dir")     == 0) snprintf(c->ext_pdf_printer_dir,
@@ -368,6 +369,7 @@ int config_save(const Config *c) {
     fprintf(f, "ext_serial_pty_link     = %s\n",   c->ext_serial_pty_link);
     fprintf(f, "ext_perryfi             = %s\n",   bool_to_str(c->ext_perryfi));
     fprintf(f, "ext_dktronics           = %s\n",   bool_to_str(c->ext_dktronics));
+    fprintf(f, "ext_multilink           = %s\n",   bool_to_str(c->ext_multilink));
     fprintf(f, "input_device            = %s\n",   input_device_to_str(c->input_device));
     fprintf(f, "ext_pdf_printer         = %s\n",   bool_to_str(c->ext_pdf_printer));
     fprintf(f, "ext_pdf_printer_dir     = %s\n",   c->ext_pdf_printer_dir);

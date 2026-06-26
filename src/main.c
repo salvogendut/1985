@@ -440,6 +440,8 @@ static void apply_runtime_config(PCW *pcw, const Config *cfg) {
 
     bool dk_on = cfg->ext_sanpollo_backplane && cfg->ext_dktronics;
     aysound_init(&pcw->ay, dk_on);
+    multilink_set_present(&pcw->multilink,
+                          cfg->ext_sanpollo_backplane && cfg->ext_multilink);
     pcwmouse_configure(&pcw->mouse,
                        dk_on && cfg->input_device == INPUT_DEVICE_MOUSE,
                        cfg->mouse_type);

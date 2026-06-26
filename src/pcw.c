@@ -123,8 +123,9 @@ static u8 bus_io_read(void *ctx, u16 port) {
 
     /* Multilink probe-stub at ports 0xA6/0xA7 (Seasip §14.1). Returns
      * the fixed "ring broken" 4-byte sequence so Multilink-aware
-     * software stops looping on probe. See multilink.h, audit M8. */
-    if (lo == 0xA6 || lo == 0xA7) {
+     * software stops looping on probe. Backplane-only accessory —
+     * skip when not plugged in so the ports float as on real hardware. */
+    if ((lo == 0xA6 || lo == 0xA7) && pcw->multilink.present) {
         u8 v = multilink_read(&pcw->multilink, lo);
         if (pcw->trace_io)
             fprintf(stderr, "        -> %02X (multilink)\n", v);
@@ -246,7 +247,7 @@ static void bus_io_write(void *ctx, u16 port, u8 val) {
         return;
     }
     /* Multilink probe-stub — accept and drop writes to 0xA6/0xA7. */
-    if (lo == 0xA6 || lo == 0xA7) {
+    if ((lo == 0xA6 || lo == 0xA7) && pcw->multilink.present) {
         multilink_write(&pcw->multilink, lo, val);
         return;
     }
