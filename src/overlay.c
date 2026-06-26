@@ -353,7 +353,7 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
 #ifndef PROG_GIT_COMMIT
 #define PROG_GIT_COMMIT "unknown"
 #endif
-                    snprintf(val, vsz, "1985 v" "0.4.1" " (git %s)", PROG_GIT_COMMIT);
+                    snprintf(val, vsz, "1985 v" "0.4.2" " (git %s)", PROG_GIT_COMMIT);
                     break;
                 case TINK_ROW_COUNT: break;
             }

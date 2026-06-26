@@ -1,5 +1,5 @@
 Name:           1985
-Version:        0.4.1
+Version:        0.4.2
 Release:        1%{?dist}
 Summary:        Amstrad PCW 8256 / 8512 / 9512 emulator
 
@@ -78,6 +78,20 @@ appstream-util validate-relax --nonet %{buildroot}%{_datadir}/metainfo/io.github
 %{_datadir}/icons/hicolor/*/apps/io.github.salvogendut.Emulator1985.png
 
 %changelog
+* Fri Jun 26 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.2-1
+- PCW built-in beeper (F8 cmd 0x0B/0x0C, 3.75 kHz) — audit M9.
+  Boot ROM error tones, CP/M BEL, +/- and F7/F8 PCW keys all audible.
+- Multilink probe-stub at ports 0xA6/0xA7 (audit M8) — prevents
+  Multilink-aware software from hanging on probe. Gated on the
+  PCW Backplane and a new "Multilink" Extensions toggle.
+- Boot ROM search path: looks in $XDG_DATA_HOME/1985/roms,
+  ~/.local/share/1985/roms, $XDG_CONFIG_HOME/1985/roms, and
+  ~/.config/1985/roms before falling back to ./roms. New F9 →
+  Advanced "Boot ROM" row shows the resolved path; Enter opens a
+  folder picker, Del clears the override.
+- F9 → Advanced "Version" row now also shows the git commit so
+  users can paste an exact build id into a bug report.
+
 * Fri Jun 26 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.1-1
 - CF2DD blank disc spec byte 1 = 0x81 — drive-B writes now work on
   PCW 8512/9512 and on 8256 with the Second drive accessory (#114).
