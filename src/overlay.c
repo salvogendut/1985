@@ -155,7 +155,7 @@ static int row_count(const Overlay *ov, OvSection s) {
              *   Serial port
              *   PerryFi                 (AT-modem; lives on the serial line)
              *   DK'TRONICS Sound & Joystick
-             *   Multilink Support       (probe-stub at 0xA6/0xA7)
+             *   Multilink               (probe-stub at 0xA6/0xA7)
              *   Input Device
              *
              * The Serial backend toggle (pty/tcp) lives under Advanced —
@@ -288,7 +288,7 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                     snprintf(val, vsz, "%s", bool_str(cfg->ext_dktronics));
                     break;
                 case EXT_MULTILINK:
-                    snprintf(label, lsz, "Multilink Support");
+                    snprintf(label, lsz, "Multilink");
                     snprintf(val, vsz, "%s", bool_str(cfg->ext_multilink));
                     break;
                 case EXT_INPUT_DEVICE:
