@@ -1,13 +1,15 @@
 #include "asic.h"
 #include "fdc.h"
 #include "bootstrap.h"
-#include "fdc.h"
+#include "beeper.h"
 #include <string.h>
 
-void asic_init(Asic *a, struct Bootstrap *boot, struct Fdc *fdc) {
+void asic_init(Asic *a, struct Bootstrap *boot, struct Fdc *fdc,
+               struct Beeper *beeper) {
     memset(a, 0, sizeof(*a));
     a->bootstrap = boot;
     a->fdc       = fdc;
+    a->beeper    = beeper;
     asic_reset(a);
 }
 
@@ -149,7 +151,9 @@ void asic_write(Asic *a, u8 port, u8 val) {
                 case 0x08: a->display_enabled = false; break;
                 case 0x09: fdc_set_motor(a->fdc, true);  break;
                 case 0x0A: fdc_set_motor(a->fdc, false); break;
-                default:   break;  /* beeper / unused */
+                case 0x0B: if (a->beeper) beeper_set_on(a->beeper, true);  break;
+                case 0x0C: if (a->beeper) beeper_set_on(a->beeper, false); break;
+                default:   break;  /* unused */
             }
             break;
         default:

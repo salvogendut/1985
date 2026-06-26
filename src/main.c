@@ -510,6 +510,10 @@ int main(int argc, char **argv) {
                 AY_AUDIO_RATE);
     }
 
+    /* PCW built-in beeper. pcw_init() already constructed the struct;
+     * now that we know the audio sample rate, configure the phase step. */
+    beeper_init(&pcw.beeper, AY_AUDIO_RATE);
+
     /* SDL gamepad for the DK'tronics joystick. Pick the first one that
      * shows up; hot-plug handled below via SDL_EVENT_GAMEPAD_ADDED. */
     SDL_InitSubSystem(SDL_INIT_GAMEPAD);
@@ -856,6 +860,10 @@ int main(int argc, char **argv) {
             s16 abuf[AY_SAMPLES_FRAME];
             aysound_render(&pcw.ay, abuf, AY_SAMPLES_FRAME,
                            AY_CLOCK_HZ, AY_AUDIO_RATE);
+            /* Mix the PCW built-in beeper on top of the AY output —
+             * the BEL (^G) tone, boot-ROM error blips, and any game
+             * that toggles F8 cmd 0x0B/0x0C all come through here. */
+            beeper_render(&pcw.beeper, abuf, AY_SAMPLES_FRAME);
             SDL_PutAudioStreamData(ay_stream, abuf, sizeof(abuf));
         }
         /* Auto-open the monitor on a breakpoint hit and refresh the

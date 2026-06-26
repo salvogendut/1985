@@ -259,7 +259,12 @@ void pcw_init(PCW *pcw, PcwModel model, int memory_kb) {
     fdc_init    (&pcw->fdc);
     crtc_init   (&pcw->crtc);
     printer_init(&pcw->printer);
-    asic_init   (&pcw->asic, &pcw->boot, &pcw->fdc);
+    /* Beeper is part of the built-in PCW hardware (F8 cmd 0x0B/0x0C),
+     * not an optional extension. Frequency 3.75 kHz per MAME pcw.cpp.
+     * The audio rate is set later by main.c via beeper_init() once the
+     * SDL audio stream is open. */
+    beeper_init (&pcw->beeper, 0);
+    asic_init   (&pcw->asic, &pcw->boot, &pcw->fdc, &pcw->beeper);
     /* Backend lifecycle is unconditional; the actual pty/tcp setup
      * is wired by main/overlay based on the live config. */
     pcw->serial.pty_master = -1;
@@ -299,6 +304,7 @@ void pcw_reset(PCW *pcw) {
     crtc_reset(&pcw->crtc);
     asic_reset(&pcw->asic);
     aysound_reset(&pcw->ay);
+    beeper_reset(&pcw->beeper);
     pcwmouse_reset(&pcw->mouse);
     z80_reset(&pcw->cpu);
 

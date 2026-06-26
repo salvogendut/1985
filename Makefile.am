@@ -5,6 +5,7 @@ dist_man1_MANS = 1985.1
 1985_SOURCES = \
 	src/asic.c \
 	src/aysound.c \
+	src/beeper.c \
 	src/bootstrap.c \
 	src/config.c \
 	src/cps.c \
@@ -34,6 +35,7 @@ dist_man1_MANS = 1985.1
 noinst_HEADERS = \
 	src/asic.h \
 	src/aysound.h \
+	src/beeper.h \
 	src/bootstrap.h \
 	src/compat_win.h \
 	src/config.h \
