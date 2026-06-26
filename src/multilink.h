@@ -14,10 +14,16 @@
  * pursuing without a software target — see audit M8 / issue #122. */
 
 typedef struct Multilink {
-    u8 idx;   /* next slot in PROBE_REPLY to return on read */
+    bool present;   /* true when an add-on Multilink card is plugged in.
+                     * Set by main.c from cfg->ext_sanpollo_backplane &&
+                     * cfg->ext_multilink — Multilink is a backplane-only
+                     * accessory, so the gate compounds with the
+                     * backplane state. */
+    u8 idx;         /* next slot in PROBE_REPLY to return on read */
 } Multilink;
 
-void multilink_init (Multilink *m);
-void multilink_reset(Multilink *m);
-u8   multilink_read (Multilink *m, u8 port);
-void multilink_write(Multilink *m, u8 port, u8 val);
+void multilink_init       (Multilink *m);
+void multilink_reset      (Multilink *m);
+void multilink_set_present(Multilink *m, bool present);
+u8   multilink_read       (Multilink *m, u8 port);
+void multilink_write      (Multilink *m, u8 port, u8 val);

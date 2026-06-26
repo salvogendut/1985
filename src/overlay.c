@@ -26,6 +26,7 @@ typedef enum {
     EXT_SERIAL,
     EXT_PERRYFI,
     EXT_DKTRONICS,
+    EXT_MULTILINK,
     EXT_INPUT_DEVICE,
 } ExtRow;
 
@@ -35,6 +36,7 @@ static ExtRow ext_row_at(const Config *cfg, int row) {
     if (row == r++) return EXT_SERIAL;
     if (row == r++) return EXT_PERRYFI;
     if (row == r++) return EXT_DKTRONICS;
+    if (row == r++) return EXT_MULTILINK;
     if (row == r++) return EXT_INPUT_DEVICE;
     return EXT_NONE;
 }
@@ -153,6 +155,7 @@ static int row_count(const Overlay *ov, OvSection s) {
              *   Serial port
              *   PerryFi                 (AT-modem; lives on the serial line)
              *   DK'TRONICS Sound & Joystick
+             *   Multilink Support       (probe-stub at 0xA6/0xA7)
              *   Input Device
              *
              * The Serial backend toggle (pty/tcp) lives under Advanced —
@@ -160,7 +163,7 @@ static int row_count(const Overlay *ov, OvSection s) {
              * Second drive and PDF printer moved to General — both are
              * stock-PCW features that don't need the backplane. */
             if (!ov->cfg->ext_sanpollo_backplane) return 0;
-            return 4;
+            return 5;
         }
         case OV_TINKER:     return ov->cfg->tinker ? TINK_ROW_COUNT : 0;
         default:            return 0;
@@ -283,6 +286,10 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                      * Joystick) lives in code comments and the README. */
                     snprintf(label, lsz, "DK'sound");
                     snprintf(val, vsz, "%s", bool_str(cfg->ext_dktronics));
+                    break;
+                case EXT_MULTILINK:
+                    snprintf(label, lsz, "Multilink Support");
+                    snprintf(val, vsz, "%s", bool_str(cfg->ext_multilink));
                     break;
                 case EXT_INPUT_DEVICE:
                     snprintf(label, lsz, "Input Device");
@@ -531,6 +538,9 @@ static void activate(Overlay *ov) {
                     if (!c->ext_sanpollo_backplane) {
                         c->ext_dktronics   = false;
                         c->ext_perryfi     = false;
+                        c->ext_multilink   = false;
+                        if (ov->pcw)
+                            multilink_set_present(&ov->pcw->multilink, false);
                         if (c->model != PCW_MODEL_9512) {
                             c->ext_serial = false;
                             if (ov->pcw) {
@@ -578,6 +588,14 @@ static void activate(Overlay *ov) {
                 case EXT_DKTRONICS:
                     c->ext_dktronics = !c->ext_dktronics;
                     apply_input_device(ov);
+                    ov->dirty = true;
+                    break;
+                case EXT_MULTILINK:
+                    c->ext_multilink = !c->ext_multilink;
+                    if (ov->pcw)
+                        multilink_set_present(&ov->pcw->multilink,
+                                              c->ext_sanpollo_backplane
+                                              && c->ext_multilink);
                     ov->dirty = true;
                     break;
                 case EXT_INPUT_DEVICE:
