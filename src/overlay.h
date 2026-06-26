@@ -27,6 +27,7 @@ typedef enum {
     DIALOG_SNAPSHOT_SAVE = 3,
     DIALOG_PRINT_DIR     = 4,
     DIALOG_DISK_NEW      = 5,   /* save dialog → disk_create_blank */
+    DIALOG_BOOT_ROM_DIR  = 6,   /* folder picker → cfg->boot_rom_dir */
 } DialogKind;
 
 struct PCW;

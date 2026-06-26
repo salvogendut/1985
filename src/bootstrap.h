@@ -25,10 +25,25 @@ typedef struct Bootstrap {
     int  len;
     bool active;
     u8   stream[1024];
+    /* Human-readable label of where the ROM bytes came from. Set in
+     * bootstrap_reset(): either the path of an on-disk file picked up
+     * by the search-path walk in load_rom_file(), or "embedded" when
+     * the fallback shipped with the binary was used. Read by the
+     * overlay's Advanced tab purely for display. */
+    char source[512];
+    /* Optional user-specified directory checked first during ROM load.
+     * Set via bootstrap_set_override_dir() from cfg->boot_rom_dir;
+     * empty means "use default search chain only". */
+    char override_dir[512];
 } Bootstrap;
 
 void bootstrap_init(Bootstrap *b);
 void bootstrap_reset(Bootstrap *b);
+
+/* Set / clear the user-specified override directory. Empty string or
+ * NULL clears it. Takes effect on the next bootstrap_reset() (which is
+ * driven by pcw_reset / pcw_cold_boot). */
+void bootstrap_set_override_dir(Bootstrap *b, const char *dir);
 
 bool bootstrap_active(const Bootstrap *b);
 

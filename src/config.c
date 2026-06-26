@@ -259,6 +259,7 @@ void config_load(Config *c, const char *path) {
         else if (strcmp(k, "drive_b")              == 0) snprintf(c->drive_b, sizeof(c->drive_b), "%s", v);
         else if (strcmp(k, "last_disk_dir")        == 0) snprintf(c->last_disk_dir, sizeof(c->last_disk_dir), "%s", v);
         else if (strcmp(k, "last_snap_dir")        == 0) snprintf(c->last_snap_dir, sizeof(c->last_snap_dir), "%s", v);
+        else if (strcmp(k, "last_boot_rom_dir")    == 0) snprintf(c->last_boot_rom_dir, sizeof(c->last_boot_rom_dir), "%s", v);
         else if (strcmp(k, "scale")                == 0) c->scale = atoi(v);
         else if (strcmp(k, "fullscreen")           == 0) c->fullscreen = parse_bool(v, c->fullscreen);
         else if (strcmp(k, "fullscreen_smoothing") == 0) c->fullscreen_smoothing = parse_bool(v, c->fullscreen_smoothing);
@@ -294,6 +295,7 @@ void config_load(Config *c, const char *path) {
         else if (strcmp(k, "ext_print_sink")          == 0) c->ext_print_sink = parse_sink(v, c->ext_print_sink);
         else if (strcmp(k, "printer_centronics_9512") == 0) c->printer_centronics_9512 = parse_bool(v, c->printer_centronics_9512);
         else if (strcmp(k, "tinker")               == 0) c->tinker = parse_bool(v, c->tinker);
+        else if (strcmp(k, "boot_rom_dir")         == 0) snprintf(c->boot_rom_dir, sizeof(c->boot_rom_dir), "%s", v);
         else if (strcmp(k, "debug")                == 0) c->debug  = parse_bool(v, c->debug);
         else if (strcmp(k, "debug_traces")         == 0) c->debug_traces = parse_bool(v, c->debug_traces);
         else if (strcmp(k, "trace_io")             == 0) c->trace_io    = parse_bool(v, c->trace_io);
@@ -350,7 +352,8 @@ int config_save(const Config *c) {
     fprintf(f, "drive_a = %s\n", c->drive_a);
     fprintf(f, "drive_b = %s\n", c->drive_b);
     fprintf(f, "last_disk_dir = %s\n", c->last_disk_dir);
-    fprintf(f, "last_snap_dir = %s\n\n", c->last_snap_dir);
+    fprintf(f, "last_snap_dir = %s\n", c->last_snap_dir);
+    fprintf(f, "last_boot_rom_dir = %s\n\n", c->last_boot_rom_dir);
 
     fprintf(f, "[display]\n");
     fprintf(f, "scale = %d\n", c->scale);
@@ -378,6 +381,7 @@ int config_save(const Config *c) {
 
     fprintf(f, "[advanced]\n");
     fprintf(f, "tinker = %s\n", bool_to_str(c->tinker));
+    fprintf(f, "boot_rom_dir = %s\n", c->boot_rom_dir);
     fprintf(f, "debug = %s\n", bool_to_str(c->debug));
     fprintf(f, "debug_traces = %s\n", bool_to_str(c->debug_traces));
     fprintf(f, "trace_io = %s\n", bool_to_str(c->trace_io));

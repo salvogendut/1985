@@ -61,6 +61,7 @@ typedef enum {
     TINK_KEYBOARD_LAYOUT,
     TINK_SAVE_SNAPSHOT,
     TINK_LOAD_SNAPSHOT,
+    TINK_BOOT_ROM,
     TINK_VERSION,
     TINK_ROW_COUNT,
 } TinkerRow;
@@ -338,6 +339,13 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                 case TINK_KEYBOARD_LAYOUT: snprintf(label, lsz, "Show keyboard layout"); snprintf(val, vsz, "..."); break;
                 case TINK_SAVE_SNAPSHOT: snprintf(label, lsz, "Save snapshot"); snprintf(val, vsz, "..."); break;
                 case TINK_LOAD_SNAPSHOT: snprintf(label, lsz, "Load snapshot"); snprintf(val, vsz, "..."); break;
+                case TINK_BOOT_ROM:
+                    snprintf(label, lsz, "Boot ROM");
+                    snprintf(val, vsz, "%s",
+                             (ov->pcw && ov->pcw->boot.source[0])
+                                 ? ov->pcw->boot.source
+                                 : "embedded");
+                    break;
                 case TINK_VERSION: snprintf(label, lsz, "Version"); snprintf(val, vsz, "1985 v" "0.4.1"); break;
                 case TINK_ROW_COUNT: break;
             }
@@ -455,6 +463,19 @@ static void open_printer_dir_dialog(Overlay *ov) {
     ov->dialog_ready = false;
     const char *where = ov->cfg->ext_pdf_printer_dir[0]
                       ? ov->cfg->ext_pdf_printer_dir
+                      : NULL;
+    SDL_ShowOpenFolderDialog(overlay_file_callback, ov, NULL, where, false);
+}
+
+static void open_boot_rom_dir_dialog(Overlay *ov) {
+    ov->dialog_kind  = DIALOG_BOOT_ROM_DIR;
+    ov->dialog_drive = -1;
+    ov->dialog_ready = false;
+    /* Seed: active override wins (most relevant — user is probably
+     * adjusting it), then the remembered last-picked dir (survives a
+     * Del-clear), then platform default. */
+    const char *where = ov->cfg->boot_rom_dir[0]    ? ov->cfg->boot_rom_dir
+                      : ov->cfg->last_boot_rom_dir[0] ? ov->cfg->last_boot_rom_dir
                       : NULL;
     SDL_ShowOpenFolderDialog(overlay_file_callback, ov, NULL, where, false);
 }
@@ -709,6 +730,7 @@ static void activate(Overlay *ov) {
                 case TINK_KEYBOARD_LAYOUT: ov->state = OV_STATE_KEYS; break;
                 case TINK_SAVE_SNAPSHOT: open_snapshot_save_dialog(ov); break;
                 case TINK_LOAD_SNAPSHOT: open_snapshot_load_dialog(ov); break;
+                case TINK_BOOT_ROM: open_boot_rom_dir_dialog(ov); break;
                 case TINK_VERSION:
                 case TINK_ROW_COUNT:
                     break;
@@ -772,6 +794,12 @@ static void close_overlay(Overlay *ov, bool save) {
                 disk_save(&ov->pcw->fdc.drive[1], ov->cfg->drive_b);
             printer_shutdown(&ov->pcw->printer);
             pcw_cold_boot(ov->pcw, ov->cfg->model, ov->cfg->memory_kb);
+            /* Re-apply the boot-ROM override on the freshly-reset
+             * bootstrap so it sticks across cold-boots driven from
+             * here too (otherwise the override only takes effect on
+             * F5 / next launch). */
+            bootstrap_set_override_dir(&ov->pcw->boot, ov->cfg->boot_rom_dir);
+            bootstrap_reset(&ov->pcw->boot);
             /* Mirror region into the freshly-reset ASIC before the
              * first new frame runs, so cycles_per_frame / ticks-per-
              * frame are already correct on the first tick. Also
@@ -974,6 +1002,22 @@ bool overlay_handle_event(Overlay *ov, SDL_Event *ev) {
         case SDLK_BACKSPACE:
             if (ov->section == OV_MEDIA && (ov->row == 0 || ov->row == 1))
                 eject_disk(ov, ov->row);
+            else if (ov->section == OV_TINKER && ov->cfg->tinker
+                  && ov->row == TINK_BOOT_ROM
+                  && (ov->cfg->boot_rom_dir[0]
+                      || ov->cfg->last_boot_rom_dir[0])) {
+                /* Clear both the active override and the remembered
+                 * last-picked dir so the next picker opens at the
+                 * platform default. The Advanced row's source line
+                 * reverts to the default search chain (or "embedded"). */
+                ov->cfg->boot_rom_dir[0]      = '\0';
+                ov->cfg->last_boot_rom_dir[0] = '\0';
+                if (ov->pcw) {
+                    bootstrap_set_override_dir(&ov->pcw->boot, NULL);
+                    bootstrap_reset(&ov->pcw->boot);
+                }
+                ov->dirty = true;
+            }
             break;
         case SDLK_N:
             if (ov->section == OV_MEDIA && (ov->row == 0 || ov->row == 1)) {
@@ -1252,6 +1296,22 @@ void overlay_tick(Overlay *ov) {
             ov->cfg->ext_pdf_printer = true;
             apply_pdf_printer(ov);
             leds_set_enabled(LED_PRINTER, true);
+            ov->dirty = true;
+            break;
+        case DIALOG_BOOT_ROM_DIR:
+            snprintf(ov->cfg->boot_rom_dir,
+                     sizeof(ov->cfg->boot_rom_dir), "%s", ov->dialog_path);
+            /* Remember this dir so the picker reopens here next time —
+             * survives a Del-clear of boot_rom_dir alone (only an
+             * explicit Del on the Boot ROM row wipes both). */
+            snprintf(ov->cfg->last_boot_rom_dir,
+                     sizeof(ov->cfg->last_boot_rom_dir), "%s",
+                     ov->dialog_path);
+            if (ov->pcw) {
+                bootstrap_set_override_dir(&ov->pcw->boot,
+                                           ov->cfg->boot_rom_dir);
+                bootstrap_reset(&ov->pcw->boot);
+            }
             ov->dirty = true;
             break;
         default: break;

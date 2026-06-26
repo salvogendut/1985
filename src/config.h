@@ -55,6 +55,9 @@ typedef struct {
      * next picker opens where you were last working. */
     char     last_disk_dir[PATH_MAX];
     char     last_snap_dir[PATH_MAX];
+    char     last_boot_rom_dir[PATH_MAX]; /* boot-ROM folder picker —
+                                           * persists even when the active
+                                           * override is cleared via Del */
 
     /* [display] */
     int      scale;          /* 1..4 */
@@ -108,6 +111,10 @@ typedef struct {
 
     /* [advanced] */
     bool     tinker;
+    char     boot_rom_dir[PATH_MAX];    /* user-picked dir checked first
+                                         * for pcw_boot.rom (overrides the
+                                         * default XDG / cwd search chain).
+                                         * Empty = no override. */
     bool     debug;
     bool     debug_traces;   /* master gate for all stderr noise -- default OFF */
     bool     trace_io;
