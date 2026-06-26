@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <SDL3/SDL.h>
 #include "config.h"
+#include "disk.h"
 
 typedef enum {
     OV_GENERAL    = 0,
@@ -25,6 +26,7 @@ typedef enum {
     DIALOG_SNAPSHOT_LOAD = 2,
     DIALOG_SNAPSHOT_SAVE = 3,
     DIALOG_PRINT_DIR     = 4,
+    DIALOG_DISK_NEW      = 5,   /* save dialog → disk_create_blank */
 } DialogKind;
 
 struct PCW;
@@ -43,6 +45,7 @@ typedef struct {
     /* pending file-dialog result */
     DialogKind  dialog_kind;
     int         dialog_drive;    /* 0=A, 1=B */
+    DiskType    dialog_disk_type;/* format for an in-flight DIALOG_DISK_NEW */
     char        dialog_path[PATH_MAX];
     bool        dialog_ready;
     bool        needs_cold_boot;

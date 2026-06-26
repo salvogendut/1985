@@ -1,6 +1,7 @@
 #include "fdc.h"
 #include "leds.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* Main status register bits. */
@@ -131,7 +132,7 @@ static void cmd_sense_drive_status(Fdc *f) {
 
     u8 st3 = (u8)((f->cur_unit & 0x03)
                 | (f->cur_head ? 0x04 : 0)
-                | (d->sides > 1 ? 0x08 : 0)
+                | ((d->is_dd_drive || d->sides > 1) ? 0x08 : 0)
                 | (f->cur_cyl[f->cur_unit] == 0 ? 0x10 : 0)
                 | (ready ? 0x20 : 0)
                 | (d->write_protected ? 0x40 : 0));
@@ -217,8 +218,9 @@ static void cmd_read_id(Fdc *f) {
     f->cur_head = (f->cmd_buf[1] >> 2) & 0x01;
     Disk *d = &f->drive[f->cur_unit];
 
+    int mt = disk_media_track(d);
     if (!d->inserted || f->cur_head >= d->sides
-        || d->cur_track >= d->track_count) {
+        || mt >= d->track_count) {
         push_rw_result(f, build_st0(f, ST0_IC_ABNORMAL) | ST0_NR,
                        0, 0, 0, 0, 0, 0);
         enter_result(f);
@@ -226,7 +228,7 @@ static void cmd_read_id(Fdc *f) {
         return;
     }
 
-    DiskTrack *tr = &d->track[d->cur_track][f->cur_head];
+    DiskTrack *tr = &d->track[mt][f->cur_head];
     if (tr->sector_count == 0) {
         push_rw_result(f, build_st0(f, ST0_IC_ABNORMAL),
                        0x01 /* ST1 MA = missing address mark */,
@@ -275,7 +277,19 @@ static void cmd_read_data(Fdc *f) {
         return;
     }
 
-    DiskTrack *tr = &d->track[d->cur_track][f->cur_head];
+    /* uPD765A datasheet: when the sector's on-disk C / H differ from
+     * the C / H in the command, set ST2.WC (Wrong Cylinder, bit 4)
+     * or ST2.BC (Bad Cylinder, bit 1) for special C=0xFF. PCW CP/M+
+     * BIOS uses ST2.WC to know "we still read the sector but the
+     * disk's C field disagrees"; without WC set, BIOS interprets a
+     * successful read with mismatched C as "geometry weird, refuse
+     * to write" and bails out with "Disc unsuitable" / "make file
+     * non-recoverable". This happens for every data disk where the
+     * sector C field stores the physical track number while BIOS
+     * commands a CP/M-relative track. */
+    /* No ST2.WC: PCW BIOS doesn't tolerate it. */
+
+    DiskTrack *tr = &d->track[disk_media_track(d)][f->cur_head];
     int size = s->size;
     if (size > FDC_EXEC_BUF_LEN) size = FDC_EXEC_BUF_LEN;
     memcpy(f->exec_buf, &tr->data[s->offset], (size_t)size);
@@ -291,9 +305,14 @@ static void cmd_read_data(Fdc *f) {
         fputc('\n', stderr);
     }
 
-    /* Stash the CHRN we'll echo in the result so the result phase has it. */
-    f->cmd_buf[2] = s->C; f->cmd_buf[3] = s->H;
-    f->cmd_buf[4] = s->R; f->cmd_buf[5] = s->N;
+    /* Don't overwrite C/H with the disk's values: BIOS expects the
+     * next-sector CHRN in the result phase to progress relative to
+     * the COMMANDED C/H (so e.g. a multi-sector read crossing a track
+     * boundary increments BIOS-side C, not on-disk C). When commanded
+     * C differs from on-disk C (data-format disks with OFF, where
+     * DISCKIT3 records C=physical but BIOS commands C=cp/m_track),
+     * echoing on-disk C breaks BIOS's progress tracking and CP/M
+     * mis-reports the read as failed. */
 
     enter_exec_read(f);
 }
@@ -314,12 +333,13 @@ static void finish_read_data(Fdc *f) {
     u8 R   = f->cmd_buf[4];
     u8 N   = f->cmd_buf[5];
     u8 EOT = f->cmd_buf[6];
-    if (R == EOT) {
-        R = 1;
-        C++;
-    } else {
-        R++;
-    }
+    /* uPD765A datasheet (MT=0): R becomes EOT+1, C/H/N unchanged.
+     * lib765 (Joyce) does the same. We previously did C++, R=1 on
+     * R==EOT — but PCW XBIOS treats a mismatch between the result C
+     * and the commanded C as "disc has been changed" (see seasip
+     * Cpm/xbios.html), which kills writes after the first directory
+     * read. Keep C as commanded. */
+    R++;
     push_rw_result(f, build_st0(f, ST0_IC_NORMAL), 0, 0, C, H, R, N);
 }
 
@@ -360,13 +380,16 @@ static void cmd_write_data(Fdc *f) {
         return;
     }
 
+    /* Same WC handling as cmd_read_data — set ST2.WC if the on-disk
+     * sector C differs from the commanded C. Without this CP/M+ BIOS
+     * sees writes succeed but on the "wrong" cylinder by its bookkeeping
+     * and refuses subsequent writes. */
+    /* No ST2.WC: PCW BIOS doesn't tolerate it. */
+
     int size = s->size;
     if (size > FDC_EXEC_BUF_LEN) size = FDC_EXEC_BUF_LEN;
     f->exec_len = size;
     f->exec_pos = 0;
-
-    f->cmd_buf[2] = s->C; f->cmd_buf[3] = s->H;
-    f->cmd_buf[4] = s->R; f->cmd_buf[5] = s->N;
 
     enter_exec_write(f);
 }
@@ -380,7 +403,7 @@ static void finish_write_data(Fdc *f) {
                                      f->cmd_buf[2], f->cmd_buf[3],
                                      f->cmd_buf[4], f->cmd_buf[5]);
     if (s) {
-        DiskTrack *tr = &d->track[d->cur_track][f->cur_head];
+        DiskTrack *tr = &d->track[disk_media_track(d)][f->cur_head];
         int n = f->exec_pos;
         if (n > s->size) n = s->size;
         memcpy(&tr->data[s->offset], f->exec_buf, (size_t)n);
@@ -389,8 +412,175 @@ static void finish_write_data(Fdc *f) {
     /* Same R-increment semantics as finish_read_data — see comment there. */
     u8 C = f->cmd_buf[2], H = f->cmd_buf[3];
     u8 R = f->cmd_buf[4], N = f->cmd_buf[5], EOT = f->cmd_buf[6];
-    if (R == EOT) { R = 1; C++; } else { R++; }
+    /* Same end-of-track semantics as finish_read_data — R becomes
+     * EOT+1, C unchanged. The result C must equal commanded C or
+     * PCW XBIOS treats the disc as having been changed and refuses
+     * subsequent writes. */
+    R++;
     push_rw_result(f, build_st0(f, ST0_IC_NORMAL), 0, 0, C, H, R, N);
+}
+
+/* FORMAT TRACK: rewrites the sector ID table for the current track.
+ * Command bytes:
+ *   [0] opcode 0x0D
+ *   [1] MT_MF_SK_HD_US (we decode US, HD; the rest are ignored)
+ *   [2] N    bytes-per-sector code (size = 128 << N)
+ *   [3] SC   sectors per track
+ *   [4] GPL  gap length (ignored)
+ *   [5] D    filler byte for every formatted sector
+ * Execution phase: host streams SC * 4 bytes (C, H, R, N per sector).
+ * On EXEC end (finish_format_track): rebuild the track's sector
+ * table, fill the data block with D, mark the disk dirty. */
+static void cmd_format_track(Fdc *f) {
+    f->cur_unit = decode_unit(f->cmd_buf[1]);
+    f->cur_head = (f->cmd_buf[1] >> 2) & 0x01;
+    u8 N  = f->cmd_buf[2];
+    u8 SC = f->cmd_buf[3];
+    Disk *d = &f->drive[f->cur_unit];
+
+    leds_ping(f->cur_unit ? LED_FDC_B : LED_FDC_A);
+
+    if (!d->inserted) {
+        push_rw_result(f, build_st0(f, ST0_IC_ABNORMAL) | ST0_NR,
+                       0, 0, 0, 0, 0, N);
+        enter_result(f);
+        return;
+    }
+    if (d->write_protected) {
+        push_rw_result(f, build_st0(f, ST0_IC_ABNORMAL), 0x02, 0,
+                       0, 0, 0, N);
+        enter_result(f);
+        return;
+    }
+    if (SC == 0 || SC > DISK_MAX_SECTORS) {
+        push_rw_result(f, build_st0(f, ST0_IC_ABNORMAL), 0, 0,
+                       0, 0, 0, N);
+        enter_result(f);
+        return;
+    }
+
+    /* EXEC_WRITE receives SC * 4 bytes (C, H, R, N per sector). */
+    f->exec_len = (int)SC * 4;
+    f->exec_pos = 0;
+    enter_exec_write(f);
+}
+
+static void finish_format_track(Fdc *f) {
+    Disk *d = &f->drive[f->cur_unit];
+    u8 N  = f->cmd_buf[2];
+    u8 SC = f->cmd_buf[3];
+    u8 D  = f->cmd_buf[5];
+    int sector_size = 128 << (N & 0x07);
+
+    int t = disk_media_track(d);
+    if (t < DISK_MAX_TRACKS && f->cur_head < DISK_MAX_SIDES) {
+        DiskTrack *tr = &d->track[t][f->cur_head];
+        int total = (int)SC * sector_size;
+
+        free(tr->data);
+        tr->data = malloc((size_t)total);
+        if (tr->data) {
+            memset(tr->data, D, (size_t)total);
+            tr->data_size   = total;
+            tr->sector_count = SC;
+
+            int got_sectors = f->exec_pos / 4;
+            for (int i = 0; i < SC; i++) {
+                DiskSector *s = &tr->sectors[i];
+                if (i < got_sectors) {
+                    u8 *p = &f->exec_buf[i * 4];
+                    s->C = p[0]; s->H = p[1]; s->R = p[2]; s->N = p[3];
+                } else {
+                    /* Host short-changed the format burst (TC fired
+                     * early); fall back to a synthetic ID so the
+                     * track is at least internally consistent. */
+                    s->C = (u8)t;
+                    s->H = (u8)f->cur_head;
+                    s->R = (u8)(i + 1);
+                    s->N = N;
+                }
+                s->st1 = 0;
+                s->st2 = 0;
+                s->size   = sector_size;
+                s->offset = i * sector_size;
+            }
+
+            d->dirty = true;
+            /* Grow the disk to include this track if FORMAT TRACK has
+             * just allocated a track beyond the current geometry. */
+            if (t + 1 > d->track_count) d->track_count = t + 1;
+            if (f->cur_head + 1 > d->sides) d->sides = f->cur_head + 1;
+        }
+    }
+
+    /* Result CHRN reflects the last sector formatted, per datasheet. */
+    u8 C = (u8)disk_media_track(d), H = (u8)f->cur_head, R = SC;
+    if (f->exec_pos >= 4) {
+        u8 *last = &f->exec_buf[(f->exec_pos & ~3) - 4];
+        C = last[0]; H = last[1]; R = last[2];
+    }
+    push_rw_result(f, build_st0(f, ST0_IC_NORMAL), 0, 0, C, H, R, N);
+}
+
+/* SCAN EQUAL (0x11), SCAN LOW-OR-EQUAL (0x19), SCAN HIGH-OR-EQUAL (0x1D)
+ * share the same command shape and exec-phase data flow. Real chips
+ * read each sector and compare bytes against a host-streamed pattern;
+ * the result-phase ST2 bits SH (0x08, scan satisfied) and SN (0x04,
+ * scan not satisfied) report the outcome.
+ *
+ * DISCKIT3 uses SCAN EQ to probe the disk before formatting — if the
+ * target sector doesn't exist (blank disk) it interprets that as
+ * "format from scratch". Without this command at all we return
+ * IC=INVALID and DISCKIT3 aborts with "track N sector X — unknown".
+ *
+ * We don't model byte-level scan-comparison: when the sector exists
+ * we still drain the host's data burst (so the protocol stays in
+ * sync) and then declare "scan satisfied". No known PCW software
+ * relies on the comparison semantics. */
+static void cmd_scan_any(Fdc *f) {
+    f->cur_unit = decode_unit(f->cmd_buf[1]);
+    f->cur_head = (f->cmd_buf[1] >> 2) & 0x01;
+    u8 C = f->cmd_buf[2];
+    u8 H = f->cmd_buf[3];
+    u8 R = f->cmd_buf[4];
+    u8 N = f->cmd_buf[5];
+    Disk *d = &f->drive[f->cur_unit];
+
+    leds_ping(f->cur_unit ? LED_FDC_B : LED_FDC_A);
+
+    if (!d->inserted) {
+        push_rw_result(f, build_st0(f, ST0_IC_ABNORMAL) | ST0_NR,
+                       0, 0, C, H, R, N);
+        enter_result(f);
+        return;
+    }
+
+    DiskSector *s = disk_find_sector(d, f->cur_head, C, H, R, N);
+    if (!s) {
+        /* No matching sector — ST1 ND, ST2 = 0 (no scan flags).
+         * DISCKIT3 maps this to "blank track, format anew". */
+        push_rw_result(f, build_st0(f, ST0_IC_ABNORMAL), 0x04, 0,
+                       C, H, R, N);
+        enter_result(f);
+        return;
+    }
+
+    /* Sector exists — drain the data stream the host wants to compare
+     * against, then return "scan satisfied" in finish_scan_any. */
+    int size = s->size;
+    if (size > FDC_EXEC_BUF_LEN) size = FDC_EXEC_BUF_LEN;
+    f->exec_len = size;
+    f->exec_pos = 0;
+    enter_exec_write(f);
+}
+
+static void finish_scan_any(Fdc *f) {
+    u8 C = f->cmd_buf[2], H = f->cmd_buf[3];
+    u8 R = f->cmd_buf[4], N = f->cmd_buf[5];
+    /* ST2 bit 3 = SH (scan satisfied). We always declare a hit when
+     * the sector exists since we don't actually compare bytes. */
+    push_rw_result(f, build_st0(f, ST0_IC_NORMAL), 0, 0x08,
+                   C, H, R, N);
 }
 
 static void cmd_invalid(Fdc *f) {
@@ -458,9 +648,13 @@ static void dispatch_command(Fdc *f) {
         case 0x08: cmd_sense_interrupt   (f); break;
         case 0x0F: cmd_seek              (f); break;
 
-        case 0x05: cmd_write_data(f); break;
-        case 0x06: cmd_read_data (f); break;
-        case 0x0A: cmd_read_id   (f); break;
+        case 0x05: cmd_write_data  (f); break;
+        case 0x06: cmd_read_data   (f); break;
+        case 0x0A: cmd_read_id     (f); break;
+        case 0x0D: cmd_format_track(f); break;
+        case 0x11: cmd_scan_any    (f); break;   /* SCAN EQUAL */
+        case 0x19: cmd_scan_any    (f); break;   /* SCAN LOW-OR-EQUAL */
+        case 0x1D: cmd_scan_any    (f); break;   /* SCAN HIGH-OR-EQUAL */
 
         default:
             cmd_invalid(f);
@@ -474,6 +668,10 @@ void fdc_init(Fdc *f) {
     memset(f, 0, sizeof(*f));
     disk_init(&f->drive[0]);
     disk_init(&f->drive[1]);
+    /* PCW 8512/9512: drive B is a CF2DD (80-track, double-sided) drive.
+     * BIOS double-steps when reading a 40-track CF2 disk inserted there;
+     * see disk_media_track() for the physical→media mapping. */
+    f->drive[1].is_dd_drive = true;
     enter_idle(f);
 }
 
@@ -488,9 +686,13 @@ void fdc_reset(Fdc *f) {
 static void finish_execution(Fdc *f) {
     u8 op = f->cmd_buf[0] & 0x1F;
     switch (op) {
-        case 0x05: finish_write_data(f); break;
-        case 0x06: finish_read_data (f); break;
-        default:   f->result_len = 0;    break;
+        case 0x05: finish_write_data  (f); break;
+        case 0x06: finish_read_data   (f); break;
+        case 0x0D: finish_format_track(f); break;
+        case 0x11:
+        case 0x19:
+        case 0x1D: finish_scan_any    (f); break;
+        default:   f->result_len = 0;      break;
     }
     enter_result(f);
 }
