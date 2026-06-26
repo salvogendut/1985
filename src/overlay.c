@@ -357,6 +357,19 @@ static void cycle_video(VideoMode *v) {
     *v = (VideoMode)(((int)*v + 1) % 4);
 }
 
+/* Copy the dirname component of `path` into `dst` (up to cap-1 chars,
+ * NUL-terminated). Drops the trailing filename + final slash. If `path`
+ * has no slash, `dst` is left untouched. */
+static void copy_dirname(char *dst, size_t cap, const char *path) {
+    if (!path || !path[0] || cap == 0) return;
+    const char *slash = strrchr(path, '/');
+    if (!slash || slash == path) return;
+    size_t n = (size_t)(slash - path);
+    if (n >= cap) n = cap - 1;
+    memcpy(dst, path, n);
+    dst[n] = '\0';
+}
+
 static void overlay_file_callback(void *userdata, const char * const *files,
                                   int filter) {
     (void)filter;
@@ -371,6 +384,13 @@ static void overlay_file_callback(void *userdata, const char * const *files,
     }
 }
 
+/* SDL3 dialogs treat NULL `default_location` as "platform default", and
+ * accept either a directory or a file as the seed. Empty string is NOT
+ * the same as NULL — pass NULL when we don't have a remembered dir. */
+static inline const char *seed_location(const char *s) {
+    return (s && s[0]) ? s : NULL;
+}
+
 static void open_disk_dialog(Overlay *ov, int drive) {
     ov->dialog_kind  = DIALOG_DISK;
     ov->dialog_drive = drive;
@@ -380,7 +400,8 @@ static void open_disk_dialog(Overlay *ov, int drive) {
         { "All files",  "*"       },
     };
     SDL_ShowOpenFileDialog(overlay_file_callback, ov, NULL,
-                           filters, 2, NULL, false);
+                           filters, 2, seed_location(ov->cfg->last_disk_dir),
+                           false);
 }
 
 static void open_disk_new_dialog(Overlay *ov, int drive, DiskType type) {
@@ -393,7 +414,7 @@ static void open_disk_new_dialog(Overlay *ov, int drive, DiskType type) {
         { "All files",  "*"       },
     };
     SDL_ShowSaveFileDialog(overlay_file_callback, ov, NULL,
-                           filters, 2, NULL);
+                           filters, 2, seed_location(ov->cfg->last_disk_dir));
 }
 
 static void open_snapshot_load_dialog(Overlay *ov) {
@@ -405,7 +426,8 @@ static void open_snapshot_load_dialog(Overlay *ov) {
         { "All files",      "*"       },
     };
     SDL_ShowOpenFileDialog(overlay_file_callback, ov, NULL,
-                           filters, 2, NULL, false);
+                           filters, 2, seed_location(ov->cfg->last_snap_dir),
+                           false);
 }
 
 static void open_snapshot_save_dialog(Overlay *ov) {
@@ -417,7 +439,7 @@ static void open_snapshot_save_dialog(Overlay *ov) {
         { "All files",      "*"       },
     };
     SDL_ShowSaveFileDialog(overlay_file_callback, ov, NULL,
-                           filters, 2, NULL);
+                           filters, 2, seed_location(ov->cfg->last_snap_dir));
 }
 
 static void open_printer_dir_dialog(Overlay *ov) {
@@ -1171,6 +1193,8 @@ void overlay_tick(Overlay *ov) {
                          ? sizeof(ov->cfg->drive_a) : sizeof(ov->cfg->drive_b),
                      "%s", ov->dialog_path);
             disk_load(d, ov->dialog_path);
+            copy_dirname(ov->cfg->last_disk_dir,
+                         sizeof(ov->cfg->last_disk_dir), ov->dialog_path);
             ov->dirty = true;
             break;
         }
@@ -1186,12 +1210,24 @@ void overlay_tick(Overlay *ov) {
                              : sizeof(ov->cfg->drive_b),
                          "%s", ov->dialog_path);
                 disk_load(d, ov->dialog_path);
+                copy_dirname(ov->cfg->last_disk_dir,
+                             sizeof(ov->cfg->last_disk_dir), ov->dialog_path);
                 ov->dirty = true;
             }
             break;
         }
-        case DIALOG_SNAPSHOT_LOAD: snapshot_load(ov->pcw, ov->dialog_path); break;
-        case DIALOG_SNAPSHOT_SAVE: snapshot_save(ov->pcw, ov->dialog_path); break;
+        case DIALOG_SNAPSHOT_LOAD:
+            snapshot_load(ov->pcw, ov->dialog_path);
+            copy_dirname(ov->cfg->last_snap_dir,
+                         sizeof(ov->cfg->last_snap_dir), ov->dialog_path);
+            ov->dirty = true;
+            break;
+        case DIALOG_SNAPSHOT_SAVE:
+            snapshot_save(ov->pcw, ov->dialog_path);
+            copy_dirname(ov->cfg->last_snap_dir,
+                         sizeof(ov->cfg->last_snap_dir), ov->dialog_path);
+            ov->dirty = true;
+            break;
         case DIALOG_PRINT_DIR:
             snprintf(ov->cfg->ext_pdf_printer_dir,
                      sizeof(ov->cfg->ext_pdf_printer_dir), "%s", ov->dialog_path);

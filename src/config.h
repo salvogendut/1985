@@ -49,6 +49,12 @@ typedef struct {
     /* [storage] */
     char     drive_a[PATH_MAX];
     char     drive_b[PATH_MAX];
+    /* Last-used directories for the F9 overlay file pickers. Seeded from
+     * the dirname of drive_a/drive_b at config_load when empty, then
+     * updated after each successful disk/snapshot/blank dialog so the
+     * next picker opens where you were last working. */
+    char     last_disk_dir[PATH_MAX];
+    char     last_snap_dir[PATH_MAX];
 
     /* [display] */
     int      scale;          /* 1..4 */
