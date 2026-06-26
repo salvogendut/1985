@@ -241,6 +241,8 @@ void config_load(Config *c, const char *path) {
         else if (strcmp(k, "region")               == 0) c->region = parse_region(v, c->region);
         else if (strcmp(k, "drive_a")              == 0) snprintf(c->drive_a, sizeof(c->drive_a), "%s", v);
         else if (strcmp(k, "drive_b")              == 0) snprintf(c->drive_b, sizeof(c->drive_b), "%s", v);
+        else if (strcmp(k, "last_disk_dir")        == 0) snprintf(c->last_disk_dir, sizeof(c->last_disk_dir), "%s", v);
+        else if (strcmp(k, "last_snap_dir")        == 0) snprintf(c->last_snap_dir, sizeof(c->last_snap_dir), "%s", v);
         else if (strcmp(k, "scale")                == 0) c->scale = atoi(v);
         else if (strcmp(k, "fullscreen")           == 0) c->fullscreen = parse_bool(v, c->fullscreen);
         else if (strcmp(k, "fullscreen_smoothing") == 0) c->fullscreen_smoothing = parse_bool(v, c->fullscreen_smoothing);
@@ -295,6 +297,23 @@ void config_load(Config *c, const char *path) {
     if (c->scale     < 1) c->scale     = 1;
     if (c->scale     > 4) c->scale     = 4;
     if (c->memory_kb < 256) c->memory_kb = 256;
+
+    /* Seed last_disk_dir from the dirname of whichever drive is mounted
+     * (prefer A; fall back to B) so the very first file picker opens
+     * in the same folder the user already keeps disks in. */
+    if (!c->last_disk_dir[0]) {
+        const char *src = c->drive_a[0] ? c->drive_a
+                        : c->drive_b[0] ? c->drive_b : NULL;
+        if (src) {
+            const char *slash = strrchr(src, '/');
+            if (slash && slash != src) {
+                size_t n = (size_t)(slash - src);
+                if (n >= sizeof(c->last_disk_dir)) n = sizeof(c->last_disk_dir) - 1;
+                memcpy(c->last_disk_dir, src, n);
+                c->last_disk_dir[n] = '\0';
+            }
+        }
+    }
 }
 
 int config_save(const Config *c) {
@@ -312,7 +331,9 @@ int config_save(const Config *c) {
 
     fprintf(f, "[storage]\n");
     fprintf(f, "drive_a = %s\n", c->drive_a);
-    fprintf(f, "drive_b = %s\n\n", c->drive_b);
+    fprintf(f, "drive_b = %s\n", c->drive_b);
+    fprintf(f, "last_disk_dir = %s\n", c->last_disk_dir);
+    fprintf(f, "last_snap_dir = %s\n\n", c->last_snap_dir);
 
     fprintf(f, "[display]\n");
     fprintf(f, "scale = %d\n", c->scale);
