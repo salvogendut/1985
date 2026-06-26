@@ -83,15 +83,27 @@ static int load_rom_file(u8 *out, int max_len,
         if ((n = try_rom(buf, out, max_len, chosen, chosen_cap)) > 0) return n;
     }
 #endif
-    const char *xdg = getenv("XDG_DATA_HOME");
-    if (xdg && xdg[0]) {
-        snprintf(buf, sizeof(buf), "%s/1985/roms/pcw_boot.rom", xdg);
+    const char *xdg_data = getenv("XDG_DATA_HOME");
+    if (xdg_data && xdg_data[0]) {
+        snprintf(buf, sizeof(buf), "%s/1985/roms/pcw_boot.rom", xdg_data);
         if ((n = try_rom(buf, out, max_len, chosen, chosen_cap)) > 0) return n;
     }
     const char *home = getenv("HOME");
     if (home && home[0]) {
         snprintf(buf, sizeof(buf),
                  "%s/.local/share/1985/roms/pcw_boot.rom", home);
+        if ((n = try_rom(buf, out, max_len, chosen, chosen_cap)) > 0) return n;
+    }
+    /* Friendly fallback: users who don't know the XDG split often
+     * expect ROMs to live next to the config file. Check there too. */
+    const char *xdg_config = getenv("XDG_CONFIG_HOME");
+    if (xdg_config && xdg_config[0]) {
+        snprintf(buf, sizeof(buf), "%s/1985/roms/pcw_boot.rom", xdg_config);
+        if ((n = try_rom(buf, out, max_len, chosen, chosen_cap)) > 0) return n;
+    }
+    if (home && home[0]) {
+        snprintf(buf, sizeof(buf),
+                 "%s/.config/1985/roms/pcw_boot.rom", home);
         if ((n = try_rom(buf, out, max_len, chosen, chosen_cap)) > 0) return n;
     }
     if ((n = try_rom("roms/pcw_boot.rom",   out, max_len, chosen, chosen_cap)) > 0) return n;

@@ -471,8 +471,11 @@ static void open_boot_rom_dir_dialog(Overlay *ov) {
     ov->dialog_kind  = DIALOG_BOOT_ROM_DIR;
     ov->dialog_drive = -1;
     ov->dialog_ready = false;
-    const char *where = ov->cfg->boot_rom_dir[0]
-                      ? ov->cfg->boot_rom_dir
+    /* Seed: active override wins (most relevant — user is probably
+     * adjusting it), then the remembered last-picked dir (survives a
+     * Del-clear), then platform default. */
+    const char *where = ov->cfg->boot_rom_dir[0]    ? ov->cfg->boot_rom_dir
+                      : ov->cfg->last_boot_rom_dir[0] ? ov->cfg->last_boot_rom_dir
                       : NULL;
     SDL_ShowOpenFolderDialog(overlay_file_callback, ov, NULL, where, false);
 }
@@ -1001,11 +1004,14 @@ bool overlay_handle_event(Overlay *ov, SDL_Event *ev) {
                 eject_disk(ov, ov->row);
             else if (ov->section == OV_TINKER && ov->cfg->tinker
                   && ov->row == TINK_BOOT_ROM
-                  && ov->cfg->boot_rom_dir[0]) {
-                /* Clear the override and reload the bootstrap so the
-                 * Advanced row shows the new resolved source (one of
-                 * the default search-chain locations, or "embedded"). */
-                ov->cfg->boot_rom_dir[0] = '\0';
+                  && (ov->cfg->boot_rom_dir[0]
+                      || ov->cfg->last_boot_rom_dir[0])) {
+                /* Clear both the active override and the remembered
+                 * last-picked dir so the next picker opens at the
+                 * platform default. The Advanced row's source line
+                 * reverts to the default search chain (or "embedded"). */
+                ov->cfg->boot_rom_dir[0]      = '\0';
+                ov->cfg->last_boot_rom_dir[0] = '\0';
                 if (ov->pcw) {
                     bootstrap_set_override_dir(&ov->pcw->boot, NULL);
                     bootstrap_reset(&ov->pcw->boot);
@@ -1295,6 +1301,12 @@ void overlay_tick(Overlay *ov) {
         case DIALOG_BOOT_ROM_DIR:
             snprintf(ov->cfg->boot_rom_dir,
                      sizeof(ov->cfg->boot_rom_dir), "%s", ov->dialog_path);
+            /* Remember this dir so the picker reopens here next time —
+             * survives a Del-clear of boot_rom_dir alone (only an
+             * explicit Del on the Boot ROM row wipes both). */
+            snprintf(ov->cfg->last_boot_rom_dir,
+                     sizeof(ov->cfg->last_boot_rom_dir), "%s",
+                     ov->dialog_path);
             if (ov->pcw) {
                 bootstrap_set_override_dir(&ov->pcw->boot,
                                            ov->cfg->boot_rom_dir);

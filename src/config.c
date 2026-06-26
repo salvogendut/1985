@@ -259,6 +259,7 @@ void config_load(Config *c, const char *path) {
         else if (strcmp(k, "drive_b")              == 0) snprintf(c->drive_b, sizeof(c->drive_b), "%s", v);
         else if (strcmp(k, "last_disk_dir")        == 0) snprintf(c->last_disk_dir, sizeof(c->last_disk_dir), "%s", v);
         else if (strcmp(k, "last_snap_dir")        == 0) snprintf(c->last_snap_dir, sizeof(c->last_snap_dir), "%s", v);
+        else if (strcmp(k, "last_boot_rom_dir")    == 0) snprintf(c->last_boot_rom_dir, sizeof(c->last_boot_rom_dir), "%s", v);
         else if (strcmp(k, "scale")                == 0) c->scale = atoi(v);
         else if (strcmp(k, "fullscreen")           == 0) c->fullscreen = parse_bool(v, c->fullscreen);
         else if (strcmp(k, "fullscreen_smoothing") == 0) c->fullscreen_smoothing = parse_bool(v, c->fullscreen_smoothing);
@@ -351,7 +352,8 @@ int config_save(const Config *c) {
     fprintf(f, "drive_a = %s\n", c->drive_a);
     fprintf(f, "drive_b = %s\n", c->drive_b);
     fprintf(f, "last_disk_dir = %s\n", c->last_disk_dir);
-    fprintf(f, "last_snap_dir = %s\n\n", c->last_snap_dir);
+    fprintf(f, "last_snap_dir = %s\n", c->last_snap_dir);
+    fprintf(f, "last_boot_rom_dir = %s\n\n", c->last_boot_rom_dir);
 
     fprintf(f, "[display]\n");
     fprintf(f, "scale = %d\n", c->scale);
