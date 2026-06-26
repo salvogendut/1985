@@ -61,6 +61,7 @@ typedef enum {
     TINK_KEYBOARD_LAYOUT,
     TINK_SAVE_SNAPSHOT,
     TINK_LOAD_SNAPSHOT,
+    TINK_BOOT_ROM,
     TINK_VERSION,
     TINK_ROW_COUNT,
 } TinkerRow;
@@ -338,6 +339,13 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                 case TINK_KEYBOARD_LAYOUT: snprintf(label, lsz, "Show keyboard layout"); snprintf(val, vsz, "..."); break;
                 case TINK_SAVE_SNAPSHOT: snprintf(label, lsz, "Save snapshot"); snprintf(val, vsz, "..."); break;
                 case TINK_LOAD_SNAPSHOT: snprintf(label, lsz, "Load snapshot"); snprintf(val, vsz, "..."); break;
+                case TINK_BOOT_ROM:
+                    snprintf(label, lsz, "Boot ROM");
+                    snprintf(val, vsz, "%s",
+                             (ov->pcw && ov->pcw->boot.source[0])
+                                 ? ov->pcw->boot.source
+                                 : "embedded");
+                    break;
                 case TINK_VERSION: snprintf(label, lsz, "Version"); snprintf(val, vsz, "1985 v" "0.4.1"); break;
                 case TINK_ROW_COUNT: break;
             }
@@ -709,6 +717,7 @@ static void activate(Overlay *ov) {
                 case TINK_KEYBOARD_LAYOUT: ov->state = OV_STATE_KEYS; break;
                 case TINK_SAVE_SNAPSHOT: open_snapshot_save_dialog(ov); break;
                 case TINK_LOAD_SNAPSHOT: open_snapshot_load_dialog(ov); break;
+                case TINK_BOOT_ROM:    /* read-only — discoverability only */
                 case TINK_VERSION:
                 case TINK_ROW_COUNT:
                     break;

@@ -1,5 +1,6 @@
 #include "bootstrap.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* PCW boot ROM — 275 bytes shifted out of the printer-MCU into low RAM
@@ -31,23 +32,63 @@ static const u8 PCW_BOOT_ROM[] = {
     0xc3, 0x00, 0x00
 };
 
-/* Try to load the boot ROM from `roms/pcw_boot.rom` relative to the
- * current working directory. Returns the number of bytes loaded, or 0
- * if the file is missing / unreadable / wrong size (caller falls back
- * to the embedded copy). */
-static int load_rom_file(u8 *out, int max_len) {
-    static const char *candidates[] = {
-        "roms/pcw_boot.rom",
-        "./roms/pcw_boot.rom",
-        NULL,
-    };
-    for (int i = 0; candidates[i]; i++) {
-        FILE *f = fopen(candidates[i], "rb");
-        if (!f) continue;
-        int n = (int)fread(out, 1, (size_t)max_len, f);
-        fclose(f);
-        if (n > 0 && n <= max_len) return n;
+/* Try a single candidate path. Returns bytes read (0 on miss). On
+ * success the path is copied into `chosen` so the caller can report it. */
+static int try_rom(const char *path, u8 *out, int max_len,
+                   char *chosen, size_t chosen_cap) {
+    if (!path || !path[0]) return 0;
+    FILE *f = fopen(path, "rb");
+    if (!f) return 0;
+    int n = (int)fread(out, 1, (size_t)max_len, f);
+    fclose(f);
+    if (n > 0 && n <= max_len) {
+        if (chosen && chosen_cap) snprintf(chosen, chosen_cap, "%s", path);
+        return n;
     }
+    return 0;
+}
+
+/* Search the standard user-data locations for a `pcw_boot.rom` override,
+ * falling back to the cwd (legacy behaviour) and finally to the embedded
+ * copy via the caller. Order:
+ *
+ *   Linux/macOS:
+ *     $XDG_DATA_HOME/1985/roms/pcw_boot.rom
+ *     $HOME/.local/share/1985/roms/pcw_boot.rom
+ *   Windows:
+ *     %APPDATA%/1985/roms/pcw_boot.rom
+ *   Always:
+ *     ./roms/pcw_boot.rom
+ *     roms/pcw_boot.rom
+ *
+ * Lets users drop a custom ROM in a stable, per-user location without
+ * needing to launch from the source tree. */
+static int load_rom_file(u8 *out, int max_len,
+                         char *chosen, size_t chosen_cap) {
+    char buf[1024];
+    int n;
+
+#ifdef _WIN32
+    const char *appdata = getenv("APPDATA");
+    if (!appdata || !appdata[0]) appdata = getenv("LOCALAPPDATA");
+    if (appdata && appdata[0]) {
+        snprintf(buf, sizeof(buf), "%s/1985/roms/pcw_boot.rom", appdata);
+        if ((n = try_rom(buf, out, max_len, chosen, chosen_cap)) > 0) return n;
+    }
+#endif
+    const char *xdg = getenv("XDG_DATA_HOME");
+    if (xdg && xdg[0]) {
+        snprintf(buf, sizeof(buf), "%s/1985/roms/pcw_boot.rom", xdg);
+        if ((n = try_rom(buf, out, max_len, chosen, chosen_cap)) > 0) return n;
+    }
+    const char *home = getenv("HOME");
+    if (home && home[0]) {
+        snprintf(buf, sizeof(buf),
+                 "%s/.local/share/1985/roms/pcw_boot.rom", home);
+        if ((n = try_rom(buf, out, max_len, chosen, chosen_cap)) > 0) return n;
+    }
+    if ((n = try_rom("roms/pcw_boot.rom",   out, max_len, chosen, chosen_cap)) > 0) return n;
+    if ((n = try_rom("./roms/pcw_boot.rom", out, max_len, chosen, chosen_cap)) > 0) return n;
     return 0;
 }
 
@@ -58,12 +99,15 @@ void bootstrap_init(Bootstrap *b) {
 
 void bootstrap_reset(Bootstrap *b) {
     /* Prefer the on-disk ROM (lets users drop a different image in
-     * roms/ without rebuilding); fall back to the embedded copy so a
-     * stock checkout still boots out of the box. */
-    int n = load_rom_file(b->stream, (int)sizeof(b->stream));
+     * one of the search paths without rebuilding); fall back to the
+     * embedded copy so a stock checkout still boots out of the box. */
+    b->source[0] = '\0';
+    int n = load_rom_file(b->stream, (int)sizeof(b->stream),
+                          b->source, sizeof(b->source));
     if (n <= 0) {
         n = (int)sizeof(PCW_BOOT_ROM);
         memcpy(b->stream, PCW_BOOT_ROM, (size_t)n);
+        snprintf(b->source, sizeof(b->source), "embedded");
     }
     b->len    = n;
     b->active = true;
