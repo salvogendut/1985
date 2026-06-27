@@ -1,4 +1,5 @@
 #include "disk.h"
+#include "notify.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -63,7 +64,7 @@ static int load_track(DiskTrack *tr, FILE *f, int track_size) {
 
 int disk_load(Disk *d, const char *path) {
     FILE *f = fopen(path, "rb");
-    if (!f) { fprintf(stderr, "disk: cannot open %s\n", path); return -1; }
+    if (!f) { notify_post("disk: cannot open %s", path); return -1; }
 
     uint8_t hdr[256];
     if (fread(hdr, 1, 256, f) != 256) { fclose(f); return -1; }

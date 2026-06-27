@@ -20,6 +20,7 @@ dist_man1_MANS = 1985.1
 	src/mem.c \
 	src/monitor.c \
 	src/multilink.c \
+	src/notify.c \
 	src/overlay.c \
 	src/paste.c \
 	src/pcw.c \
@@ -51,6 +52,7 @@ noinst_HEADERS = \
 	src/mem.h \
 	src/monitor.h \
 	src/multilink.h \
+	src/notify.h \
 	src/overlay.h \
 	src/paste.h \
 	src/pcw.h \

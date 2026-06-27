@@ -11,6 +11,7 @@
 #endif
 
 #include "perryfi.h"
+#include "notify.h"
 
 #include <SDL3/SDL.h>
 #include <ctype.h>
@@ -126,7 +127,7 @@ static int tcp_dial(Perryfi *p, const char *host, int port) {
     p->tcp_fd = fd;
     snprintf(p->remote_host, sizeof(p->remote_host), "%s", host);
     p->remote_port = port;
-    fprintf(stderr, "perryfi: connected to %s:%d\n", host, port);
+    notify_post("perryfi: connected to %s:%d", host, port);
     return 0;
 }
 #endif

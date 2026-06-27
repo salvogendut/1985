@@ -7,6 +7,7 @@
 #endif
 
 #include "serial.h"
+#include "notify.h"
 
 #include <signal.h>
 #include <stdio.h>
@@ -112,10 +113,10 @@ static int open_pty(Serial *s, const char *link_path) {
     }
 
     if (s->pty_link[0])
-        fprintf(stderr, "serial: PTY ready at %s (alias %s)\n",
-                s->pty_slave, s->pty_link);
+        notify_post("serial: PTY ready at %s (alias %s)",
+                    s->pty_slave, s->pty_link);
     else
-        fprintf(stderr, "serial: PTY ready at %s\n", s->pty_slave);
+        notify_post("serial: PTY ready at %s", s->pty_slave);
     return 0;
 }
 

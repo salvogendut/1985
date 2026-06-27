@@ -117,6 +117,7 @@ typedef struct {
                                          * Empty = no override. */
     bool     debug;
     bool     debug_traces;   /* master gate for all stderr noise -- default OFF */
+    bool     show_notifications; /* on-screen toasts via notify_post (default ON) */
     bool     trace_io;
     bool     trace_fdc;
     bool     trace_input;
