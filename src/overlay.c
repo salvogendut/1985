@@ -1081,7 +1081,8 @@ void overlay_render(Overlay *ov, SDL_Renderer *r) {
 
     int rc = row_count(ov, ov->section);
     int footer_y = ORIGIN_Y + rc * LINE_H + 6;
-    int panel_h = footer_y + 22;
+    bool has_section_hint = (ov->section == OV_MEDIA);
+    int panel_h = footer_y + 22 + (has_section_hint ? LINE_H : 0);
 
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, 0, 0, 0, 200);
@@ -1114,7 +1115,7 @@ void overlay_render(Overlay *ov, SDL_Renderer *r) {
               140, 140, 140);
 
     if (ov->section == OV_MEDIA) {
-        draw_text(r, ORIGIN_X, ORIGIN_Y + 4 * LINE_H,
+        draw_text(r, ORIGIN_X, footer_y + LINE_H,
                   "Enter: select DSK   Del: eject", 160, 160, 160);
     }
 
