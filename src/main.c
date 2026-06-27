@@ -21,6 +21,7 @@
 #include "asic.h"
 #include "monitor.h"
 #include "aysound.h"
+#include "notify.h"
 
 /* PCW DK'tronics AY clock — same 1 MHz the CPC sibling uses for its
  * AY-3-8912. Real DK'tronics divides off the PCW system clock; 1 MHz
@@ -486,6 +487,8 @@ int main(int argc, char **argv) {
      * bootstrap_reset once with no override; re-running is cheap. */
     bootstrap_set_override_dir(&pcw.boot, cfg.boot_rom_dir);
     bootstrap_reset(&pcw.boot);
+    notify_init();
+    notify_set_mode(cfg.notifications);
     apply_runtime_config(&pcw, &cfg);
 
     if (cli.load_sna) snapshot_load(&pcw, cli.load_sna);
@@ -807,6 +810,7 @@ int main(int argc, char **argv) {
             auto_space_pending = false;
         }
         overlay_tick(&ov);
+        notify_tick(16);
         /* Live-propagate trace flags from cfg in case the overlay toggled them. */
         pcw.debug_traces = cfg.debug_traces;
         pcw.trace_io  = cfg.debug_traces && cfg.trace_io;
@@ -969,6 +973,7 @@ int main(int argc, char **argv) {
         }
 
         overlay_render(&ov, disp.renderer);
+        notify_render(disp.renderer, DISPLAY_LOGICAL_W, disp.logical_h);
 
         if (gc) {
             if ((gc_skip ^= 1) == 0)

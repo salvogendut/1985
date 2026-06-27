@@ -217,6 +217,7 @@ void config_defaults(Config *c) {
     c->joystick_type        = JOYSTICK_TYPE_DKSOUND;
     c->tinker               = false;
     c->debug                = false;
+    c->notifications        = NOTIFY_MODE_SCREEN;
     snprintf(c->ext_serial_backend, sizeof(c->ext_serial_backend), "pty");
     c->ext_serial_tcp_port  = 4002;
     snprintf(c->ext_serial_pty_link, sizeof(c->ext_serial_pty_link),
@@ -298,6 +299,11 @@ void config_load(Config *c, const char *path) {
         else if (strcmp(k, "boot_rom_dir")         == 0) snprintf(c->boot_rom_dir, sizeof(c->boot_rom_dir), "%s", v);
         else if (strcmp(k, "debug")                == 0) c->debug  = parse_bool(v, c->debug);
         else if (strcmp(k, "debug_traces")         == 0) c->debug_traces = parse_bool(v, c->debug_traces);
+        else if (strcmp(k, "notifications")        == 0) {
+            if      (!strcasecmp(v, "screen"))  c->notifications = NOTIFY_MODE_SCREEN;
+            else if (!strcasecmp(v, "console")) c->notifications = NOTIFY_MODE_CONSOLE;
+            else if (!strcasecmp(v, "off"))     c->notifications = NOTIFY_MODE_OFF;
+        }
         else if (strcmp(k, "trace_io")             == 0) c->trace_io    = parse_bool(v, c->trace_io);
         else if (strcmp(k, "trace_fdc")            == 0) c->trace_fdc   = parse_bool(v, c->trace_fdc);
         else if (strcmp(k, "trace_input")          == 0) c->trace_input = parse_bool(v, c->trace_input);
@@ -384,6 +390,9 @@ int config_save(const Config *c) {
     fprintf(f, "boot_rom_dir = %s\n", c->boot_rom_dir);
     fprintf(f, "debug = %s\n", bool_to_str(c->debug));
     fprintf(f, "debug_traces = %s\n", bool_to_str(c->debug_traces));
+    fprintf(f, "notifications = %s\n",
+            c->notifications == NOTIFY_MODE_SCREEN  ? "screen"  :
+            c->notifications == NOTIFY_MODE_CONSOLE ? "console" : "off");
     fprintf(f, "trace_io = %s\n", bool_to_str(c->trace_io));
     fprintf(f, "trace_fdc = %s\n", bool_to_str(c->trace_fdc));
     fprintf(f, "trace_input = %s\n", bool_to_str(c->trace_input));

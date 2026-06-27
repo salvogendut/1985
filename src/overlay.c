@@ -4,6 +4,7 @@
 #include "disk.h"
 #include "snapshot.h"
 #include "leds.h"
+#include "notify.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -51,6 +52,7 @@ typedef enum {
     TINK_JOYSTICK_TYPE,
     TINK_PRINTER_MODE,
     TINK_PRINTER_MODEL,
+    TINK_NOTIFICATIONS,
     TINK_DEBUG,
     TINK_DEBUG_OUTPUT,
     TINK_TRACE_IO,
@@ -311,6 +313,12 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                 case TINK_JOYSTICK_TYPE: snprintf(label, lsz, "Joystick type"); snprintf(val, vsz, "%s", joystick_type_str(cfg->joystick_type)); break;
                 case TINK_PRINTER_MODE: snprintf(label, lsz, "Printer mode"); snprintf(val, vsz, "%s", sink_str(cfg->ext_print_sink)); break;
                 case TINK_PRINTER_MODEL: snprintf(label, lsz, "Printer model"); snprintf(val, vsz, "%s", printer_hw_str(cfg)); break;
+                case TINK_NOTIFICATIONS:
+                    snprintf(label, lsz, "Notifications");
+                    snprintf(val, vsz, "%s",
+                             cfg->notifications == NOTIFY_MODE_SCREEN  ? "screen"  :
+                             cfg->notifications == NOTIFY_MODE_CONSOLE ? "console" : "off");
+                    break;
                 case TINK_DEBUG: snprintf(label, lsz, "Debugging"); snprintf(val, vsz, "%s", bool_str(cfg->debug)); break;
                 case TINK_DEBUG_OUTPUT: snprintf(label, lsz, "Debug output"); snprintf(val, vsz, "%s", bool_str(cfg->debug_traces)); break;
                 case TINK_TRACE_IO: snprintf(label, lsz, "Trace IO"); snprintf(val, vsz, "%s", bool_str(cfg->trace_io)); break;
@@ -695,6 +703,11 @@ static void activate(Overlay *ov) {
                         apply_pdf_printer(ov);
                         ov->dirty = true;
                     }
+                    break;
+                case TINK_NOTIFICATIONS:
+                    c->notifications = (NotifyMode)((c->notifications + 1) % 3);
+                    notify_set_mode(c->notifications);
+                    ov->dirty = true;
                     break;
                 case TINK_DEBUG: c->debug = !c->debug; ov->dirty = true; break;
                 case TINK_DEBUG_OUTPUT: c->debug_traces = !c->debug_traces; ov->dirty = true; break;
