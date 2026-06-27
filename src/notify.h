@@ -1,18 +1,25 @@
 #pragma once
 
-#include <stdbool.h>
-
 struct SDL_Renderer;
 
-/* On-screen toast notifications. notify_post() queues a fading
- * bottom-left overlay rendered by notify_render(); when disabled via
- * the F9 → Advanced "Notifications" row, posts are dropped silently.
+/* Tri-state notification sink for informational messages from
+ * disk.c / serial.c / perryfi.c. Toggle via F9 → Advanced
+ * "Notifications".
  *
- * The whole module is a single global singleton — call-sites in
- * disk.c / serial.c / perryfi.c need no Notify* in scope. */
+ *   NOTIFY_MODE_SCREEN  — fading bottom-left toast overlay (default)
+ *   NOTIFY_MODE_CONSOLE — stderr only (legacy behaviour)
+ *   NOTIFY_MODE_OFF     — silent
+ *
+ * Single global singleton — call-sites need no context handle. */
+
+typedef enum {
+    NOTIFY_MODE_OFF = 0,
+    NOTIFY_MODE_SCREEN,
+    NOTIFY_MODE_CONSOLE,
+} NotifyMode;
 
 void notify_init(void);
-void notify_set_enabled(bool on);
+void notify_set_mode(NotifyMode mode);
 
 void notify_post(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 

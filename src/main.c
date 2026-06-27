@@ -488,7 +488,7 @@ int main(int argc, char **argv) {
     bootstrap_set_override_dir(&pcw.boot, cfg.boot_rom_dir);
     bootstrap_reset(&pcw.boot);
     notify_init();
-    notify_set_enabled(cfg.show_notifications);
+    notify_set_mode(cfg.notifications);
     apply_runtime_config(&pcw, &cfg);
 
     if (cli.load_sna) snapshot_load(&pcw, cli.load_sna);

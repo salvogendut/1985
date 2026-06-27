@@ -20,14 +20,14 @@ typedef struct {
 } NotifyEntry;
 
 static NotifyEntry g_slots[NOTIFY_MAX];
-static bool        g_enabled = true;
+static NotifyMode  g_mode = NOTIFY_MODE_SCREEN;
 
 void notify_init(void) {
     for (int i = 0; i < NOTIFY_MAX; i++) g_slots[i].age_ms = -1;
-    g_enabled = true;
+    g_mode = NOTIFY_MODE_SCREEN;
 }
 
-void notify_set_enabled(bool on) { g_enabled = on; }
+void notify_set_mode(NotifyMode mode) { g_mode = mode; }
 
 static int oldest_slot(void) {
     int best = 0;
@@ -37,13 +37,18 @@ static int oldest_slot(void) {
 }
 
 void notify_post(const char *fmt, ...) {
-    if (!g_enabled) return;
+    if (g_mode == NOTIFY_MODE_OFF) return;
 
     char buf[NOTIFY_TEXT_MAX];
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
+
+    if (g_mode == NOTIFY_MODE_CONSOLE) {
+        fprintf(stderr, "%s\n", buf);
+        return;
+    }
 
     int slot = -1;
     for (int i = 0; i < NOTIFY_MAX; i++) {
@@ -65,7 +70,7 @@ void notify_tick(int dt_ms) {
 
 void notify_render(struct SDL_Renderer *r, int win_w, int win_h) {
     (void)win_w;
-    if (!g_enabled || !r) return;
+    if (g_mode != NOTIFY_MODE_SCREEN || !r) return;
 
     /* Build an ordered list of active entries by age, oldest first
      * (those are drawn highest; newest sits at the bottom). */

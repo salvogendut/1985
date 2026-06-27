@@ -3,6 +3,7 @@
 #include <limits.h>
 #include "pcw.h"
 #include "input_types.h"
+#include "notify.h"
 
 #ifndef PATH_MAX
 #define PATH_MAX 4096
@@ -117,7 +118,7 @@ typedef struct {
                                          * Empty = no override. */
     bool     debug;
     bool     debug_traces;   /* master gate for all stderr noise -- default OFF */
-    bool     show_notifications; /* on-screen toasts via notify_post (default ON) */
+    NotifyMode notifications;    /* screen / console / off; default screen */
     bool     trace_io;
     bool     trace_fdc;
     bool     trace_input;
