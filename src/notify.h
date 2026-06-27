@@ -4,10 +4,9 @@
 
 struct SDL_Renderer;
 
-/* On-screen toast notifications. notify_post() always writes to stderr
- * (so headless runs and CI logs are unchanged); when enabled, it also
- * queues the message for a fading bottom-left overlay rendered by
- * notify_render(). Toggle via the F9 → Advanced "Notifications" row.
+/* On-screen toast notifications. notify_post() queues a fading
+ * bottom-left overlay rendered by notify_render(); when disabled via
+ * the F9 → Advanced "Notifications" row, posts are dropped silently.
  *
  * The whole module is a single global singleton — call-sites in
  * disk.c / serial.c / perryfi.c need no Notify* in scope. */

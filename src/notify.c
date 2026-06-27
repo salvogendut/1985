@@ -37,13 +37,13 @@ static int oldest_slot(void) {
 }
 
 void notify_post(const char *fmt, ...) {
+    if (!g_enabled) return;
+
     char buf[NOTIFY_TEXT_MAX];
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
-
-    fprintf(stderr, "%s\n", buf);
 
     int slot = -1;
     for (int i = 0; i < NOTIFY_MAX; i++) {
