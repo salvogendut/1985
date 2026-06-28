@@ -22,6 +22,7 @@
 #include "monitor.h"
 #include "aysound.h"
 #include "notify.h"
+#include "shutter_wav.h"
 
 /* PCW DK'tronics AY clock — same 1 MHz the CPC sibling uses for its
  * AY-3-8912. Real DK'tronics divides off the PCW system clock; 1 MHz
@@ -558,6 +559,24 @@ int main(int argc, char **argv) {
      * now that we know the audio sample rate, configure the phase step. */
     beeper_init(&pcw.beeper, AY_AUDIO_RATE);
 
+    /* Camera-shutter SFX for F4 — same approach as 1984. Decode the
+     * embedded WAV once, open a dedicated audio stream, and clear+push
+     * the PCM on each screenshot trigger so it can replay overlapping
+     * AY/beeper output. */
+    SDL_AudioStream *sfx_stream = NULL;
+    Uint8  *sfx_buf     = NULL;
+    Uint32  sfx_buf_len = 0;
+    {
+        SDL_AudioSpec sfx_spec;
+        SDL_IOStream *io = SDL_IOFromConstMem(shutter_wav, shutter_wav_len);
+        if (io && SDL_LoadWAV_IO(io, true, &sfx_spec, &sfx_buf, &sfx_buf_len)) {
+            sfx_stream = SDL_OpenAudioDeviceStream(
+                SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &sfx_spec, NULL, NULL);
+            if (sfx_stream)
+                SDL_ResumeAudioStreamDevice(sfx_stream);
+        }
+    }
+
     /* SDL gamepad for the DK'tronics joystick. Pick the first one that
      * shows up; hot-plug handled below via SDL_EVENT_GAMEPAD_ADDED. */
     SDL_InitSubSystem(SDL_INIT_GAMEPAD);
@@ -687,6 +706,10 @@ int main(int argc, char **argv) {
                             snprintf(path, sizeof(path), "1985-%05d.ppm", frame);
                             display_save_ppm(&disp, path);
                             printf("screenshot: %s\n", path);
+                            if (sfx_stream && sfx_buf) {
+                                SDL_ClearAudioStream(sfx_stream);
+                                SDL_PutAudioStreamData(sfx_stream, sfx_buf, (int)sfx_buf_len);
+                            }
                             break;
                         }
                         case SDLK_F5: {
@@ -1057,7 +1080,9 @@ int main(int argc, char **argv) {
     set_mouse_capture(&disp, &pcw.mouse, &mouse_captured, false);
     monitor_destroy(mon);
     if (gamepad)   SDL_CloseGamepad(gamepad);
-    if (ay_stream) SDL_DestroyAudioStream(ay_stream);
+    if (ay_stream)  SDL_DestroyAudioStream(ay_stream);
+    if (sfx_stream) SDL_DestroyAudioStream(sfx_stream);
+    if (sfx_buf)    SDL_free(sfx_buf);
     paste_free(&paste);
     printer_shutdown(&pcw.printer);
     display_quit(&disp);
