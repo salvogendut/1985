@@ -61,6 +61,7 @@ noinst_HEADERS = \
 	src/printer.h \
 	src/roller.h \
 	src/serial.h \
+	src/shutter_wav.h \
 	src/snapshot.h \
 	src/startup_debug.h \
 	src/symbols.h \
