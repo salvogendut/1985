@@ -12,12 +12,14 @@
  * declaration matches the `Beeper *` here without a cast. */
 typedef struct Beeper {
     bool on;
-    u32  phase_acc;   /* 24.8-ish fixed-point phase */
-    u32  phase_step;  /* (freq << 16) / rate — set in beeper_init */
+    u32  phase_acc;   /* 32-bit oscillator phase accumulator */
+    u32  phase_step;  /* (freq << 32) / rate — set from audio_rate */
+    int  audio_rate;  /* host output rate used to derive phase_step */
 } Beeper;
 
 void beeper_init  (Beeper *b, int audio_rate);
 void beeper_reset (Beeper *b);
+void beeper_set_audio_rate(Beeper *b, int audio_rate);
 void beeper_set_on(Beeper *b, bool on);
 
 /* Mix the beeper square wave into `buf` (additive). Pass the same

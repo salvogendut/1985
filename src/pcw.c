@@ -311,7 +311,14 @@ void pcw_init(PCW *pcw, PcwModel model, int memory_kb) {
 }
 
 void pcw_cold_boot(PCW *pcw, PcwModel model, int memory_kb) {
+    int beeper_audio_rate = pcw->beeper.audio_rate;
     pcw_init(pcw, model, memory_kb);
+    /* pcw_init constructs the beeper before SDL audio exists, so it
+     * uses rate 0. Runtime cold boots must keep the already-open audio
+     * stream's rate; otherwise the beeper gates DC and resets produce
+     * clicks instead of the 3.75 kHz tone. */
+    if (beeper_audio_rate > 0)
+        beeper_set_audio_rate(&pcw->beeper, beeper_audio_rate);
 }
 
 void pcw_reset(PCW *pcw) {
