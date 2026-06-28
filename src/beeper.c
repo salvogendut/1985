@@ -11,6 +11,12 @@
 
 void beeper_init(Beeper *b, int audio_rate) {
     memset(b, 0, sizeof(*b));
+    beeper_set_audio_rate(b, audio_rate);
+}
+
+void beeper_set_audio_rate(Beeper *b, int audio_rate) {
+    b->audio_rate = audio_rate;
+    b->phase_step = 0;
     if (audio_rate <= 0) return;
     /* phase_step is the amount added to phase_acc per sample so that
      * the MSB toggles at BEEPER_FREQ_HZ. With phase_acc as a 32-bit
