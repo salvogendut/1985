@@ -1,5 +1,5 @@
 Name:           1985
-Version:        0.4.2
+Version:        0.4.3
 Release:        1%{?dist}
 Summary:        Amstrad PCW 8256 / 8512 / 9512 emulator
 
@@ -78,6 +78,19 @@ appstream-util validate-relax --nonet %{buildroot}%{_datadir}/metainfo/io.github
 %{_datadir}/icons/hicolor/*/apps/io.github.salvogendut.Emulator1985.png
 
 %changelog
+* Sun Jun 28 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.3-1
+- On-screen toast notifications: disk-open failures, serial PTY readiness
+  and PerryFi dial-outs now fade in/out over the PCW display. F9 ▸
+  Advanced ▸ Notifications cycles screen / console / off (#128).
+- LED hover labels: mousing over a status LED in the bottom bar now
+  reveals what it represents (#132).
+- Real CRT controls in Advanced: scanline opacity, brightness, contrast
+  and per-channel RGB gain knobs for the lightweight CRT post-process
+  (#132).
+- Media tab overlay panel resized so the "Enter: select DSK / Del:
+  eject" hint sits inside the dark panel instead of clipping over the
+  PCW backdrop (#130).
+
 * Fri Jun 26 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.2-1
 - PCW built-in beeper (F8 cmd 0x0B/0x0C, 3.75 kHz) — audit M9.
   Boot ROM error tones, CP/M BEL, +/- and F7/F8 PCW keys all audible.

@@ -45,6 +45,8 @@ ext_pdf_printer_dir     =
 [advanced]
 # Set tinker=true to unlock the Advanced tab in the F9 overlay.
 tinker = false
+# screen = fading toast over PCW display; console = stderr line; off = silent
+notifications = screen
 debug = false
 debug_traces = false
 trace_io = false

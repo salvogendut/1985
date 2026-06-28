@@ -89,6 +89,12 @@ with adjustable scanlines, brightness, contrast, and red / green /
 blue channel gain. The effect applies after the PCW tint or decorative
 colour mode is resolved.
 
+Disk-open failures, serial PTY readiness and PerryFi dial-outs surface
+as fading bottom-left toasts over the PCW display. Advanced ▸
+**Notifications** cycles **screen** (default) / **console** (stderr
+only, pre-0.4.3 behaviour) / **off**. Hovering over any status LED in
+the bottom bar reveals its label.
+
 Snapshots — F9 ▸ Advanced ▸ **Save snapshot** / **Load snapshot**
 write a `.sna` file containing the full RAM, the Z80 register set,
 and the ASIC / memory-paging state. Loading a snapshot taken on a

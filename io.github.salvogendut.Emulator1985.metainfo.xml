@@ -28,6 +28,26 @@
   <url type="bugtracker">https://github.com/salvogendut/1985/issues</url>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.4.3" date="2026-06-28">
+      <description>
+        <p>On-screen toast notifications for disk-open failures, serial PTY readiness and PerryFi dial-outs — F9 ▸ Advanced ▸ Notifications cycles screen / console / off. LED hover labels reveal what each status LED represents. Real CRT post-process gains adjustable scanline, brightness, contrast and per-channel RGB controls under Advanced. Media tab overlay panel resized so the "Enter / Del" hint no longer clips.</p>
+      </description>
+    </release>
+    <release version="0.4.2" date="2026-06-26">
+      <description>
+        <p>PCW built-in beeper (boot-ROM error tones, CP/M BEL, +/- and F7/F8 keys all audible). Multilink probe-stub at ports 0xA6/0xA7 prevents Multilink-aware software from hanging. Boot ROM search now walks the XDG data and config paths; new Advanced row shows the resolved path with picker and clear. Advanced "Version" row also shows the git commit.</p>
+      </description>
+    </release>
+    <release version="0.4.1" date="2026-06-26">
+      <description>
+        <p>CF2DD blank disc spec fix — drive-B writes now work on PCW 8512/9512 and on 8256 with the Second drive accessory. Overlay file pickers (Drive A/B, blank create, snapshot Load/Save) remember the last directory used. Windows build persists config under %APPDATA%/1985 instead of next to the .exe.</p>
+      </description>
+    </release>
+    <release version="0.4.0" date="2026-06-23">
+      <description>
+        <p>F9 ▸ General reorganised: PCW Backplane now lives here and gates the whole Extensions tab; Second drive moved here too (8256 only). Floppy LED B is hidden when the running model has no second drive. Printer LED hides when the backplane is unplugged. Man page refreshed.</p>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-06-21">
       <description>
         <p>Initial scaffolding: SDL3 window, F9 overlay framework copied from 1984, Z80 core wired against PCW memory and I/O ports (0x00/0x01 FDC, 0xF0-0xF3 banking, 0xF4-0xF8 ASIC, 0xFC/0xFD printer status), 778-byte boot stream + boot loader at 0x0002. PDF printer output is available from the Extensions overlay.</p>

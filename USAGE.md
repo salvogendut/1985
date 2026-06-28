@@ -48,4 +48,17 @@
   scanlines/brightness/contrast/RGB controls, tint (green / amber /
   white), tint mode (normal / glow), video mode, Mouse type (AMX /
   Kempston), Joystick type, printer mode/model, debug toggles, serial
-  mode, snapshot load/save.
+  mode, snapshot load/save, Notifications (screen / console / off).
+
+## Notifications
+
+Disk-open failures, serial PTY readiness and PerryFi dial-outs are
+surfaced through the notification system. F9 ▸ Advanced ▸
+**Notifications** cycles three modes:
+
+- **screen** (default) — a fading bottom-left toast over the PCW display.
+- **console** — one stderr line, no on-screen overlay (the pre-0.4.3 behaviour).
+- **off** — silent.
+
+Hovering over any status LED in the bottom bar reveals its label
+(floppy A/B, printer, serial RX/TX, …).
