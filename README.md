@@ -84,6 +84,11 @@ real PCW software drives them), ported from ZEsarUX:
 - **EGA** — 4 bpp, classic 16-colour IBM palette, quadrupled
   horizontally.
 
+Advanced ▸ **Real CRT** enables a lightweight display post-process
+with adjustable scanlines, brightness, contrast, and red / green /
+blue channel gain. The effect applies after the PCW tint or decorative
+colour mode is resolved.
+
 Snapshots — F9 ▸ Advanced ▸ **Save snapshot** / **Load snapshot**
 write a `.sna` file containing the full RAM, the Z80 register set,
 and the ASIC / memory-paging state. Loading a snapshot taken on a

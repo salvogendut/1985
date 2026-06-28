@@ -44,6 +44,13 @@ static ExtRow ext_row_at(const Config *cfg, int row) {
 
 typedef enum {
     TINK_SMOOTHING = 0,
+    TINK_REAL_CRT,
+    TINK_CRT_SCANLINES,
+    TINK_CRT_BRIGHTNESS,
+    TINK_CRT_CONTRAST,
+    TINK_CRT_RED,
+    TINK_CRT_GREEN,
+    TINK_CRT_BLUE,
     TINK_TINT,
     TINK_TINT_MODE,
     TINK_VIDEO_MODE,
@@ -67,6 +74,119 @@ typedef enum {
     TINK_VERSION,
     TINK_ROW_COUNT,
 } TinkerRow;
+
+static TinkerRow tinker_row_at(const Overlay *ov, int row) {
+    int r = 0;
+    if (row == r++) return TINK_SMOOTHING;
+    if (row == r++) return TINK_REAL_CRT;
+    if (ov->cfg->real_crt) {
+        if (row == r++) return TINK_CRT_SCANLINES;
+        if (row == r++) return TINK_CRT_BRIGHTNESS;
+        if (row == r++) return TINK_CRT_CONTRAST;
+        if (row == r++) return TINK_CRT_RED;
+        if (row == r++) return TINK_CRT_GREEN;
+        if (row == r++) return TINK_CRT_BLUE;
+    }
+    if (row == r++) return TINK_TINT;
+    if (row == r++) return TINK_TINT_MODE;
+    if (row == r++) return TINK_VIDEO_MODE;
+    if (row == r++) return TINK_REGION;
+    if (row == r++) return TINK_MOUSE_TYPE;
+    if (row == r++) return TINK_JOYSTICK_TYPE;
+    if (row == r++) return TINK_PRINTER_MODE;
+    if (row == r++) return TINK_PRINTER_MODEL;
+    if (row == r++) return TINK_NOTIFICATIONS;
+    if (row == r++) return TINK_DEBUG;
+    if (row == r++) return TINK_DEBUG_OUTPUT;
+    if (row == r++) return TINK_TRACE_IO;
+    if (row == r++) return TINK_TRACE_FDC;
+    if (row == r++) return TINK_TRACE_INPUT;
+    if (row == r++) return TINK_SERIAL_MODE;
+    if (row == r++) return TINK_SERIAL_PATH;
+    if (row == r++) return TINK_KEYBOARD_LAYOUT;
+    if (row == r++) return TINK_SAVE_SNAPSHOT;
+    if (row == r++) return TINK_LOAD_SNAPSHOT;
+    if (row == r++) return TINK_BOOT_ROM;
+    if (row == r++) return TINK_VERSION;
+    return TINK_ROW_COUNT;
+}
+
+static int tinker_row_count(const Overlay *ov) {
+    int n = 0;
+    while (tinker_row_at(ov, n) != TINK_ROW_COUNT)
+        n++;
+    return n;
+}
+
+static void overlay_apply_crt(Overlay *ov) {
+    if (!ov->disp) return;
+    display_set_crt(ov->disp, ov->cfg->real_crt, ov->cfg->crt_scanlines,
+                    ov->cfg->crt_brightness, ov->cfg->crt_contrast,
+                    ov->cfg->crt_red, ov->cfg->crt_green, ov->cfg->crt_blue);
+}
+
+static int cycle_crt_percent(int v, int lo, int hi) {
+    v += 5;
+    if (v > hi) v = lo;
+    return v;
+}
+
+static bool reset_tinker_crt_item(Overlay *ov) {
+    if (ov->section != OV_TINKER)
+        return false;
+
+    bool old_real_crt = ov->cfg->real_crt;
+    int old_scanlines = ov->cfg->crt_scanlines;
+    int old_brightness = ov->cfg->crt_brightness;
+    int old_contrast = ov->cfg->crt_contrast;
+    int old_red = ov->cfg->crt_red;
+    int old_green = ov->cfg->crt_green;
+    int old_blue = ov->cfg->crt_blue;
+
+    switch (tinker_row_at(ov, ov->row)) {
+        case TINK_REAL_CRT:
+            ov->cfg->real_crt = false;
+            ov->cfg->crt_scanlines = DISPLAY_CRT_SCANLINES_DEFAULT;
+            ov->cfg->crt_brightness = DISPLAY_CRT_BRIGHTNESS_DEFAULT;
+            ov->cfg->crt_contrast = DISPLAY_CRT_CONTRAST_DEFAULT;
+            ov->cfg->crt_red = DISPLAY_CRT_RGB_DEFAULT;
+            ov->cfg->crt_green = DISPLAY_CRT_RGB_DEFAULT;
+            ov->cfg->crt_blue = DISPLAY_CRT_RGB_DEFAULT;
+            break;
+        case TINK_CRT_SCANLINES:
+            ov->cfg->crt_scanlines = DISPLAY_CRT_SCANLINES_DEFAULT;
+            break;
+        case TINK_CRT_BRIGHTNESS:
+            ov->cfg->crt_brightness = DISPLAY_CRT_BRIGHTNESS_DEFAULT;
+            break;
+        case TINK_CRT_CONTRAST:
+            ov->cfg->crt_contrast = DISPLAY_CRT_CONTRAST_DEFAULT;
+            break;
+        case TINK_CRT_RED:
+            ov->cfg->crt_red = DISPLAY_CRT_RGB_DEFAULT;
+            break;
+        case TINK_CRT_GREEN:
+            ov->cfg->crt_green = DISPLAY_CRT_RGB_DEFAULT;
+            break;
+        case TINK_CRT_BLUE:
+            ov->cfg->crt_blue = DISPLAY_CRT_RGB_DEFAULT;
+            break;
+        default:
+            return false;
+    }
+
+    if (old_real_crt != ov->cfg->real_crt ||
+        old_scanlines != ov->cfg->crt_scanlines ||
+        old_brightness != ov->cfg->crt_brightness ||
+        old_contrast != ov->cfg->crt_contrast ||
+        old_red != ov->cfg->crt_red ||
+        old_green != ov->cfg->crt_green ||
+        old_blue != ov->cfg->crt_blue) {
+        overlay_apply_crt(ov);
+        ov->dirty = true;
+    }
+    return true;
+}
 
 /* General-tab row identity. Same shape as ExtRow: the displayed row
  * index shifts when an 8256-only row is hidden, so navigation routes
@@ -168,7 +288,7 @@ static int row_count(const Overlay *ov, OvSection s) {
             if (!ov->cfg->ext_sanpollo_backplane) return 0;
             return 5;
         }
-        case OV_TINKER:     return ov->cfg->tinker ? TINK_ROW_COUNT : 0;
+        case OV_TINKER:     return ov->cfg->tinker ? tinker_row_count(ov) : 0;
         default:            return 0;
     }
 }
@@ -303,8 +423,15 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
             }
             break;
         case OV_TINKER:
-            switch (row) {
+            switch (tinker_row_at(ov, row)) {
                 case TINK_SMOOTHING: snprintf(label, lsz, "Smoothing"); snprintf(val, vsz, "%s", bool_str(cfg->fullscreen_smoothing)); break;
+                case TINK_REAL_CRT: snprintf(label, lsz, "Real CRT"); snprintf(val, vsz, "%s", cfg->real_crt ? "enabled" : "disabled"); break;
+                case TINK_CRT_SCANLINES: snprintf(label, lsz, "Scanlines"); snprintf(val, vsz, "%d%%", cfg->crt_scanlines); break;
+                case TINK_CRT_BRIGHTNESS: snprintf(label, lsz, "Brightness"); snprintf(val, vsz, "%d%%", cfg->crt_brightness); break;
+                case TINK_CRT_CONTRAST: snprintf(label, lsz, "Contrast"); snprintf(val, vsz, "%d%%", cfg->crt_contrast); break;
+                case TINK_CRT_RED: snprintf(label, lsz, "Red"); snprintf(val, vsz, "%d%%", cfg->crt_red); break;
+                case TINK_CRT_GREEN: snprintf(label, lsz, "Green"); snprintf(val, vsz, "%d%%", cfg->crt_green); break;
+                case TINK_CRT_BLUE: snprintf(label, lsz, "Blue"); snprintf(val, vsz, "%d%%", cfg->crt_blue); break;
                 case TINK_TINT: snprintf(label, lsz, "Tint"); snprintf(val, vsz, "%s", mono_str(cfg->monochrome)); break;
                 case TINK_TINT_MODE: snprintf(label, lsz, "Tint mode"); snprintf(val, vsz, "%s", cfg->tint_glow ? "glow" : "normal"); break;
                 case TINK_VIDEO_MODE: snprintf(label, lsz, "Video mode"); snprintf(val, vsz, "%s", video_str(cfg->video_mode)); break;
@@ -648,11 +775,48 @@ static void activate(Overlay *ov) {
             }
             break;
         case OV_TINKER:
-            switch (ov->row) {
+            switch (tinker_row_at(ov, ov->row)) {
                 case TINK_SMOOTHING:
                     c->fullscreen_smoothing = !c->fullscreen_smoothing;
                     if (ov->disp)
                         display_set_smoothing(ov->disp, c->fullscreen_smoothing);
+                    ov->dirty = true;
+                    break;
+                case TINK_REAL_CRT:
+                    c->real_crt = !c->real_crt;
+                    overlay_apply_crt(ov);
+                    ov->dirty = true;
+                    break;
+                case TINK_CRT_SCANLINES:
+                    c->crt_scanlines = cycle_crt_percent(c->crt_scanlines, 0, 95);
+                    overlay_apply_crt(ov);
+                    ov->dirty = true;
+                    break;
+                case TINK_CRT_BRIGHTNESS:
+                    c->crt_brightness -= 5;
+                    if (c->crt_brightness < 50)
+                        c->crt_brightness = 100;
+                    overlay_apply_crt(ov);
+                    ov->dirty = true;
+                    break;
+                case TINK_CRT_CONTRAST:
+                    c->crt_contrast = cycle_crt_percent(c->crt_contrast, 50, 150);
+                    overlay_apply_crt(ov);
+                    ov->dirty = true;
+                    break;
+                case TINK_CRT_RED:
+                    c->crt_red = cycle_crt_percent(c->crt_red, 50, 150);
+                    overlay_apply_crt(ov);
+                    ov->dirty = true;
+                    break;
+                case TINK_CRT_GREEN:
+                    c->crt_green = cycle_crt_percent(c->crt_green, 50, 150);
+                    overlay_apply_crt(ov);
+                    ov->dirty = true;
+                    break;
+                case TINK_CRT_BLUE:
+                    c->crt_blue = cycle_crt_percent(c->crt_blue, 50, 150);
+                    overlay_apply_crt(ov);
                     ov->dirty = true;
                     break;
                 case TINK_TINT:
@@ -859,6 +1023,7 @@ static void close_overlay(Overlay *ov, bool save) {
          * cycled. Glow must come after monochrome — display_set_*
          * both write d->bg, glow needs to win. */
         if (ov->disp) {
+            overlay_apply_crt(ov);
             display_set_monochrome(ov->disp, ov->cfg->monochrome);
             display_set_tint_glow(ov->disp, ov->cfg->tint_glow);
             display_set_video_mode(ov->disp, ov->cfg->video_mode);
@@ -1023,8 +1188,10 @@ bool overlay_handle_event(Overlay *ov, SDL_Event *ev) {
         case SDLK_BACKSPACE:
             if (ov->section == OV_MEDIA && (ov->row == 0 || ov->row == 1))
                 eject_disk(ov, ov->row);
+            else if (reset_tinker_crt_item(ov))
+                break;
             else if (ov->section == OV_TINKER && ov->cfg->tinker
-                  && ov->row == TINK_BOOT_ROM
+                  && tinker_row_at(ov, ov->row) == TINK_BOOT_ROM
                   && (ov->cfg->boot_rom_dir[0]
                       || ov->cfg->last_boot_rom_dir[0])) {
                 /* Clear both the active override and the remembered

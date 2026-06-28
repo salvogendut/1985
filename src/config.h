@@ -41,6 +41,11 @@ typedef enum {
     REGION_NTSC,
 } Region;
 
+#define DISPLAY_CRT_SCANLINES_DEFAULT 35
+#define DISPLAY_CRT_BRIGHTNESS_DEFAULT 100
+#define DISPLAY_CRT_CONTRAST_DEFAULT 100
+#define DISPLAY_CRT_RGB_DEFAULT 100
+
 typedef struct {
     /* [machine] */
     PcwModel model;          /* default PCW_MODEL_8256 */
@@ -64,6 +69,13 @@ typedef struct {
     int      scale;          /* 1..4 */
     bool     fullscreen;
     bool     fullscreen_smoothing;
+    bool     real_crt;       /* enable lightweight CRT post-process */
+    int      crt_scanlines;  /* scanline opacity, 0..95 */
+    int      crt_brightness; /* texture brightness, 50..100 */
+    int      crt_contrast;   /* texture contrast, 50..150 */
+    int      crt_red;        /* red channel gain, 50..150 */
+    int      crt_green;      /* green channel gain, 50..150 */
+    int      crt_blue;       /* blue channel gain, 50..150 */
     MonoMode  monochrome;    /* default MONO_GREEN */
     bool      tint_glow;     /* CRT-style: dim → near-black so the tint
                               * really pops, like a turned-up brightness
