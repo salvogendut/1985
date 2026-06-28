@@ -17,6 +17,16 @@ drive_b =
 scale = 2
 fullscreen = false
 fullscreen_smoothing = true
+# Lightweight CRT post-process. real_crt enables the Advanced overlay controls.
+real_crt = false
+# Scanline opacity, 0..95. Brightness is 50..100.
+# Contrast and RGB channel gains are 50..150.
+crt_scanlines = 35
+crt_brightness = 100
+crt_contrast = 100
+crt_red = 100
+crt_green = 100
+crt_blue = 100
 # off / green / amber / white. PCW shipped with a green-phosphor monitor.
 monochrome = green
 

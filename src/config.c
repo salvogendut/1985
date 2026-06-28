@@ -211,6 +211,13 @@ void config_defaults(Config *c) {
     c->scale                = 1;
     c->fullscreen           = false;
     c->fullscreen_smoothing = true;
+    c->real_crt             = false;
+    c->crt_scanlines        = DISPLAY_CRT_SCANLINES_DEFAULT;
+    c->crt_brightness       = DISPLAY_CRT_BRIGHTNESS_DEFAULT;
+    c->crt_contrast         = DISPLAY_CRT_CONTRAST_DEFAULT;
+    c->crt_red              = DISPLAY_CRT_RGB_DEFAULT;
+    c->crt_green            = DISPLAY_CRT_RGB_DEFAULT;
+    c->crt_blue             = DISPLAY_CRT_RGB_DEFAULT;
     c->monochrome           = MONO_GREEN;
     c->input_device         = INPUT_DEVICE_JOYSTICK;
     c->mouse_type           = MOUSE_TYPE_AMX;
@@ -264,6 +271,31 @@ void config_load(Config *c, const char *path) {
         else if (strcmp(k, "scale")                == 0) c->scale = atoi(v);
         else if (strcmp(k, "fullscreen")           == 0) c->fullscreen = parse_bool(v, c->fullscreen);
         else if (strcmp(k, "fullscreen_smoothing") == 0) c->fullscreen_smoothing = parse_bool(v, c->fullscreen_smoothing);
+        else if (strcmp(k, "real_crt")             == 0) c->real_crt = parse_bool(v, c->real_crt);
+        else if (strcmp(k, "crt_scanlines")        == 0) {
+            int n = atoi(v);
+            if (n >= 0 && n <= 95) c->crt_scanlines = n;
+        }
+        else if (strcmp(k, "crt_brightness")       == 0) {
+            int n = atoi(v);
+            if (n >= 50 && n <= 100) c->crt_brightness = n;
+        }
+        else if (strcmp(k, "crt_contrast")         == 0) {
+            int n = atoi(v);
+            if (n >= 50 && n <= 150) c->crt_contrast = n;
+        }
+        else if (strcmp(k, "crt_red")              == 0) {
+            int n = atoi(v);
+            if (n >= 50 && n <= 150) c->crt_red = n;
+        }
+        else if (strcmp(k, "crt_green")            == 0) {
+            int n = atoi(v);
+            if (n >= 50 && n <= 150) c->crt_green = n;
+        }
+        else if (strcmp(k, "crt_blue")             == 0) {
+            int n = atoi(v);
+            if (n >= 50 && n <= 150) c->crt_blue = n;
+        }
         else if (strcmp(k, "monochrome")           == 0) c->monochrome = parse_mono(v, c->monochrome);
         else if (strcmp(k, "tint_glow")            == 0) c->tint_glow  = parse_bool(v, c->tint_glow);
         else if (strcmp(k, "video_mode")           == 0) c->video_mode = parse_video(v, c->video_mode);
@@ -365,6 +397,13 @@ int config_save(const Config *c) {
     fprintf(f, "scale = %d\n", c->scale);
     fprintf(f, "fullscreen = %s\n", bool_to_str(c->fullscreen));
     fprintf(f, "fullscreen_smoothing = %s\n", bool_to_str(c->fullscreen_smoothing));
+    fprintf(f, "real_crt = %s\n", bool_to_str(c->real_crt));
+    fprintf(f, "crt_scanlines = %d\n", c->crt_scanlines);
+    fprintf(f, "crt_brightness = %d\n", c->crt_brightness);
+    fprintf(f, "crt_contrast = %d\n", c->crt_contrast);
+    fprintf(f, "crt_red = %d\n", c->crt_red);
+    fprintf(f, "crt_green = %d\n", c->crt_green);
+    fprintf(f, "crt_blue = %d\n", c->crt_blue);
     fprintf(f, "monochrome = %s\n", mono_to_str(c->monochrome));
     fprintf(f, "tint_glow  = %s\n", bool_to_str(c->tint_glow));
     fprintf(f, "video_mode = %s\n\n", video_to_str(c->video_mode));

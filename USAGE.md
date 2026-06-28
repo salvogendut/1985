@@ -44,7 +44,8 @@
 - **Media** — drive A and B file pickers.
 - **Extensions** (only when the PCW Backplane is enabled) — serial port,
   PerryFi, DK'tronics sound, and Input Device (Mouse / Joystick).
-- **Advanced** (hidden unless `tinker=true`) — smoothing, tint
-  (green / amber / white), tint mode (normal / glow), video mode,
-  Mouse type (AMX / Kempston), Joystick type (DKsound / Atari),
-  printer mode/model, debug toggles, serial mode, snapshot load/save.
+- **Advanced** (hidden unless `tinker=true`) — smoothing, Real CRT
+  scanlines/brightness/contrast/RGB controls, tint (green / amber /
+  white), tint mode (normal / glow), video mode, Mouse type (AMX /
+  Kempston), Joystick type, printer mode/model, debug toggles, serial
+  mode, snapshot load/save.

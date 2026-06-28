@@ -393,7 +393,40 @@ static void set_mouse_capture(Display *disp, PcwMouse *mouse,
         return;
     }
     *captured = enable;
+    if (enable) leds_set_mouse_position(0.0f, 0.0f, false);
     if (!enable) pcwmouse_clear_input(mouse);
+}
+
+static void leds_track_event(Display *disp, SDL_WindowID window_id,
+                             const SDL_Event *ev, bool mouse_captured) {
+    if (mouse_captured) {
+        if (ev->type == SDL_EVENT_MOUSE_MOTION ||
+            ev->type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+            ev->type == SDL_EVENT_MOUSE_BUTTON_UP ||
+            ev->type == SDL_EVENT_WINDOW_MOUSE_LEAVE)
+            leds_set_mouse_position(0.0f, 0.0f, false);
+        return;
+    }
+
+    float rx = 0.0f, ry = 0.0f;
+    if (ev->type == SDL_EVENT_MOUSE_MOTION &&
+        ev->motion.windowID == window_id &&
+        SDL_RenderCoordinatesFromWindow(disp->renderer,
+                                        ev->motion.x, ev->motion.y,
+                                        &rx, &ry)) {
+        leds_set_mouse_position(rx, ry, true);
+    } else if ((ev->type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+                ev->type == SDL_EVENT_MOUSE_BUTTON_UP) &&
+               ev->button.windowID == window_id &&
+               SDL_RenderCoordinatesFromWindow(disp->renderer,
+                                               ev->button.x, ev->button.y,
+                                               &rx, &ry)) {
+        leds_set_mouse_position(rx, ry, true);
+    } else if ((ev->type == SDL_EVENT_WINDOW_MOUSE_LEAVE ||
+                ev->type == SDL_EVENT_WINDOW_FOCUS_LOST) &&
+               ev->window.windowID == window_id) {
+        leds_set_mouse_position(0.0f, 0.0f, false);
+    }
 }
 
 /* Re-apply every config-driven setting that pcw_init/pcw_cold_boot
@@ -475,6 +508,7 @@ int main(int argc, char **argv) {
 
     Display disp;
     if (display_init(&disp, &cfg) < 0) return 1;
+    SDL_WindowID display_window_id = SDL_GetWindowID(disp.win);
 
     /* PCW carries the full 2 MB RAM inline; that would blow the default
      * 1 MB Windows main-thread stack before main() even runs. Static
@@ -583,8 +617,11 @@ int main(int argc, char **argv) {
                     && (ov.visible || !mouse_input_enabled(&cfg)))
                     set_mouse_capture(&disp, &pcw.mouse,
                                       &mouse_captured, false);
+                if (ov.visible)
+                    leds_set_mouse_position(0.0f, 0.0f, false);
                 continue;
             }
+            leds_track_event(&disp, display_window_id, &ev, mouse_captured);
             switch (ev.type) {
                 case SDL_EVENT_QUIT:
                     running = false; break;
@@ -974,6 +1011,11 @@ int main(int argc, char **argv) {
 
         overlay_render(&ov, disp.renderer);
         notify_render(disp.renderer, DISPLAY_LOGICAL_W, disp.logical_h);
+        {
+            int ww, wh;
+            SDL_GetWindowSize(disp.win, &ww, &wh);
+            leds_render_hover(disp.renderer, ww, wh);
+        }
 
         if (gc) {
             if ((gc_skip ^= 1) == 0)

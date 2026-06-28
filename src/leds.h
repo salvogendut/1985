@@ -32,5 +32,13 @@ void leds_ping(LedId id);
 /* Signal RX (tx=false) or TX (tx=true) activity on a split LED. */
 void leds_ping_split(LedId id, bool tx);
 
+/* Track mouse hover over the LED bar in renderer/logical coordinates.
+ * Pass inside=false on window leave or mouse capture to clear the label. */
+void leds_set_mouse_position(float x, float y, bool inside);
+
 /* Render the LED bar across (x,y,w,h). */
 void leds_render(SDL_Renderer *r, int x, int y, int w, int h);
+
+/* Render the active hover label, if any. Call after bottom status UI so
+ * the tooltip is not covered. */
+void leds_render_hover(SDL_Renderer *r, int window_w, int window_h);

@@ -1,7 +1,70 @@
 #include "display.h"
 #include "leds.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+
+static int clamp_int(int v, int lo, int hi) {
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+
+static float render_scale(Display *d) {
+    int lw = 0, lh = 0;
+    SDL_RendererLogicalPresentation mode;
+    SDL_FRect rect;
+    if (d->renderer &&
+        SDL_GetRenderLogicalPresentation(d->renderer, &lw, &lh, &mode) &&
+        lw > 0 && lh > 0 &&
+        SDL_GetRenderLogicalPresentationRect(d->renderer, &rect) &&
+        rect.w > 0.0f && rect.h > 0.0f) {
+        float sx = rect.w / (float)lw;
+        float sy = rect.h / (float)lh;
+        float s = sx < sy ? sx : sy;
+        if (s > 0.0f) return s;
+    }
+    return 1.0f;
+}
+
+static unsigned adjust_component(unsigned c, int brightness, int contrast,
+                                 int gain) {
+    int v = 128 + (((int)c - 128) * contrast + 50) / 100;
+    v = (v * brightness + 50) / 100;
+    v = (v * gain + 50) / 100;
+    return (unsigned)clamp_int(v, 0, 255);
+}
+
+static const u32 *display_crt_pixels(Display *d) {
+    if (!d->crt_enabled ||
+        (d->crt_brightness == DISPLAY_CRT_BRIGHTNESS_DEFAULT &&
+         d->crt_contrast == DISPLAY_CRT_CONTRAST_DEFAULT &&
+         d->crt_red == DISPLAY_CRT_RGB_DEFAULT &&
+         d->crt_green == DISPLAY_CRT_RGB_DEFAULT &&
+         d->crt_blue == DISPLAY_CRT_RGB_DEFAULT))
+        return d->fb;
+    if (!d->crt_fb)
+        return d->fb;
+
+    int n = DISPLAY_W * DISPLAY_H;
+    for (int i = 0; i < n; i++) {
+        u32 px = d->fb[i];
+        unsigned r = adjust_component((px >> 16) & 0xFF,
+                                      d->crt_brightness,
+                                      d->crt_contrast,
+                                      d->crt_red);
+        unsigned g = adjust_component((px >> 8) & 0xFF,
+                                      d->crt_brightness,
+                                      d->crt_contrast,
+                                      d->crt_green);
+        unsigned b = adjust_component(px & 0xFF,
+                                      d->crt_brightness,
+                                      d->crt_contrast,
+                                      d->crt_blue);
+        d->crt_fb[i] = (px & 0xFF000000u) | (r << 16) | (g << 8) | b;
+    }
+    return d->crt_fb;
+}
 
 static u32 mono_lit(MonoMode m) {
     switch (m) {
@@ -88,6 +151,11 @@ void display_put_indexed(Display *d, int x, int y, int idx) {
 
 int display_init(Display *d, const Config *cfg) {
     memset(d, 0, sizeof(*d));
+    d->crt_fb = malloc(DISPLAY_W * DISPLAY_H * sizeof(*d->crt_fb));
+    if (!d->crt_fb) {
+        fprintf(stderr, "display: CRT framebuffer allocation failed\n");
+        return -1;
+    }
     d->scale      = cfg->scale > 0 ? cfg->scale : 2;
     d->fullscreen = cfg->fullscreen;
     d->smoothing  = cfg->fullscreen_smoothing;
@@ -98,6 +166,9 @@ int display_init(Display *d, const Config *cfg) {
     d->logical_h     = d->ntsc ? DISPLAY_NTSC_LOGICAL_H: DISPLAY_PAL_LOGICAL_H;
     display_set_monochrome(d, cfg->monochrome);
     display_set_video_mode(d, cfg->video_mode);
+    display_set_crt(d, cfg->real_crt, cfg->crt_scanlines,
+                    cfg->crt_brightness, cfg->crt_contrast,
+                    cfg->crt_red, cfg->crt_green, cfg->crt_blue);
 
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
@@ -151,6 +222,17 @@ void display_set_smoothing(Display *d, bool smooth) {
             smooth ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST);
 }
 
+void display_set_crt(Display *d, bool enabled, int scanlines, int brightness,
+                     int contrast, int red, int green, int blue) {
+    d->crt_enabled = enabled;
+    d->crt_scanlines = clamp_int(scanlines, 0, 95);
+    d->crt_brightness = clamp_int(brightness, 50, 100);
+    d->crt_contrast = clamp_int(contrast, 50, 150);
+    d->crt_red = clamp_int(red, 50, 150);
+    d->crt_green = clamp_int(green, 50, 150);
+    d->crt_blue = clamp_int(blue, 50, 150);
+}
+
 void display_set_region(Display *d, Region region) {
     bool ntsc = (region == REGION_NTSC);
     if (d->ntsc == ntsc) return;
@@ -172,6 +254,7 @@ void display_quit(Display *d) {
     if (d->tex)      SDL_DestroyTexture(d->tex);
     if (d->renderer) SDL_DestroyRenderer(d->renderer);
     if (d->win)      SDL_DestroyWindow(d->win);
+    free(d->crt_fb);
     SDL_Quit();
     memset(d, 0, sizeof(*d));
 }
@@ -190,7 +273,7 @@ void display_put_pixel(Display *d, int x, int y, bool lit) {
 }
 
 void display_draw_framebuffer(Display *d) {
-    SDL_UpdateTexture(d->tex, NULL, d->fb, DISPLAY_W * 4);
+    SDL_UpdateTexture(d->tex, NULL, display_crt_pixels(d), DISPLAY_W * 4);
     SDL_SetRenderDrawColor(d->renderer, 0, 0, 0, 255);
     SDL_RenderClear(d->renderer);
 
@@ -202,6 +285,19 @@ void display_draw_framebuffer(Display *d) {
     SDL_FRect dst = { 0.0f, 0.0f,
                       (float)DISPLAY_LOGICAL_W, (float)d->screen_h };
     SDL_RenderTexture(d->renderer, d->tex, &src, &dst);
+
+    if (d->crt_enabled && d->crt_scanlines > 0) {
+        float s = render_scale(d);
+        float line_h = 1.0f / s;
+        float step = 2.0f / s;
+        Uint8 alpha = (Uint8)((d->crt_scanlines * 255 + 50) / 100);
+        SDL_SetRenderDrawBlendMode(d->renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(d->renderer, 0, 0, 0, alpha);
+        for (float y = line_h; y < (float)d->screen_h; y += step) {
+            SDL_FRect scan = { 0.0f, y, (float)DISPLAY_LOGICAL_W, line_h };
+            SDL_RenderFillRect(d->renderer, &scan);
+        }
+    }
 
     leds_render(d->renderer, 0, d->screen_h,
                 DISPLAY_LOGICAL_W, DISPLAY_LED_BAR_H);

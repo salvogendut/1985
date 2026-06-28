@@ -42,10 +42,18 @@ typedef struct Display {
     SDL_Texture  *tex;
 
     u32  fb[DISPLAY_W * DISPLAY_H];
+    u32 *crt_fb;
 
     int  scale;
     bool fullscreen;
     bool smoothing;
+    bool crt_enabled;
+    int  crt_scanlines;
+    int  crt_brightness;
+    int  crt_contrast;
+    int  crt_red;
+    int  crt_green;
+    int  crt_blue;
     bool ntsc;               /* false = PAL (256 lines), true = NTSC (200) */
     int  visible_lines;      /* live: 256 (PAL) or 200 (NTSC) */
     int  screen_h;           /* live logical height of PCW image area */
@@ -70,6 +78,8 @@ void display_set_monochrome(Display *d, MonoMode m);
 void display_set_tint_glow(Display *d, bool on);
 void display_set_video_mode(Display *d, VideoMode v);
 void display_set_smoothing(Display *d, bool smooth);
+void display_set_crt(Display *d, bool enabled, int scanlines, int brightness,
+                     int contrast, int red, int green, int blue);
 /* Switch between PAL (256 lines) and NTSC (200 lines). Resizes the
  * SDL window and updates the logical presentation so the rendered
  * image area shrinks when NTSC is selected. */
