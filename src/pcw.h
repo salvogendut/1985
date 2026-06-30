@@ -57,6 +57,12 @@ typedef struct PCW {
     PcwModel   model;
     int        memory_kb;
 
+    /* Doubles the cycle budget per emulated frame so the Z80 runs at
+     * an effective 8 MHz vs the stock 4 MHz. The 300 Hz interrupt
+     * tick is wall-clock based on the real machine, so its cycle
+     * interval doubles in lock-step — guests still see /INT 300×/s. */
+    bool       turbo;
+
     /* Master gate for ALL debug stderr output, populated from
      * cfg.debug_traces. When false, none of the dev traces print
      * regardless of the per-channel sub-flags below. */

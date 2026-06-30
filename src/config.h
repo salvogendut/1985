@@ -82,6 +82,8 @@ typedef struct {
                               * knob. Applies to all phosphor tints. */
     VideoMode video_mode;    /* default VIDEO_PCW */
 
+    bool     turbo;                     /* 8 MHz Z80 (2× stock). General tab. */
+
     /* [extensions] — model-specific add-ons. */
     bool     ext_second_drive;          /* PCW 8256 only: bolt-on drive B */
     bool     ext_sanpollo_backplane;    /* 50-pin edge-connector hub at the
