@@ -362,11 +362,13 @@ void pcw_frame(PCW *pcw) {
     pcw->step_once = false;
     bool stop_early = false;
 
+    int turbo_mul = pcw->turbo ? 2 : 1;
     int cycles = 0;
-    int next_tick = CYCLES_PER_TICK;
-    int cycles_per_frame = pcw->asic.refresh_60hz
-                         ? CYCLES_PER_FRAME_NTSC
-                         : CYCLES_PER_FRAME_PAL;
+    int cycles_per_tick  = CYCLES_PER_TICK * turbo_mul;
+    int next_tick = cycles_per_tick;
+    int cycles_per_frame = (pcw->asic.refresh_60hz
+                            ? CYCLES_PER_FRAME_NTSC
+                            : CYCLES_PER_FRAME_PAL) * turbo_mul;
 
     while (cycles < cycles_per_frame && !stop_early) {
         if (pcw->cpu.halted
@@ -708,7 +710,7 @@ void pcw_frame(PCW *pcw) {
                              || pcw->fdc.irq_arm_ticks > 0;
                 if (!fdc_busy) z80_interrupt(&pcw->cpu);
             }
-            next_tick += CYCLES_PER_TICK;
+            next_tick += cycles_per_tick;
         }
     }
 

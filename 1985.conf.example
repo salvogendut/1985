@@ -8,6 +8,8 @@ model = 8256
 memory_kb = 256
 # pal (50 Hz, 256 lines) / ntsc (60 Hz, top 200 lines, F8 bit 4 set)
 region = pal
+# false = stock 4 MHz Z80; true = 8 MHz overclock (CP/M apps run ~2× faster)
+turbo = false
 
 [storage]
 drive_a =

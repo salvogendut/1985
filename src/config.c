@@ -222,6 +222,7 @@ void config_defaults(Config *c) {
     c->input_device         = INPUT_DEVICE_JOYSTICK;
     c->mouse_type           = MOUSE_TYPE_AMX;
     c->joystick_type        = JOYSTICK_TYPE_DKSOUND;
+    c->turbo                = false;
     c->tinker               = false;
     c->debug                = false;
     c->notifications        = NOTIFY_MODE_SCREEN;
@@ -299,6 +300,7 @@ void config_load(Config *c, const char *path) {
         else if (strcmp(k, "monochrome")           == 0) c->monochrome = parse_mono(v, c->monochrome);
         else if (strcmp(k, "tint_glow")            == 0) c->tint_glow  = parse_bool(v, c->tint_glow);
         else if (strcmp(k, "video_mode")           == 0) c->video_mode = parse_video(v, c->video_mode);
+        else if (strcmp(k, "turbo")                == 0) c->turbo                   = parse_bool(v, c->turbo);
         else if (strcmp(k, "ext_second_drive")        == 0) c->ext_second_drive        = parse_bool(v, c->ext_second_drive);
         else if (strcmp(k, "ext_sanpollo_backplane")  == 0) c->ext_sanpollo_backplane  = parse_bool(v, c->ext_sanpollo_backplane);
         else if (strcmp(k, "ext_serial")              == 0) c->ext_serial              = parse_bool(v, c->ext_serial);
@@ -384,7 +386,8 @@ int config_save(const Config *c) {
     fprintf(f, "[machine]\n");
     fprintf(f, "model = %s\n", model_to_str(c->model));
     fprintf(f, "memory_kb = %d\n", c->memory_kb);
-    fprintf(f, "region = %s\n\n", region_to_str(c->region));
+    fprintf(f, "region = %s\n", region_to_str(c->region));
+    fprintf(f, "turbo = %s\n\n", bool_to_str(c->turbo));
 
     fprintf(f, "[storage]\n");
     fprintf(f, "drive_a = %s\n", c->drive_a);

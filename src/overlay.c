@@ -201,6 +201,7 @@ typedef enum {
                           * hardware, so the toggle isn't gated on the
                           * backplane (#79) */
     GEN_BACKPLANE,
+    GEN_TURBO,
     GEN_TINKER,
 } GenRow;
 
@@ -213,6 +214,7 @@ static GenRow gen_row_at(const Config *cfg, int row) {
     }
     if (row == r++) return GEN_PRINTER;
     if (row == r++) return GEN_BACKPLANE;
+    if (row == r++) return GEN_TURBO;
     if (row == r++) return GEN_TINKER;
     return GEN_NONE;
 }
@@ -259,8 +261,8 @@ static const char *section_title(OvSection s) {
 static int row_count(const Overlay *ov, OvSection s) {
     switch (s) {
         case OV_GENERAL:
-            /* model, memory, [second drive on 8256], printer, backplane, tinker */
-            return ov->cfg->model == PCW_MODEL_8256 ? 6 : 5;
+            /* model, memory, [second drive on 8256], printer, backplane, turbo, tinker */
+            return ov->cfg->model == PCW_MODEL_8256 ? 7 : 6;
         case OV_MEDIA:
             /* 8256 shipped with a single floppy; 8512/9512 had two.
              * Users can bolt a second drive onto an 8256 via the
@@ -380,6 +382,7 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                         snprintf(val, vsz, "yes: [choose folder]");
                     break;
                 case GEN_BACKPLANE:    snprintf(label, lsz, "PCW Backplane"); snprintf(val, vsz, "%s", bool_str(cfg->ext_sanpollo_backplane));  break;
+                case GEN_TURBO:        snprintf(label, lsz, "Turbo");         snprintf(val, vsz, "%s", cfg->turbo ? "yes (8 MHz)" : "no (4 MHz)"); break;
                 case GEN_TINKER:       snprintf(label, lsz, "Tinker");        snprintf(val, vsz, "%s", bool_str(cfg->tinker));                  break;
                 case GEN_NONE: default: break;
             }
@@ -715,6 +718,11 @@ static void activate(Overlay *ov) {
                         }
                     }
                     apply_input_device(ov);
+                    ov->dirty = true;
+                    break;
+                case GEN_TURBO:
+                    c->turbo = !c->turbo;
+                    if (ov->pcw) ov->pcw->turbo = c->turbo;
                     ov->dirty = true;
                     break;
                 case GEN_TINKER:

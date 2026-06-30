@@ -449,6 +449,7 @@ static void apply_runtime_config(PCW *pcw, const Config *cfg) {
     printer_set_kind(&pcw->printer,
                      cfg->model == PCW_MODEL_9512 ? PRINTER_KIND_DAISYWHEEL
                                                   : PRINTER_KIND_DOT_MATRIX);
+    pcw->turbo        = cfg->turbo;
     pcw->debug_traces = cfg->debug_traces;
     pcw->trace_io     = cfg->debug_traces && cfg->trace_io;
     pcw->fdc.trace    = cfg->debug_traces && cfg->trace_fdc;
@@ -872,6 +873,7 @@ int main(int argc, char **argv) {
         overlay_tick(&ov);
         notify_tick(16);
         /* Live-propagate trace flags from cfg in case the overlay toggled them. */
+        pcw.turbo        = cfg.turbo;
         pcw.debug_traces = cfg.debug_traces;
         pcw.trace_io  = cfg.debug_traces && cfg.trace_io;
         pcw.fdc.trace = cfg.debug_traces && cfg.trace_fdc;
