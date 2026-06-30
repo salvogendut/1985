@@ -28,6 +28,11 @@
   <url type="bugtracker">https://github.com/salvogendut/1985/issues</url>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.4.4" date="2026-06-30">
+      <description>
+        <p>New 8 MHz Z80 Turbo toggle on the General tab. Camera-shutter sound effect when you take an F4 screenshot. The built-in beeper now keeps its audio sample rate across cold resets. Flatpak builds are now produced from main and published as a release asset.</p>
+      </description>
+    </release>
     <release version="0.4.3" date="2026-06-28">
       <description>
         <p>On-screen toast notifications for disk-open failures, serial PTY readiness and PerryFi dial-outs — F9 ▸ Advanced ▸ Notifications cycles screen / console / off. LED hover labels reveal what each status LED represents. Real CRT post-process gains adjustable scanline, brightness, contrast and per-channel RGB controls under Advanced. Media tab overlay panel resized so the "Enter / Del" hint no longer clips.</p>
