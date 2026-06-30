@@ -136,11 +136,14 @@ file).
 ## Binaries
 
 Each push to `main` and each `v*` tag produces signed-off Linux,
-Fedora RPM, and Windows builds via GitHub Actions — grab them from
-the [Releases page](https://github.com/salvogendut/1985/releases).
+Fedora RPM, Windows, and Flatpak builds via GitHub Actions — grab them
+from the [Releases page](https://github.com/salvogendut/1985/releases).
 The Windows zip is unpacked with `1985.exe`, `SDL3.dll`, and the
 boot ROM next to it; double-click to launch. If anything goes
 wrong on first run, look for `1985.log` in the same folder.
+
+The Flatpak builds straight from `main` (no separate branch) — see
+[FLATPAK.md](FLATPAK.md) to build a local bundle or install one.
 
 ## Keyboard shortcuts
 
