@@ -35,6 +35,8 @@ roms/*
 1985-*.gif
 
 # Flatpak build output
+/.flatpak-builder/
+/build-dir/
 /flatpak-repo/
 /1985.flatpak
 /Emulator1985-*.flatpak
