@@ -1,5 +1,5 @@
 Name:           1985
-Version:        0.4.3
+Version:        0.4.4
 Release:        1%{?dist}
 Summary:        Amstrad PCW 8256 / 8512 / 9512 emulator
 
@@ -78,6 +78,13 @@ appstream-util validate-relax --nonet %{buildroot}%{_datadir}/metainfo/io.github
 %{_datadir}/icons/hicolor/*/apps/io.github.salvogendut.Emulator1985.png
 
 %changelog
+* Tue Jun 30 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.4-1
+- 8 MHz Z80 Turbo toggle on the General tab (#137).
+- Camera-shutter sound effect when taking an F4 screenshot (#134).
+- Beeper preserves its audio sample rate across cold resets (#136).
+- Flatpak now builds from main and ships as a release asset; the separate
+  flatpak branch was retired (#139).
+
 * Sun Jun 28 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.3-1
 - On-screen toast notifications: disk-open failures, serial PTY readiness
   and PerryFi dial-outs now fade in/out over the PCW display. F9 ▸
