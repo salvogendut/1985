@@ -126,6 +126,9 @@ typedef struct {
 
     /* [advanced] */
     bool     tinker;
+    bool     show_status_line;   /* Show the guest's bottom 8 scanlines
+                                  * (CP/M status row). A real CRT hides
+                                  * them in overscan; default shown. */
     char     boot_rom_dir[PATH_MAX];    /* user-picked dir checked first
                                          * for pcw_boot.rom (overrides the
                                          * default XDG / cwd search chain).

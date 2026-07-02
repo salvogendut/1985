@@ -61,6 +61,8 @@ typedef struct Display {
     int  crt_green;
     int  crt_blue;
     bool ntsc;               /* false = PAL (256 lines), true = NTSC (200) */
+    bool show_status_line;   /* false = crop the bottom 8 guest scanlines
+                              * (CP/M status row) like real CRT overscan */
     int  visible_lines;      /* live: 256 (PAL) or 200 (NTSC) */
     int  screen_h;           /* live logical height of PCW image area */
     int  logical_h;          /* live logical height incl. LED bar */
@@ -90,6 +92,7 @@ void display_set_crt(Display *d, bool enabled, int scanlines, int brightness,
  * SDL window and updates the logical presentation so the rendered
  * image area shrinks when NTSC is selected. */
 void display_set_region(Display *d, Region region);
+void display_set_status_line(Display *d, bool shown);
 
 /* Plot a colour-indexed pixel (CGA/EGA modes). Index is masked to the
  * palette size in the active video mode (4 in CGA, 16 in EGA). */

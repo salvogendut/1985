@@ -55,6 +55,7 @@ typedef enum {
     TINK_TINT_MODE,
     TINK_VIDEO_MODE,
     TINK_REGION,
+    TINK_STATUS_LINE,
     TINK_MOUSE_TYPE,
     TINK_JOYSTICK_TYPE,
     TINK_PRINTER_MODE,
@@ -91,6 +92,7 @@ static TinkerRow tinker_row_at(const Overlay *ov, int row) {
     if (row == r++) return TINK_TINT_MODE;
     if (row == r++) return TINK_VIDEO_MODE;
     if (row == r++) return TINK_REGION;
+    if (row == r++) return TINK_STATUS_LINE;
     if (row == r++) return TINK_MOUSE_TYPE;
     if (row == r++) return TINK_JOYSTICK_TYPE;
     if (row == r++) return TINK_PRINTER_MODE;
@@ -439,6 +441,7 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                 case TINK_TINT_MODE: snprintf(label, lsz, "Tint mode"); snprintf(val, vsz, "%s", cfg->tint_glow ? "glow" : "normal"); break;
                 case TINK_VIDEO_MODE: snprintf(label, lsz, "Video mode"); snprintf(val, vsz, "%s", video_str(cfg->video_mode)); break;
                 case TINK_REGION: snprintf(label, lsz, "Region"); snprintf(val, vsz, "%s", region_str(cfg->region)); break;
+                case TINK_STATUS_LINE: snprintf(label, lsz, "Status line"); snprintf(val, vsz, "%s", cfg->show_status_line ? "shown" : "hidden (overscan)"); break;
                 case TINK_MOUSE_TYPE: snprintf(label, lsz, "Mouse type"); snprintf(val, vsz, "%s", mouse_type_str(cfg->mouse_type)); break;
                 case TINK_JOYSTICK_TYPE: snprintf(label, lsz, "Joystick type"); snprintf(val, vsz, "%s", joystick_type_str(cfg->joystick_type)); break;
                 case TINK_PRINTER_MODE: snprintf(label, lsz, "Printer mode"); snprintf(val, vsz, "%s", sink_str(cfg->ext_print_sink)); break;
@@ -845,6 +848,16 @@ static void activate(Overlay *ov) {
                 case TINK_REGION:
                     c->region = (c->region == REGION_PAL)
                               ? REGION_NTSC : REGION_PAL;
+                    ov->dirty = true;
+                    break;
+                case TINK_STATUS_LINE:
+                    /* A real CRT hides the guest's bottom 8 scanlines
+                     * (CP/M's status row) in overscan; "hidden" crops
+                     * them the same way. Applies live. */
+                    c->show_status_line = !c->show_status_line;
+                    if (ov->disp)
+                        display_set_status_line(ov->disp,
+                                                c->show_status_line);
                     ov->dirty = true;
                     break;
                 case TINK_MOUSE_TYPE:
