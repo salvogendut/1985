@@ -29,8 +29,14 @@
 #define DISPLAY_PAL_SCREEN_H    (DISPLAY_PAL_LINES * 2)
 #define DISPLAY_NTSC_SCREEN_H   (DISPLAY_NTSC_LINES * 2)
 #define DISPLAY_LED_BAR_H       22
-#define DISPLAY_PAL_LOGICAL_H   (DISPLAY_PAL_SCREEN_H + DISPLAY_LED_BAR_H)
-#define DISPLAY_NTSC_LOGICAL_H  (DISPLAY_NTSC_SCREEN_H + DISPLAY_LED_BAR_H)
+/* Dedicated band for the bottom status strip (model name + F-key
+ * hints), between the PCW image and the LED bar. It used to be drawn
+ * over the last 8 guest scanlines, which was invisible while the F8
+ * bit-4 bug made CP/M configure a 200-line screen — with the full
+ * 256-line screen the CP/M status line lives in those rows (#143). */
+#define DISPLAY_STRIP_H         16
+#define DISPLAY_PAL_LOGICAL_H   (DISPLAY_PAL_SCREEN_H + DISPLAY_STRIP_H + DISPLAY_LED_BAR_H)
+#define DISPLAY_NTSC_LOGICAL_H  (DISPLAY_NTSC_SCREEN_H + DISPLAY_STRIP_H + DISPLAY_LED_BAR_H)
 /* Defaults match the PAL configuration. Use Display->screen_h / .logical_h
  * for the live values. */
 #define DISPLAY_SCREEN_H        DISPLAY_PAL_SCREEN_H

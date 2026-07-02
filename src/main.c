@@ -972,19 +972,21 @@ int main(int argc, char **argv) {
                                              SDL_LOGICAL_PRESENTATION_DISABLED);
             int ww, wh;
             SDL_GetWindowSize(disp.win, &ww, &wh);
-            const float strip_h = 16.0f;
-            /* Compute the LED band's actual physical-pixel height under
-             * letterbox scaling so the strip lands above it instead of
-             * on top of it. Letterbox uses the smaller of the two axis
-             * scales, and centres the content vertically. */
+            /* The strip owns the DISPLAY_STRIP_H logical band between
+             * the PCW image and the LED bar — it must not overdraw the
+             * image, since CP/M's status line uses the bottom scanlines
+             * (#143). Compute the band's physical extent under
+             * letterbox scaling (the smaller of the two axis scales,
+             * content centred vertically); the 8x8 debug font stays
+             * native-size, centred in the band. */
             float scale_x = (float)ww / (float)DISPLAY_LOGICAL_W;
             float scale_y = (float)wh / (float)disp.logical_h;
             float scale   = scale_x < scale_y ? scale_x : scale_y;
             float scaled_h = (float)disp.logical_h * scale;
             float letterbox_top = ((float)wh - scaled_h) * 0.5f;
-            float led_top = letterbox_top + (float)disp.screen_h * scale;
-            float strip_y = led_top - strip_h;
-            float text_y  = strip_y + 4.0f;
+            float strip_y = letterbox_top + (float)disp.screen_h * scale;
+            float strip_h = (float)DISPLAY_STRIP_H * scale;
+            float text_y  = strip_y + (strip_h - 8.0f) * 0.5f;
             SDL_FRect strip = { 0.0f, strip_y, (float)ww, strip_h };
             SDL_SetRenderDrawBlendMode(disp.renderer, SDL_BLENDMODE_NONE);
             SDL_SetRenderDrawColor(disp.renderer, 0x10, 0x10, 0x14, 255);
@@ -1024,18 +1026,20 @@ int main(int argc, char **argv) {
             last_ns = now;
             char buf[64];
             snprintf(buf, sizeof(buf), "DBG  %.1f fps", (double)fps_smooth);
-            /* Sit just above the bottom status strip (16 px), in
-             * logical coords (renderer uses LogicalPresentation). */
-            const float lh = (float)disp.logical_h;
-            const float strip_h = 16.0f;
+            /* Sit just above the status strip band — i.e. at the
+             * bottom of the PCW image — in logical coords (renderer
+             * uses LogicalPresentation). */
+            const float sh = (float)disp.screen_h;
             SDL_SetRenderDrawColor(disp.renderer, 0, 0, 0, 255);
-            SDL_RenderDebugText(disp.renderer, 7.0f, lh - strip_h - 12.0f, buf);
+            SDL_RenderDebugText(disp.renderer, 7.0f, sh - 12.0f, buf);
             SDL_SetRenderDrawColor(disp.renderer, 0xFF, 0xC0, 0x40, 255);
-            SDL_RenderDebugText(disp.renderer, 6.0f, lh - strip_h - 13.0f, buf);
+            SDL_RenderDebugText(disp.renderer, 6.0f, sh - 13.0f, buf);
         }
 
         overlay_render(&ov, disp.renderer);
-        notify_render(disp.renderer, DISPLAY_LOGICAL_W, disp.logical_h);
+        /* Anchor toasts to the bottom of the PCW image, not the full
+         * logical area — the strip + LED bands below it are chrome. */
+        notify_render(disp.renderer, DISPLAY_LOGICAL_W, disp.screen_h);
         {
             int ww, wh;
             SDL_GetWindowSize(disp.win, &ww, &wh);

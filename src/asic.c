@@ -91,7 +91,15 @@ static u8 sys_status(const Asic *a) {
      * it implicitly by draining the FDC result phase (which causes the
      * FDC to drop its IRQ line). */
     u8 v = (a->interrupt_counter & 0x0F);
-    if (a->refresh_60hz)                  v |= 0x10;  /* Seasip §4.1 */
+    /* Bit 4 SET = 50 Hz machine, CLEAR = 60 Hz/200-line PCW. Seasip
+     * §4.1 reads as if set means 60 Hz, but the polarity is inverted
+     * there — MAME pcw.cpp ("50/60Hz Frame Rate Option" dipswitch:
+     * 0x10 = 50Hz, default) and Joyce JoyceAsic.cxx:82 (m_inf8 = 0x30
+     * at reset, "0x20 for the 200-line screen") agree bit 4 is set on
+     * the stock PAL machine. Reporting 0 here made CP/M+ configure a
+     * 200-line NTSC screen: status line at text row 24 and GSX apps
+     * (AMX Desk) sizing their desktop to 192 lines. */
+    if (!a->refresh_60hz)                 v |= 0x10;
     if (a->flyback)                       v |= 0x40;
     if (a->fdc && a->fdc->irq)            v |= 0x20;
     return v;
