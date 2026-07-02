@@ -54,6 +54,8 @@ static const char *USAGE =
 "  --paste TEXT                type TEXT after boot (\\n = Enter)\n"
 "  --paste-at N                start --paste injection at frame N\n"
 "  --paste-event N:TEXT        inject TEXT at frame N (repeatable)\n"
+"  --disk-event N:D:PATH       at frame N put PATH in drive D (a/b);\n"
+"                              empty PATH ejects (repeatable)\n"
 "  --load-sna PATH             load .sna at init (stub)\n"
 "  --save-sna-at N:PATH        save .sna at frame N (stub)\n"
 "  --screenshot-at N:PATH      save PPM at frame N and exit\n"
@@ -67,6 +69,15 @@ typedef struct {
     int         frame;
     const char *text;
 } CliPasteEvent;
+
+/* Scripted disk change: mirrors the overlay Media tab's swap/eject so
+ * multi-disk software (boot CP/M, swap in the app disk, run it) can be
+ * driven headlessly. path == "" means eject. */
+typedef struct {
+    int         frame;
+    int         drive;            /* 0 = A, 1 = B */
+    const char *path;
+} CliDiskEvent;
 
 typedef struct {
     const char *config_path;
@@ -82,6 +93,8 @@ typedef struct {
     bool        unthrottled;
     CliPasteEvent paste_event[MAX_PASTE_EVENTS];
     int         paste_event_count;
+    CliDiskEvent disk_event[MAX_PASTE_EVENTS];
+    int         disk_event_count;
     int         memory_kb;        /* 0 = leave config alone */
     int         paste_at;         /* 0 = begin immediately */
     int         exit_after;       /* -1 = run forever */
@@ -285,6 +298,31 @@ static int add_paste_event(Cli *cli, const char *spec) {
     return 0;
 }
 
+static int add_disk_event(Cli *cli, const char *spec) {
+    if (cli->disk_event_count >= MAX_PASTE_EVENTS) {
+        fprintf(stderr, "too many --disk-event options (max %d)\n",
+                MAX_PASTE_EVENTS);
+        return -1;
+    }
+
+    char *end;
+    long frame = strtol(spec, &end, 10);
+    if (end == spec || *end != ':' || frame < 0
+        || (end[1] != 'a' && end[1] != 'b' && end[1] != 'A' && end[1] != 'B')
+        || end[2] != ':') {
+        fprintf(stderr,
+                "invalid --disk-event '%s' (expected N:D:PATH, D = a|b)\n",
+                spec);
+        return -1;
+    }
+
+    CliDiskEvent *event = &cli->disk_event[cli->disk_event_count++];
+    event->frame = (int)frame;
+    event->drive = (end[1] == 'b' || end[1] == 'B') ? 1 : 0;
+    event->path  = end + 3;
+    return 0;
+}
+
 static int parse_cli(int argc, char **argv, Cli *cli) {
     memset(cli, 0, sizeof(*cli));
     cli->exit_after = -1;
@@ -309,6 +347,10 @@ static int parse_cli(int argc, char **argv, Cli *cli) {
             if (add_paste_event(cli, v) < 0) return -1;
             continue;
         }
+        if ((v = eq_value(a, "--disk-event")) && *v) {
+            if (add_disk_event(cli, v) < 0) return -1;
+            continue;
+        }
         if ((v = eq_value(a, "--load-sna"))    && *v) { cli->load_sna    = v; continue; }
         if ((v = eq_value(a, "--save-sna-at")) && *v) { cli->save_sna_arg = v; continue; }
         if ((v = eq_value(a, "--screenshot-at")) && *v) { cli->screenshot_arg = v; continue; }
@@ -328,6 +370,10 @@ static int parse_cli(int argc, char **argv, Cli *cli) {
         if (strcmp(a, "--paste-at")      == 0 && i+1 < argc) { cli->paste_at    = atoi(argv[++i]); continue; }
         if (strcmp(a, "--paste-event")   == 0 && i+1 < argc) {
             if (add_paste_event(cli, argv[++i]) < 0) return -1;
+            continue;
+        }
+        if (strcmp(a, "--disk-event")    == 0 && i+1 < argc) {
+            if (add_disk_event(cli, argv[++i]) < 0) return -1;
             continue;
         }
         if (strcmp(a, "--load-sna")      == 0 && i+1 < argc) { cli->load_sna    = argv[++i]; continue; }
@@ -858,6 +904,27 @@ int main(int argc, char **argv) {
         for (int i = 0; i < cli.paste_event_count; i++) {
             if (cli.paste_event[i].frame == frame)
                 paste_text(&paste, cli.paste_event[i].text);
+        }
+        for (int i = 0; i < cli.disk_event_count; i++) {
+            if (cli.disk_event[i].frame != frame) continue;
+            int   drive = cli.disk_event[i].drive;
+            char *slot  = drive == 0 ? cfg.drive_a : cfg.drive_b;
+            size_t ssz  = drive == 0 ? sizeof(cfg.drive_a)
+                                     : sizeof(cfg.drive_b);
+            Disk *d = &pcw.fdc.drive[drive];
+            /* Same contract as the overlay Media tab: flush pending
+             * writes to the outgoing image before it goes away. */
+            if (d->dirty && slot[0]) disk_save(d, slot);
+            if (cli.disk_event[i].path[0]) {
+                snprintf(slot, ssz, "%s", cli.disk_event[i].path);
+                disk_load(d, slot);
+                printf("disk-event: drive %c <- %s\n",
+                       'A' + drive, slot);
+            } else {
+                slot[0] = 0;
+                disk_eject(d);
+                printf("disk-event: drive %c ejected\n", 'A' + drive);
+            }
         }
         paste_tick(&paste, &pcw.kbd);
 
