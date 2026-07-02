@@ -11,6 +11,7 @@
 | `--paste TEXT` | Type TEXT after boot (`\n` becomes Enter) |
 | `--paste-at N` | Delay `--paste` until frame N |
 | `--paste-event N:TEXT` | Inject TEXT at frame N; repeat for scripted input |
+| `--disk-event N:D:PATH` | At frame N put PATH in drive D (`a`/`b`); empty PATH ejects. Scripts the boot-then-swap flow multi-disk software needs |
 | `--load-sna PATH` | Load a `.sna` snapshot at init (stubbed) |
 | `--save-sna-at N:PATH` | Save snapshot at frame N (stubbed) |
 | `--screenshot-at N:PATH` | Save PPM at frame N and exit |
