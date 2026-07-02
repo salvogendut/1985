@@ -57,13 +57,17 @@ void roller_render(struct Mem *m, struct Asic *a, struct Display *d) {
      * background so the bottom strip is visibly off, not garbage. */
     int visible_rows = a->refresh_60hz ? 200 : SCREEN_ROWS;
 
+    /* All coordinates below are in-range by construction (90 cols × 8
+     * px = 720 = DISPLAY_W, 256 rows = DISPLAY_H), so write straight
+     * into the framebuffer row instead of going through the
+     * bounds-checked display_put_pixel() call 184,320 times a frame —
+     * that call was ~45% of total emulation time under gprof. */
+    const u32 fg = d->fg, bg = d->bg;
+
     for (int y = 0; y < SCREEN_ROWS; y++) {
+        u32 *row = &d->fb[y * DISPLAY_W];
         if (y >= visible_rows) {
-            for (int col = 0; col < SCREEN_COLS; col++) {
-                int xbase = col * 8;
-                for (int b = 0; b < 8; b++)
-                    display_put_pixel(d, xbase + b, y, false);
-            }
+            for (int x = 0; x < SCREEN_COLS * 8; x++) row[x] = bg;
             continue;
         }
         int idx = (y + scroll) & 0xFF;
@@ -75,11 +79,7 @@ void roller_render(struct Mem *m, struct Asic *a, struct Display *d) {
         bool tbl_ready = mem_byte_written(m, tbl_off)
                       && mem_byte_written(m, (tbl_off + 1) & 0x3FFFF);
         if (!tbl_ready) {
-            for (int col = 0; col < SCREEN_COLS; col++) {
-                int xbase = col * 8;
-                for (int b = 0; b < 8; b++)
-                    display_put_pixel(d, xbase + b, y, true);
-            }
+            for (int x = 0; x < SCREEN_COLS * 8; x++) row[x] = fg;
             continue;
         }
 
@@ -91,13 +91,12 @@ void roller_render(struct Mem *m, struct Asic *a, struct Display *d) {
 
         for (int col = 0; col < SCREEN_COLS; col++) {
             int src = (row_addr + col * 8) & 0x3FFFF;
-            int xbase = col * 8;
+            u32 *cell = row + col * 8;
             if (!mem_byte_written(m, src)) {
                 /* Pixel cell whose source byte has never been written
                  * by the guest — show phosphor green, not whatever
                  * random data happens to live in that RAM cell. */
-                for (int b = 0; b < 8; b++)
-                    display_put_pixel(d, xbase + b, y, true);
+                for (int b = 0; b < 8; b++) cell[b] = fg;
                 continue;
             }
             u8 byte = m->ram[src];
@@ -109,9 +108,9 @@ void roller_render(struct Mem *m, struct Asic *a, struct Display *d) {
                     /* 2 bpp: each pair of bits is a palette index;
                      * doubled horizontally so the line still spans 720. */
                     for (int b = 0; b < 8; b += 2) {
-                        int idx = (byte >> (6 - b)) & 0x3;
-                        display_put_indexed(d, xbase + b,     y, idx);
-                        display_put_indexed(d, xbase + b + 1, y, idx);
+                        u32 px = d->palette[(byte >> (6 - b)) & 0x3];
+                        cell[b]     = px;
+                        cell[b + 1] = px;
                     }
                     break;
                 }
@@ -119,17 +118,16 @@ void roller_render(struct Mem *m, struct Asic *a, struct Display *d) {
                     /* 4 bpp: each nybble is a palette index; quadrupled
                      * horizontally so the line still spans 720. */
                     for (int b = 0; b < 8; b += 4) {
-                        int idx = (byte >> (4 - b)) & 0xF;
+                        u32 px = d->palette[(byte >> (4 - b)) & 0xF];
                         for (int r = 0; r < 4; r++)
-                            display_put_indexed(d, xbase + b + r, y, idx);
+                            cell[b + r] = px;
                     }
                     break;
                 }
                 case VIDEO_PCW:
                 default:
                     for (int b = 0; b < 8; b++)
-                        display_put_pixel(d, xbase + b, y,
-                                          ((byte >> (7 - b)) & 1) != 0);
+                        cell[b] = (byte & (0x80u >> b)) ? fg : bg;
                     break;
             }
         }

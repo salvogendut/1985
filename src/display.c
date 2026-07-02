@@ -46,22 +46,34 @@ static const u32 *display_crt_pixels(Display *d) {
     if (!d->crt_fb)
         return d->fb;
 
+    /* The brightness/contrast/gain chain only depends on the 8-bit
+     * input component, so bake it into three per-channel tables and
+     * rebuild them when a slider moves — not 3×184,320 times a frame. */
+    static u8  lut_r[256], lut_g[256], lut_b[256];
+    static int lut_bri = -1, lut_con = -1, lut_red = -1,
+               lut_grn = -1, lut_blu = -1;
+    if (d->crt_brightness != lut_bri || d->crt_contrast != lut_con ||
+        d->crt_red != lut_red || d->crt_green != lut_grn ||
+        d->crt_blue != lut_blu) {
+        for (int c = 0; c < 256; c++) {
+            lut_r[c] = (u8)adjust_component((unsigned)c, d->crt_brightness,
+                                            d->crt_contrast, d->crt_red);
+            lut_g[c] = (u8)adjust_component((unsigned)c, d->crt_brightness,
+                                            d->crt_contrast, d->crt_green);
+            lut_b[c] = (u8)adjust_component((unsigned)c, d->crt_brightness,
+                                            d->crt_contrast, d->crt_blue);
+        }
+        lut_bri = d->crt_brightness; lut_con = d->crt_contrast;
+        lut_red = d->crt_red; lut_grn = d->crt_green; lut_blu = d->crt_blue;
+    }
+
     int n = DISPLAY_W * DISPLAY_H;
     for (int i = 0; i < n; i++) {
         u32 px = d->fb[i];
-        unsigned r = adjust_component((px >> 16) & 0xFF,
-                                      d->crt_brightness,
-                                      d->crt_contrast,
-                                      d->crt_red);
-        unsigned g = adjust_component((px >> 8) & 0xFF,
-                                      d->crt_brightness,
-                                      d->crt_contrast,
-                                      d->crt_green);
-        unsigned b = adjust_component(px & 0xFF,
-                                      d->crt_brightness,
-                                      d->crt_contrast,
-                                      d->crt_blue);
-        d->crt_fb[i] = (px & 0xFF000000u) | (r << 16) | (g << 8) | b;
+        d->crt_fb[i] = (px & 0xFF000000u)
+                     | ((u32)lut_r[(px >> 16) & 0xFF] << 16)
+                     | ((u32)lut_g[(px >> 8)  & 0xFF] << 8)
+                     |  (u32)lut_b[ px        & 0xFF];
     }
     return d->crt_fb;
 }
