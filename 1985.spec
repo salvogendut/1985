@@ -1,5 +1,5 @@
 Name:           1985
-Version:        0.4.4
+Version:        0.4.5
 Release:        1%{?dist}
 Summary:        Amstrad PCW 8256 / 8512 / 9512 emulator
 
@@ -78,6 +78,19 @@ appstream-util validate-relax --nonet %{buildroot}%{_datadir}/metainfo/io.github
 %{_datadir}/icons/hicolor/*/apps/io.github.salvogendut.Emulator1985.png
 
 %changelog
+* Thu Jul 02 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.5-1
+- F8 bit-4 polarity fix: CP/M+ now configures the full 256-line PAL screen
+  instead of a 200-line NTSC one — fixes AMX Desk's clipped desktop and
+  unreachable trash bin (#143).
+- Function-key strip moved to its own band below the PCW image so the CP/M
+  status line row is no longer covered (#143).
+- New Advanced "Status line" toggle: hide the guest's bottom 8 scanlines the
+  way real CRT overscan does (#148).
+- Video render path ~2.5x faster: direct framebuffer row writes and cached
+  Real CRT colour tables (#142).
+- New --disk-event N:D:PATH CLI flag for scripted mid-run disk swap/eject
+  (#144).
+
 * Tue Jun 30 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.4-1
 - 8 MHz Z80 Turbo toggle on the General tab (#137).
 - Camera-shutter sound effect when taking an F4 screenshot (#134).
