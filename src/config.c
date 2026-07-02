@@ -224,6 +224,7 @@ void config_defaults(Config *c) {
     c->joystick_type        = JOYSTICK_TYPE_DKSOUND;
     c->turbo                = false;
     c->tinker               = false;
+    c->show_status_line     = true;
     c->debug                = false;
     c->notifications        = NOTIFY_MODE_SCREEN;
     snprintf(c->ext_serial_backend, sizeof(c->ext_serial_backend), "pty");
@@ -330,6 +331,7 @@ void config_load(Config *c, const char *path) {
         else if (strcmp(k, "ext_print_sink")          == 0) c->ext_print_sink = parse_sink(v, c->ext_print_sink);
         else if (strcmp(k, "printer_centronics_9512") == 0) c->printer_centronics_9512 = parse_bool(v, c->printer_centronics_9512);
         else if (strcmp(k, "tinker")               == 0) c->tinker = parse_bool(v, c->tinker);
+        else if (strcmp(k, "status_line")          == 0) c->show_status_line = parse_bool(v, c->show_status_line);
         else if (strcmp(k, "boot_rom_dir")         == 0) snprintf(c->boot_rom_dir, sizeof(c->boot_rom_dir), "%s", v);
         else if (strcmp(k, "debug")                == 0) c->debug  = parse_bool(v, c->debug);
         else if (strcmp(k, "debug_traces")         == 0) c->debug_traces = parse_bool(v, c->debug_traces);
@@ -429,6 +431,7 @@ int config_save(const Config *c) {
 
     fprintf(f, "[advanced]\n");
     fprintf(f, "tinker = %s\n", bool_to_str(c->tinker));
+    fprintf(f, "status_line = %s\n", bool_to_str(c->show_status_line));
     fprintf(f, "boot_rom_dir = %s\n", c->boot_rom_dir);
     fprintf(f, "debug = %s\n", bool_to_str(c->debug));
     fprintf(f, "debug_traces = %s\n", bool_to_str(c->debug_traces));

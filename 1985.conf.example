@@ -47,6 +47,9 @@ ext_pdf_printer_dir     =
 [advanced]
 # Set tinker=true to unlock the Advanced tab in the F9 overlay.
 tinker = false
+# false crops the guest's bottom 8 scanlines (CP/M status row), like a
+# real CRT's overscan — on real hardware that row is never visible.
+status_line = true
 # screen = fading toast over PCW display; console = stderr line; off = silent
 notifications = screen
 debug = false

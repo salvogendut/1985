@@ -47,7 +47,9 @@
   PerryFi, DK'tronics sound, and Input Device (Mouse / Joystick).
 - **Advanced** (hidden unless `tinker=true`) — smoothing, Real CRT
   scanlines/brightness/contrast/RGB controls, tint (green / amber /
-  white), tint mode (normal / glow), video mode, Mouse type (AMX /
+  white), tint mode (normal / glow), video mode, Region, Status line
+  (shown / hidden — a real CRT hides the guest's bottom 8 scanlines,
+  where CP/M keeps its status row, in overscan), Mouse type (AMX /
   Kempston), Joystick type, printer mode/model, debug toggles, serial
   mode, snapshot load/save, Notifications (screen / console / off).
 

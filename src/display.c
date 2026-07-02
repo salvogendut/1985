@@ -172,6 +172,7 @@ int display_init(Display *d, const Config *cfg) {
     d->fullscreen = cfg->fullscreen;
     d->smoothing  = cfg->fullscreen_smoothing;
     d->tint_glow = cfg->tint_glow;
+    d->show_status_line = cfg->show_status_line;
     d->ntsc          = (cfg->region == REGION_NTSC);
     d->visible_lines = d->ntsc ? DISPLAY_NTSC_LINES    : DISPLAY_PAL_LINES;
     d->screen_h      = d->ntsc ? DISPLAY_NTSC_SCREEN_H : DISPLAY_PAL_SCREEN_H;
@@ -291,9 +292,13 @@ void display_draw_framebuffer(Display *d) {
 
     /* NTSC: sample only the top 200 framebuffer rows. PAL: full 256.
      * The dst rect is the shrunk image area; SDL letterboxes the
-     * whole window cleanly because logical_h was set to match. */
+     * whole window cleanly because logical_h was set to match.
+     * With the status line hidden, drop the bottom 8 guest scanlines
+     * (CP/M's status row) and let the remainder fill the same image
+     * area — exactly what a real tube's overscan does. */
+    int vis = d->visible_lines - (d->show_status_line ? 0 : 8);
     SDL_FRect src = { 0.0f, 0.0f,
-                      (float)DISPLAY_W, (float)d->visible_lines };
+                      (float)DISPLAY_W, (float)vis };
     SDL_FRect dst = { 0.0f, 0.0f,
                       (float)DISPLAY_LOGICAL_W, (float)d->screen_h };
     SDL_RenderTexture(d->renderer, d->tex, &src, &dst);
@@ -313,6 +318,10 @@ void display_draw_framebuffer(Display *d) {
 
     leds_render(d->renderer, 0, d->screen_h + DISPLAY_STRIP_H,
                 DISPLAY_LOGICAL_W, DISPLAY_LED_BAR_H);
+}
+
+void display_set_status_line(Display *d, bool shown) {
+    d->show_status_line = shown;
 }
 
 void display_present(Display *d) {
