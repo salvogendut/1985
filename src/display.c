@@ -299,7 +299,7 @@ void display_draw_framebuffer(Display *d) {
         }
     }
 
-    leds_render(d->renderer, 0, d->screen_h,
+    leds_render(d->renderer, 0, d->screen_h + DISPLAY_STRIP_H,
                 DISPLAY_LOGICAL_W, DISPLAY_LED_BAR_H);
 }
 
