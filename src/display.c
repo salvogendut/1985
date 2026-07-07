@@ -82,7 +82,7 @@ static u32 mono_lit(MonoMode m) {
     switch (m) {
         case MONO_AMBER: return 0xFFBF00;
         case MONO_WHITE: return 0xFFFFFF;
-        case MONO_GREEN: return 0x80FF80;
+        case MONO_GREEN: return 0x00FF70;
         case MONO_OFF:
         default:         return 0xFFFFFF;   /* paper white when no tint */
     }
