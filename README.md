@@ -53,14 +53,14 @@ Extensions available (Extensions tab, gated on PCW Backplane):
   (`/dev/pts/N`) or a TCP listener on `localhost:4002` — flip mode
   under Advanced. A split RX/TX LED next to the floppies lights when
   bytes move.
-- **PerryFi** — SanPollo's Wemos D1 (ESP8266) AT modem that plugs onto
-  the serial line. 1985 implements the AT command set in software
-  (`AT`, `ATDT host:port`, `+++ATH`, `AT&W`, `AT$SSID=`, …) and
-  forwards dial-out to a real host TCP socket. Because the host's
-  network is already there, **WiFi configuration is unnecessary** —
-  just enable PerryFi in the Extensions menu, fire up any CP/M
-  terminal program (QTERM, KERMIT, …) at 9600 bps on the serial
-  port, type `ATDT bbs.example.com:23` and you're telnetted in.
+- **PerryFi** — SanPollo's Wemos D1 (ESP8266) modem that plugs onto
+  the serial line. The default mode is the PerryFiFW / Hayes-compatible
+  AT modem: 1985 implements `AT`, `ATDT host:port`, `+++ATH`, `AT&W`,
+  `AT$SSID=`, … in software and forwards dial-out to a real host TCP
+  socket. Advanced ▸ PerryFi mode can switch the same emulated device
+  to a PerryNet framed socket API for new CP/M software that speaks
+  `HELLO`, `DNS_RESOLVE`, `TCP_OPEN`, and `TCP_SEND` frames directly.
+  Existing terminal programs should use the default AT Hayes mode.
 - **DK'TRONICS Sound & Joystick** — AY-3-8912 PSG + DB9 joystick port
   at I/O `0xA9-0xAB`. 1985 ships a register-accurate AY model with
   tone/noise/envelope, mixed to mono 16-bit and routed through SDL3's
@@ -199,6 +199,9 @@ to cross-check against:
   — the AT-modem command set and the dial-out semantics used by 1985's
   PerryFi extension. The firmware itself is derived from
   [mecparts/RetroWiFiModem](https://github.com/mecparts/RetroWiFiModem).
+- **PerryNet** — framed socket-service firmware for PerryFi-class ESP8266
+  hardware, modelled by 1985's PerryFi mode toggle for software that wants
+  DNS/TCP commands instead of Hayes-style dialing.
 - **[DK'TRONICS Sound & Joystick (habisoft PCW wiki)](https://www.habisoft.com/pcwwiki/doku.php?id=es:hardware:perifericos:dksound)**
   — schematic / clone documentation for the AY-3-8912 + DB9 board. The
   AY model itself is ported from 1984's `src/psg.c`.

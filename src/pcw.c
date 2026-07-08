@@ -293,7 +293,7 @@ void pcw_init(PCW *pcw, PcwModel model, int memory_kb) {
      * route through pcw->serial (or through pcw->perryfi when the
      * PerryFi extension is plugged in). */
     cps_init(&pcw->cps, false, &pcw->serial, &pcw->perryfi, &pcw->printer);
-    perryfi_init(&pcw->perryfi, false);
+    perryfi_init(&pcw->perryfi, false, PERRYFI_MODE_HAYES);
     /* DK'tronics PCW Sound + Joystick — present-state set by main/
      * overlay after init based on cfg + backplane gating. */
     aysound_init(&pcw->ay, false);

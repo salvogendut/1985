@@ -39,6 +39,9 @@ ext_serial              = false
 ext_serial_backend      = pty
 ext_serial_tcp_port     = 4002
 ext_perryfi             = false
+# hayes / perrynet. Hayes stays compatible with terminal software;
+# PerryNet is a framed socket API for new CP/M software.
+perryfi_mode            = hayes
 ext_dktronics           = false
 input_device            = joystick
 ext_pdf_printer         = false

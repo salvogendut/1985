@@ -106,6 +106,9 @@ typedef struct {
                                          * the serial port, so it's only
                                          * available when ext_serial is
                                          * enabled. */
+    PerryfiMode perryfi_mode;           /* Hayes AT modem by default;
+                                         * PerryNet exposes the framed
+                                         * socket API from ../PerryNet. */
     bool     ext_dktronics;             /* DK'tronics PCW Sound + Joystick:
                                          * AY-3-8912 + DB9 at 0xA9-0xAB.
                                          * Needs the PCW Backplane. */
