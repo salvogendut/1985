@@ -5,6 +5,7 @@
 #include "snapshot.h"
 #include "leds.h"
 #include "notify.h"
+#include "webgui.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -73,6 +74,7 @@ typedef enum {
     TINK_SAVE_SNAPSHOT,
     TINK_LOAD_SNAPSHOT,
     TINK_BOOT_ROM,
+    TINK_WEBGUI,
     TINK_VERSION,
     TINK_ROW_COUNT,
 } TinkerRow;
@@ -111,6 +113,7 @@ static TinkerRow tinker_row_at(const Overlay *ov, int row) {
     if (row == r++) return TINK_SAVE_SNAPSHOT;
     if (row == r++) return TINK_LOAD_SNAPSHOT;
     if (row == r++) return TINK_BOOT_ROM;
+    if (row == r++) return TINK_WEBGUI;
     if (row == r++) return TINK_VERSION;
     return TINK_ROW_COUNT;
 }
@@ -500,6 +503,13 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                              (ov->pcw && ov->pcw->boot.source[0])
                                  ? ov->pcw->boot.source
                                  : "embedded");
+                    break;
+                case TINK_WEBGUI:
+                    snprintf(label, lsz, "Web GUI");
+                    if (webgui_active())
+                        snprintf(val, vsz, "on - 0.0.0.0:%d", webgui_port());
+                    else
+                        snprintf(val, vsz, "off (port %d)", ov->cfg->web_port);
                     break;
                 case TINK_VERSION:
                     snprintf(label, lsz, "Version");
@@ -960,6 +970,17 @@ static void activate(Overlay *ov) {
                 case TINK_SAVE_SNAPSHOT: open_snapshot_save_dialog(ov); break;
                 case TINK_LOAD_SNAPSHOT: open_snapshot_load_dialog(ov); break;
                 case TINK_BOOT_ROM: open_boot_rom_dir_dialog(ov); break;
+                case TINK_WEBGUI:
+                    /* Live start/stop, no reboot. On start failure the
+                     * flag stays off (webgui_start posted the toast). */
+                    if (webgui_active()) {
+                        webgui_stop();
+                        ov->cfg->web_gui = false;
+                    } else if (webgui_start(ov->cfg->web_port)) {
+                        ov->cfg->web_gui = true;
+                    }
+                    ov->dirty = true;
+                    break;
                 case TINK_VERSION:
                 case TINK_ROW_COUNT:
                     break;

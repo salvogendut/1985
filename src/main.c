@@ -23,6 +23,7 @@
 #include "aysound.h"
 #include "notify.h"
 #include "shutter_wav.h"
+#include "webgui.h"
 
 /* PCW DK'tronics AY clock — same 1 MHz the CPC sibling uses for its
  * AY-3-8912. Real DK'tronics divides off the PCW system clock; 1 MHz
@@ -63,6 +64,15 @@ static const char *USAGE =
 "  --exit-after N              quit after frame N\n"
 "  --dump-at N                 dump CPU, memory and FDC state at frame N\n"
 "  --unthrottled               disable 50 Hz frame pacing (diagnostics)\n"
+"  --web[=PORT]                serve the emulator to a browser over HTTP\n"
+"                              (default port 1985). Implies --headless: no\n"
+"                              window on the host, the browser is the only\n"
+"                              interface. (The overlay toggle / web_gui\n"
+"                              config key serve with the window visible.)\n"
+"                              Binds 0.0.0.0 — anyone on the network can\n"
+"                              view and type; no authentication.\n"
+"  --headless                  no window on the host: offscreen video and\n"
+"                              dummy audio drivers (implied by --web)\n"
 "  -h, --help                  show this help\n";
 
 typedef struct {
@@ -99,6 +109,9 @@ typedef struct {
     int         paste_at;         /* 0 = begin immediately */
     int         exit_after;       /* -1 = run forever */
     int         dump_at;          /* -1 = no dump */
+    bool        web;              /* --web[=PORT] */
+    int         web_port;         /* 0 = use config value */
+    bool        headless;         /* --headless: offscreen video */
 } Cli;
 
 static void dump_state(PCW *pcw, int frame) {
@@ -359,6 +372,18 @@ static int parse_cli(int argc, char **argv, Cli *cli) {
         if ((v = eq_value(a, "--dump-at"))     && *v) { cli->dump_at     = atoi(v); continue; }
         if (strcmp(a, "--auto-space") == 0) { cli->auto_space = true; continue; }
         if (strcmp(a, "--unthrottled") == 0) { cli->unthrottled = true; continue; }
+        if ((v = eq_value(a, "--web")) && *v) {
+            int p = atoi(v);
+            if (p < 1 || p > 65535) {
+                fprintf(stderr, "--web=PORT must be 1..65535\n");
+                return -1;
+            }
+            cli->web = true;
+            cli->web_port = p;
+            continue;
+        }
+        if (strcmp(a, "--web") == 0)      { cli->web = true; continue; }
+        if (strcmp(a, "--headless") == 0) { cli->headless = true; continue; }
 
         /* Two-token form: --flag VALUE */
         if (strcmp(a, "--config")        == 0 && i+1 < argc) { cli->config_path = argv[++i]; continue; }
@@ -553,6 +578,24 @@ int main(int argc, char **argv) {
     if (cli.memory_kb)   cfg.memory_kb = cli.memory_kb;
     if (cli.disk_a)      snprintf(cfg.drive_a, sizeof(cfg.drive_a), "%s", cli.disk_a);
     if (cli.disk_b)      snprintf(cfg.drive_b, sizeof(cfg.drive_b), "%s", cli.disk_b);
+    if (cli.web) {
+        cfg.web_gui = true;
+        if (cli.web_port) cfg.web_port = cli.web_port;
+        /* --web means "web appliance": completely headless, the browser
+         * is the only interface. The overlay toggle and the web_gui
+         * config key start the server WITHOUT hiding the host window. */
+        cli.headless = true;
+    }
+    if (cli.headless) {
+        /* Truly windowless: force the offscreen video and dummy audio
+         * drivers with OVERRIDE priority so a session's DISPLAY /
+         * WAYLAND_DISPLAY / SDL_VIDEODRIVER cannot bring a window up.
+         * Must run before display_init (which calls SDL_Init). */
+        SDL_SetHintWithPriority(SDL_HINT_VIDEO_DRIVER, "offscreen",
+                                SDL_HINT_OVERRIDE);
+        SDL_SetHintWithPriority(SDL_HINT_AUDIO_DRIVER, "dummy",
+                                SDL_HINT_OVERRIDE);
+    }
 
     Display disp;
     if (display_init(&disp, &cfg) < 0) return 1;
@@ -638,6 +681,12 @@ int main(int argc, char **argv) {
 
     Paste paste;
     paste_init(&paste);
+
+    webgui_init(&pcw, &disp, &paste);
+    webgui_set_log(cli.web);   /* --web = headless service: log to stderr */
+    if (cfg.web_gui)
+        webgui_start(cfg.web_port);
+
     bool paste_pending = cli.paste_text && cli.paste_at > 0;
     if (cli.paste_text && !paste_pending) paste_text(&paste, cli.paste_text);
     bool auto_space_pending = cli.auto_space && cli.boot_ems;
@@ -927,6 +976,7 @@ int main(int argc, char **argv) {
             }
         }
         paste_tick(&paste, &pcw.kbd);
+        webgui_poll();
 
         if (auto_space_pending && frame == auto_space_frame) {
             kbd_press(&pcw.kbd, 5, 7);
@@ -1117,6 +1167,7 @@ int main(int argc, char **argv) {
             if ((gc_skip ^= 1) == 0)
                 gifcap_frame(gc, disp.fb);
         }
+        webgui_frame();
 
         if (frame == screenshot_frame) {
             display_save_ppm(&disp, screenshot_path);
@@ -1150,6 +1201,7 @@ int main(int argc, char **argv) {
         disk_save(&pcw.fdc.drive[1], cfg.drive_b);
 
     if (gc) gifcap_close(gc);
+    webgui_stop();
     set_mouse_capture(&disp, &pcw.mouse, &mouse_captured, false);
     monitor_destroy(mon);
     if (gamepad)   SDL_CloseGamepad(gamepad);

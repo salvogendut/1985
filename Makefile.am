@@ -31,6 +31,7 @@ dist_man1_MANS = 1985.1
 	src/serial.c \
 	src/snapshot.c \
 	src/symbols.c \
+	src/webgui.c \
 	src/z80.c \
 	src/z80dis.c
 
@@ -67,6 +68,8 @@ noinst_HEADERS = \
 	src/symbols.h \
 	src/input_types.h \
 	src/types.h \
+	src/webgui.h \
+	src/webgui_page.h \
 	src/z80.h \
 	src/z80dis.h
 
@@ -85,7 +88,17 @@ icons/1985-rc.o: $(srcdir)/icons/1985.rc $(srcdir)/icons/1985.ico
 	@mkdir -p icons
 	$(WINDRES) -I$(srcdir)/icons -i $< -O coff -o $@
 
-CLEANFILES = icons/1985-rc.o
+CLEANFILES = icons/1985-rc.o packaging/1985-web.service
+
+# systemd user unit for the headless Web GUI service. Generated from
+# the .in template so ExecStart points at the configured bindir.
+userunitdir   = $(prefix)/lib/systemd/user
+userunit_DATA = packaging/1985-web.service
+
+packaging/1985-web.service: packaging/1985-web.service.in Makefile
+	@$(MKDIR_P) packaging
+	sed -e 's|@BINDIR[@]|$(bindir)|g' \
+	    $(srcdir)/packaging/1985-web.service.in > $@
 
 desktopdir         = $(datadir)/applications
 dist_desktop_DATA  = io.github.salvogendut.Emulator1985.desktop
@@ -109,4 +122,6 @@ icon512dir         = $(datadir)/icons/hicolor/512x512/apps
 dist_icon512_DATA  = icons/512x512/apps/io.github.salvogendut.Emulator1985.png
 
 EXTRA_DIST = LICENSE README.md INSTALL.md USAGE.md Development.md \
-             1985.conf.example icons/1985.rc icons/1985.ico
+             1985.conf.example icons/1985.rc icons/1985.ico \
+             src/webgui_page.html tools/gen_webgui_page.sh \
+             packaging/1985-web.service.in
