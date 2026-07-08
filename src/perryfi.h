@@ -27,7 +27,9 @@
 #define PERRYFI_ESC_COUNT     3
 #define PERRYNET_MAX_PAYLOAD 512
 #define PERRYNET_FRAME_MAX   (6 + PERRYNET_MAX_PAYLOAD + 2)
-#define PERRYNET_MAX_TCP       4
+#define PERRYNET_MAX_CHANNELS  4
+#define PERRYNET_MAX_TCP       PERRYNET_MAX_CHANNELS
+#define PERRYNET_MAX_UDP       PERRYNET_MAX_CHANNELS
 
 typedef enum {
     PERRYFI_MODE_HAYES = 0,       /* PerryFiFW-style Hayes AT modem */
@@ -43,6 +45,12 @@ typedef struct {
     bool open;
     int  fd;
 } PerryfiTcpChannel;
+
+typedef struct {
+    bool open;
+    int  fd;
+    u16  local_port;
+} PerryfiUdpChannel;
 
 typedef struct Perryfi {
     bool present;                 /* mirror of cfg->ext_perryfi at init time */
@@ -84,6 +92,7 @@ typedef struct Perryfi {
     bool   pn_pass_set;
     char   pn_ssid[64];
     PerryfiTcpChannel pn_tcp[PERRYNET_MAX_TCP];
+    PerryfiUdpChannel pn_udp[PERRYNET_MAX_UDP];
 } Perryfi;
 
 void perryfi_init    (Perryfi *p, bool enable, PerryfiMode mode);
