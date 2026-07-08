@@ -51,7 +51,8 @@
   (shown / hidden — a real CRT hides the guest's bottom 8 scanlines,
   where CP/M keeps its status row, in overscan), Mouse type (AMX /
   Kempston), Joystick type, printer mode/model, debug toggles, serial
-  mode, snapshot load/save, Notifications (screen / console / off).
+  mode/path, PerryFi mode, snapshot load/save, Notifications (screen /
+  console / off).
 
 ## Notifications
 

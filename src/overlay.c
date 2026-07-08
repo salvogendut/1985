@@ -16,7 +16,7 @@
 
 #define LINE_H   16
 #define ORIGIN_X 24
-#define ORIGIN_Y 28
+#define ORIGIN_Y 24
 #define VAL_X    144
 
 /* Semantic identity of a row in the Extensions section. The display
@@ -68,6 +68,7 @@ typedef enum {
     TINK_TRACE_INPUT,
     TINK_SERIAL_MODE,
     TINK_SERIAL_PATH,
+    TINK_PERRYFI_MODE,
     TINK_KEYBOARD_LAYOUT,
     TINK_SAVE_SNAPSHOT,
     TINK_LOAD_SNAPSHOT,
@@ -105,6 +106,7 @@ static TinkerRow tinker_row_at(const Overlay *ov, int row) {
     if (row == r++) return TINK_TRACE_INPUT;
     if (row == r++) return TINK_SERIAL_MODE;
     if (row == r++) return TINK_SERIAL_PATH;
+    if (row == r++) return TINK_PERRYFI_MODE;
     if (row == r++) return TINK_KEYBOARD_LAYOUT;
     if (row == r++) return TINK_SAVE_SNAPSHOT;
     if (row == r++) return TINK_LOAD_SNAPSHOT;
@@ -363,6 +365,10 @@ static const char *joystick_type_str(JoystickType type) {
     }
 }
 
+static const char *perryfi_mode_str(PerryfiMode mode) {
+    return mode == PERRYFI_MODE_PERRYNET ? "PerryNet TCP/IP" : "AT Hayes";
+}
+
 static const char *bool_str(bool b) { return b ? "yes" : "no"; }
 
 static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char *val, size_t vsz) {
@@ -476,6 +482,14 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                              cfg->ext_serial_pty_link[0]
                                  ? cfg->ext_serial_pty_link
                                  : "/tmp/1985-serial");
+                    break;
+                case TINK_PERRYFI_MODE:
+                    snprintf(label, lsz, "PerryFi mode");
+                    if (!cfg->ext_perryfi)
+                        snprintf(val, vsz, "[PerryFi disabled]");
+                    else
+                        snprintf(val, vsz, "%s",
+                                 perryfi_mode_str(cfg->perryfi_mode));
                     break;
                 case TINK_KEYBOARD_LAYOUT: snprintf(label, lsz, "Show keyboard layout"); snprintf(val, vsz, "..."); break;
                 case TINK_SAVE_SNAPSHOT: snprintf(label, lsz, "Save snapshot"); snprintf(val, vsz, "..."); break;
@@ -933,6 +947,15 @@ static void activate(Overlay *ov) {
                     ov->state = OV_STATE_EDIT;
                     if (ov->disp) SDL_StartTextInput(ov->disp->win);
                     break;
+                case TINK_PERRYFI_MODE:
+                    if (c->ext_perryfi) {
+                        c->perryfi_mode =
+                            c->perryfi_mode == PERRYFI_MODE_PERRYNET
+                            ? PERRYFI_MODE_HAYES
+                            : PERRYFI_MODE_PERRYNET;
+                        ov->dirty = true;
+                    }
+                    break;
                 case TINK_KEYBOARD_LAYOUT: ov->state = OV_STATE_KEYS; break;
                 case TINK_SAVE_SNAPSHOT: open_snapshot_save_dialog(ov); break;
                 case TINK_LOAD_SNAPSHOT: open_snapshot_load_dialog(ov); break;
@@ -964,6 +987,7 @@ static void close_overlay(Overlay *ov, bool save) {
                            || (ov->cfg->ext_sanpollo_backplane != ov->saved.ext_sanpollo_backplane)
                            || (ov->cfg->ext_serial           != ov->saved.ext_serial)
                            || (ov->cfg->ext_perryfi          != ov->saved.ext_perryfi)
+                           || (ov->cfg->perryfi_mode         != ov->saved.perryfi_mode)
                            || (ov->cfg->ext_dktronics        != ov->saved.ext_dktronics)
                            /* Mouse drivers latch the protocol at boot:
                             * AMX probes the 8255 once, Keymouse changes
@@ -1024,7 +1048,7 @@ static void close_overlay(Overlay *ov, bool save) {
                         ov->cfg->ext_serial_backend,
                         ov->cfg->ext_serial_tcp_port,
                         ov->cfg->ext_serial_pty_link);
-            perryfi_init(&ov->pcw->perryfi, p_on);
+            perryfi_init(&ov->pcw->perryfi, p_on, ov->cfg->perryfi_mode);
             cps_set_present(&ov->pcw->cps, s_on);
             leds_set_enabled(LED_SERIAL, s_on);
 

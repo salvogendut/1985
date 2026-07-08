@@ -516,7 +516,7 @@ static void apply_runtime_config(PCW *pcw, const Config *cfg) {
                     cfg->ext_serial_backend, cfg->ext_serial_tcp_port,
                     cfg->ext_serial_pty_link);
     if (!pcw->perryfi.present)
-        perryfi_init(&pcw->perryfi, perryfi_on);
+        perryfi_init(&pcw->perryfi, perryfi_on, cfg->perryfi_mode);
     cps_set_present(&pcw->cps, serial_on);
     leds_set_enabled(LED_SERIAL, serial_on);
 

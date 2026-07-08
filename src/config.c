@@ -56,6 +56,24 @@ static PrintSink parse_sink(const char *s, PrintSink fallback) {
     return fallback;
 }
 
+static const char *perryfi_mode_to_str(PerryfiMode mode) {
+    return (mode == PERRYFI_MODE_PERRYNET) ? "perrynet" : "hayes";
+}
+
+static PerryfiMode parse_perryfi_mode(const char *s, PerryfiMode fallback) {
+    if (!s) return fallback;
+    if (strcasecmp(s, "hayes") == 0
+        || strcasecmp(s, "at") == 0
+        || strcasecmp(s, "at_hayes") == 0)
+        return PERRYFI_MODE_HAYES;
+    if (strcasecmp(s, "perrynet") == 0
+        || strcasecmp(s, "tcpip") == 0
+        || strcasecmp(s, "tcp/ip") == 0)
+        return PERRYFI_MODE_PERRYNET;
+    fprintf(stderr, "config: unknown perryfi_mode '%s' — using default\n", s);
+    return fallback;
+}
+
 static VideoMode parse_video(const char *s, VideoMode fallback) {
     if (!s) return fallback;
     if (strcasecmp(s, "pcw")  == 0) return VIDEO_PCW;
@@ -229,6 +247,7 @@ void config_defaults(Config *c) {
     c->notifications        = NOTIFY_MODE_SCREEN;
     snprintf(c->ext_serial_backend, sizeof(c->ext_serial_backend), "pty");
     c->ext_serial_tcp_port  = 4002;
+    c->perryfi_mode         = PERRYFI_MODE_HAYES;
     snprintf(c->ext_serial_pty_link, sizeof(c->ext_serial_pty_link),
              "/tmp/1985-serial");
 }
@@ -322,6 +341,7 @@ void config_load(Config *c, const char *path) {
                          sizeof(c->ext_serial_pty_link), "%s", v);
         }
         else if (strcmp(k, "ext_perryfi")             == 0) c->ext_perryfi             = parse_bool(v, c->ext_perryfi);
+        else if (strcmp(k, "perryfi_mode")            == 0) c->perryfi_mode            = parse_perryfi_mode(v, c->perryfi_mode);
         else if (strcmp(k, "ext_dktronics")           == 0) c->ext_dktronics           = parse_bool(v, c->ext_dktronics);
         else if (strcmp(k, "ext_multilink")           == 0) c->ext_multilink           = parse_bool(v, c->ext_multilink);
         else if (strcmp(k, "input_device")             == 0) c->input_device = parse_input_device(v, c->input_device);
@@ -421,6 +441,7 @@ int config_save(const Config *c) {
     fprintf(f, "ext_serial_tcp_port     = %d\n",   c->ext_serial_tcp_port);
     fprintf(f, "ext_serial_pty_link     = %s\n",   c->ext_serial_pty_link);
     fprintf(f, "ext_perryfi             = %s\n",   bool_to_str(c->ext_perryfi));
+    fprintf(f, "perryfi_mode            = %s\n",   perryfi_mode_to_str(c->perryfi_mode));
     fprintf(f, "ext_dktronics           = %s\n",   bool_to_str(c->ext_dktronics));
     fprintf(f, "ext_multilink           = %s\n",   bool_to_str(c->ext_multilink));
     fprintf(f, "input_device            = %s\n",   input_device_to_str(c->input_device));
