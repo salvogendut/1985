@@ -106,6 +106,24 @@ accepts `--load-sna FILE`.
 Still stubbed: 9512 daisywheel fidelity, and most game-side
 hardware extensions.
 
+**Web GUI** — an embedded HTTP server (`--web[=PORT]`, or the Web GUI
+toggle under Advanced in the F9 overlay) serves the emulator to any
+browser on the network: live screen as a multipart GIF stream
+(in-tree encoder, no dependencies, ~25 fps with change detection),
+and full input capture — click the screen and the browser's keyboard
+**and mouse** (pointer lock, relative motion into the configured
+AMX / Kempston / Keymouse device) belong to the PCW until
+**Ctrl+Enter** releases them — plus paste-text and reset controls.
+`--web` implies `--headless` (offscreen video, dummy audio): no
+window on the host, the browser is the only interface, with
+lifecycle logging to stderr for journald. For a permanent web
+appliance a systemd user unit is installed as `1985-web.service`:
+`systemctl --user enable --now 1985-web` (add `loginctl
+enable-linger` to start at boot). **Security note: it binds
+`0.0.0.0` with no authentication — anyone on your network can watch
+and type. Enable it only on networks you trust.** Ported from
+[1984](https://github.com/salvogendut/1984)'s Web GUI.
+
 <p align="center">
   <img src="screenshots/cpm.png" alt="CP/M+ boot banner and A&gt; prompt" width="380">
   &nbsp;&nbsp;

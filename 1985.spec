@@ -15,6 +15,7 @@ BuildRequires:  pkgconfig(sdl3)
 BuildRequires:  pkgconfig(cairo)
 BuildRequires:  desktop-file-utils
 BuildRequires:  libappstream-glib
+BuildRequires:  systemd-rpm-macros
 
 %description
 1985 is an Amstrad PCW emulator written in C with SDL3, a sibling
@@ -68,11 +69,18 @@ autoreconf -fiv
 desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.salvogendut.Emulator1985.desktop
 appstream-util validate-relax --nonet %{buildroot}%{_datadir}/metainfo/io.github.salvogendut.Emulator1985.metainfo.xml
 
+%post
+%systemd_user_post 1985-web.service
+
+%preun
+%systemd_user_preun 1985-web.service
+
 %files
 %license LICENSE
 %doc README.md INSTALL.md USAGE.md
 %{_bindir}/%{name}
 %{_mandir}/man1/%{name}.1*
+%{_userunitdir}/1985-web.service
 %{_datadir}/applications/io.github.salvogendut.Emulator1985.desktop
 %{_datadir}/metainfo/io.github.salvogendut.Emulator1985.metainfo.xml
 %{_datadir}/icons/hicolor/*/apps/io.github.salvogendut.Emulator1985.png

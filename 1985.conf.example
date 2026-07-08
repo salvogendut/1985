@@ -55,6 +55,10 @@ tinker = false
 status_line = true
 # screen = fading toast over PCW display; console = stderr line; off = silent
 notifications = screen
+# Web GUI: serve the emulator screen + controls over HTTP.
+# Binds 0.0.0.0 — anyone on your network can view and type. No auth.
+web_gui = false
+web_port = 1985
 debug = false
 debug_traces = false
 trace_io = false

@@ -245,6 +245,8 @@ void config_defaults(Config *c) {
     c->show_status_line     = true;
     c->debug                = false;
     c->notifications        = NOTIFY_MODE_SCREEN;
+    c->web_gui              = false;
+    c->web_port             = 1985;
     snprintf(c->ext_serial_backend, sizeof(c->ext_serial_backend), "pty");
     c->ext_serial_tcp_port  = 4002;
     c->perryfi_mode         = PERRYFI_MODE_HAYES;
@@ -360,6 +362,11 @@ void config_load(Config *c, const char *path) {
             else if (!strcasecmp(v, "console")) c->notifications = NOTIFY_MODE_CONSOLE;
             else if (!strcasecmp(v, "off"))     c->notifications = NOTIFY_MODE_OFF;
         }
+        else if (strcmp(k, "web_gui")              == 0) c->web_gui = parse_bool(v, c->web_gui);
+        else if (strcmp(k, "web_port")             == 0) {
+            int p = atoi(v);
+            if (p > 0 && p < 65536) c->web_port = p;
+        }
         else if (strcmp(k, "trace_io")             == 0) c->trace_io    = parse_bool(v, c->trace_io);
         else if (strcmp(k, "trace_fdc")            == 0) c->trace_fdc   = parse_bool(v, c->trace_fdc);
         else if (strcmp(k, "trace_input")          == 0) c->trace_input = parse_bool(v, c->trace_input);
@@ -459,6 +466,8 @@ int config_save(const Config *c) {
     fprintf(f, "notifications = %s\n",
             c->notifications == NOTIFY_MODE_SCREEN  ? "screen"  :
             c->notifications == NOTIFY_MODE_CONSOLE ? "console" : "off");
+    fprintf(f, "web_gui = %s\n", bool_to_str(c->web_gui));
+    fprintf(f, "web_port = %d\n", c->web_port);
     fprintf(f, "trace_io = %s\n", bool_to_str(c->trace_io));
     fprintf(f, "trace_fdc = %s\n", bool_to_str(c->trace_fdc));
     fprintf(f, "trace_input = %s\n", bool_to_str(c->trace_input));

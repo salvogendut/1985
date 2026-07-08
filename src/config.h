@@ -145,6 +145,10 @@ typedef struct {
     InputDevice input_device;
     MouseType mouse_type;
     JoystickType joystick_type;
+    bool     web_gui;        /* embedded HTTP server serving the emulator to
+                              * a browser. Binds 0.0.0.0 — LAN-visible, no
+                              * auth. */
+    int      web_port;       /* Web GUI TCP port; default 1985 */
 
     /* Path actually used at load/save time. */
     char     path[PATH_MAX];

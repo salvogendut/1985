@@ -69,6 +69,56 @@ Open a PTY that injects writes as keystrokes.
 .BI --symbols= PATH
 Load an SDCC .map for the F8 disassembler.
 .TP
+.B --web[=PORT]
+Start the embedded
+.B Web GUI
+HTTP server (default port 1985): any browser on the network gets the
+live emulator screen (a multipart GIF stream) plus full input capture
+\(em clicking the screen captures the browser's keyboard and mouse
+(pointer lock; motion feeds the configured AMX / Kempston / Keymouse
+device) until
+.B Ctrl+Enter
+releases them, the same combo as the emulator window \(em and
+paste-text / reset controls.
+.B --web
+implies
+.BR --headless :
+no window appears on the host and the browser is the only interface.
+To serve with the host window still visible, use the Web GUI toggle on
+the Advanced overlay tab or set
+.B web_gui=true
+in the configuration file instead. The server binds
+.B 0.0.0.0
+with
+.BR "no authentication" :
+anyone on the local network can watch and type. Settings persist as
+.B web_gui
+and
+.B web_port
+in the configuration file.
+.TP
+.B --headless
+No window on the host: force SDL's
+.B offscreen
+video driver and
+.B dummy
+audio driver. Implied by
+.BR --web .
+A ready-made systemd user unit is installed as
+.BR 1985-web.service :
+.IP
+.nf
+systemctl --user enable --now 1985-web
+.fi
+.IP
+It runs
+.B 1985 --web
+and can be customised with a drop-in
+.RB ( "systemctl --user edit 1985-web" ).
+Use
+.B loginctl enable-linger
+to start it at boot without logging in.
+.TP
 .BR -h ", " --help
 Show help and exit.
 .SH KEYBOARD SHORTCUTS
