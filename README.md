@@ -131,9 +131,13 @@ just that session's boot state. Each session also gets per-drive
 `--headless`: no window on the host at all, and it is a genuinely
 separate, self-contained server (`src/websvc.c`) — not just a headless
 flavor of the Web GUI above. For a permanent web appliance a systemd
-user unit is installed as `1985-web.service`: `systemctl --user enable
---now 1985-web` gives you a multi-user browser-only PCW service (add
-`loginctl enable-linger` to start at boot).
+**system** unit is installed as `1985-web.service`: `systemctl enable
+--now 1985-web` gives you a multi-user browser-only PCW service. It runs
+as a dedicated, shell-less `emulator` system account (created
+automatically, shared with 1984's equivalent unit if both are installed)
+rather than root or an interactive login user, with systemd sandboxing
+(`ProtectSystem=strict`, `NoNewPrivileges`, no capabilities, ...) on top —
+see the unit file's comments for the full rationale.
 
 **Security note (both modes): they bind `0.0.0.0` with no
 authentication — anyone on your network can watch and type. Web
