@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #ifndef _WIN32
 #include <unistd.h>
@@ -56,11 +57,13 @@ enum {
     PN_OP_TCP_SEND          = 0x32,
     PN_OP_TCP_LISTEN        = 0x33,
     PN_OP_TCP_LISTEN_CLOSE  = 0x34,
+    PN_OP_TCP_RECV          = 0x35,
     PN_OP_UDP_OPEN          = 0x40,
     PN_OP_UDP_CLOSE         = 0x41,
     PN_OP_UDP_SEND          = 0x42,
     PN_OP_UART_GET          = 0x50,
     PN_OP_UART_SET          = 0x51,
+    PN_OP_TIME_GET          = 0x60,
     PN_OP_PING              = 0x70,
     PN_OP_ACK               = 0x80,
     PN_OP_EVENT             = 0x81,
@@ -425,6 +428,7 @@ static void pn_tcp_close(Perryfi *p, int idx) {
         close(p->pn_tcp[idx].fd);
 #endif
     p->pn_tcp[idx].open = false;
+    p->pn_tcp[idx].pull_rx = false;
     p->pn_tcp[idx].fd = -1;
 }
 
@@ -526,6 +530,7 @@ static int pn_tcp_open(Perryfi *p, int idx, const char *host, u16 port,
 
     p->pn_tcp[idx].fd = fd;
     p->pn_tcp[idx].open = true;
+    p->pn_tcp[idx].pull_rx = (flags & 0x02) != 0;
     notify_post("perrynet: TCP %d connected to %s:%u",
                 idx + 1, host, (unsigned)port);
     return 0;
@@ -625,7 +630,7 @@ static void pn_handle_frame(Perryfi *p, const u8 *body, size_t body_len) {
             pn_append_u16(response, &response_len, PERRYNET_MAX_PAYLOAD);
             response[response_len++] = PERRYNET_MAX_TCP;
             response[response_len++] = 0; /* listeners: follow-up scope */
-            pn_append_u32(response, &response_len, 0x37); /* WiFi/DNS/TCP/UDP/UART */
+            pn_append_u32(response, &response_len, 0x7F); /* WiFi/DNS/TCP/UDP/UART/TIME */
             const char name[] = "1985 PerryNet";
             memcpy(response + response_len, name, sizeof(name));
             response_len += sizeof(name);
@@ -794,6 +799,48 @@ static void pn_handle_frame(Perryfi *p, const u8 *body, size_t body_len) {
 #endif
             return;
         }
+        case PN_OP_TCP_RECV: {
+            int slot = pn_tcp_slot(p, channel);
+            if (slot < 0) {
+                pn_send_ack(p, seq, channel, PN_STATUS_BAD_CHANNEL, NULL, 0);
+                return;
+            }
+            if (payload_len != 0 && payload_len != 2) {
+                pn_send_ack(p, seq, channel, PN_STATUS_BAD_LENGTH, NULL, 0);
+                return;
+            }
+#ifndef _WIN32
+            size_t max_len = PN_TCP_READ_MAX;
+            if (payload_len == 2)
+                max_len = pn_read_u16(payload);
+            if (max_len > PERRYNET_MAX_PAYLOAD - 1)
+                max_len = PERRYNET_MAX_PAYLOAD - 1;
+            ssize_t n = 0;
+            if (max_len > 0)
+                n = recv(p->pn_tcp[slot].fd, response, max_len, 0);
+            if (n > 0) {
+                pn_send_ack(p, seq, channel, PN_STATUS_OK, response, (size_t)n);
+                return;
+            }
+            if (n == 0) {
+                pn_send_ack(p, seq, channel, PN_STATUS_OK, NULL, 0);
+                pn_tcp_close(p, slot);
+                pn_send_event(p, channel, PN_EVT_TCP_CLOSED, NULL, 0);
+                return;
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                pn_send_ack(p, seq, channel, PN_STATUS_OK, NULL, 0);
+                return;
+            }
+            pn_send_ack(p, seq, channel, PN_STATUS_IO_ERROR, NULL, 0);
+            pn_tcp_close(p, slot);
+            pn_send_event(p, channel, PN_EVT_TCP_ERROR,
+                          (const u8[]){ PN_STATUS_IO_ERROR }, 1);
+#else
+            pn_send_ack(p, seq, channel, PN_STATUS_UNSUPPORTED, NULL, 0);
+#endif
+            return;
+        }
         case PN_OP_UDP_OPEN: {
             if (!p->pn_wifi_connected) {
                 pn_send_ack(p, seq, channel, PN_STATUS_WIFI_DOWN, NULL, 0);
@@ -880,6 +927,14 @@ static void pn_handle_frame(Perryfi *p, const u8 *body, size_t body_len) {
             else
                 pn_send_ack(p, seq, channel, PN_STATUS_OK, NULL, 0);
             return;
+        case PN_OP_TIME_GET: {
+            time_t now = time(NULL);
+            response[response_len++] = now > 0 ? 1 : 0;
+            pn_append_u32(response, &response_len, now > 0 ? (u32)now : 0);
+            pn_append_u32(response, &response_len, (u32)SDL_GetTicks());
+            pn_send_ack(p, seq, channel, PN_STATUS_OK, response, response_len);
+            return;
+        }
         case PN_OP_PING:
             pn_send_ack(p, seq, channel, PN_STATUS_OK, payload, payload_len);
             return;
@@ -936,6 +991,7 @@ static void perrynet_poll(Perryfi *p) {
 #ifndef _WIN32
     for (int i = 0; i < PERRYNET_MAX_TCP; i++) {
         if (!p->pn_tcp[i].open || p->pn_tcp[i].fd < 0) continue;
+        if (p->pn_tcp[i].pull_rx) continue;
         if (rb_space(p->rx_head, p->rx_tail) < (PN_TCP_READ_MAX * 2 + 16))
             break;
 

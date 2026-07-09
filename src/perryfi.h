@@ -43,6 +43,7 @@ typedef enum {
 
 typedef struct {
     bool open;
+    bool pull_rx;
     int  fd;
 } PerryfiTcpChannel;
 
