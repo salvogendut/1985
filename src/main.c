@@ -25,6 +25,7 @@
 #include "shutter_wav.h"
 #include "webgui.h"
 #include "websvc.h"
+#include "pilot.h"
 
 /* PCW DK'tronics AY clock — same 1 MHz the CPC sibling uses for its
  * AY-3-8912. Real DK'tronics divides off the PCW system clock; 1 MHz
@@ -65,6 +66,9 @@ static const char *USAGE =
 "  --exit-after N              quit after frame N\n"
 "  --dump-at N                 dump CPU, memory and FDC state at frame N\n"
 "  --unthrottled               disable 50 Hz frame pacing (diagnostics)\n"
+"  --pilot[=ARG]               open a PTY auto-pilot; ARG may be a symlink\n"
+"                              path or initial target mouse|joystick\n"
+"  --pilot-replies-stderr      mirror pilot replies to stderr\n"
 "  --web[=PORT]                serve the emulator to a browser over HTTP\n"
 "                              (default port 1985). Implies --headless: no\n"
 "                              window on the host, the browser is the only\n"
@@ -113,6 +117,10 @@ typedef struct {
     bool        web;              /* --web[=PORT] */
     int         web_port;         /* 0 = use config value */
     bool        headless;         /* --headless: offscreen video */
+    bool        pilot_enabled;
+    const char *pilot_link;
+    PilotTarget pilot_target0;
+    bool        pilot_reply_stderr;
 } Cli;
 
 static void dump_state(PCW *pcw, int frame) {
@@ -371,8 +379,20 @@ static int parse_cli(int argc, char **argv, Cli *cli) {
         if ((v = eq_value(a, "--gif-out"))     && *v) { cli->gif_out     = v; continue; }
         if ((v = eq_value(a, "--exit-after"))  && *v) { cli->exit_after  = atoi(v); continue; }
         if ((v = eq_value(a, "--dump-at"))     && *v) { cli->dump_at     = atoi(v); continue; }
+        if ((v = eq_value(a, "--pilot")) != NULL) {
+            cli->pilot_enabled = true;
+            if (!*v || strcmp(v, "mouse") == 0) {
+                cli->pilot_target0 = PILOT_MOUSE;
+            } else if (strcmp(v, "joystick") == 0 || strcmp(v, "joy") == 0) {
+                cli->pilot_target0 = PILOT_JOY;
+            } else {
+                cli->pilot_link = v;
+            }
+            continue;
+        }
         if (strcmp(a, "--auto-space") == 0) { cli->auto_space = true; continue; }
         if (strcmp(a, "--unthrottled") == 0) { cli->unthrottled = true; continue; }
+        if (strcmp(a, "--pilot-replies-stderr") == 0) { cli->pilot_reply_stderr = true; continue; }
         if ((v = eq_value(a, "--web")) && *v) {
             int p = atoi(v);
             if (p < 1 || p > 65535) {
@@ -408,8 +428,10 @@ static int parse_cli(int argc, char **argv, Cli *cli) {
         if (strcmp(a, "--gif-out")       == 0 && i+1 < argc) { cli->gif_out     = argv[++i]; continue; }
         if (strcmp(a, "--exit-after")    == 0 && i+1 < argc) { cli->exit_after  = atoi(argv[++i]); continue; }
         if (strcmp(a, "--dump-at")       == 0 && i+1 < argc) { cli->dump_at     = atoi(argv[++i]); continue; }
+        if (strcmp(a, "--pilot")         == 0) { cli->pilot_enabled = true; continue; }
         if (strcmp(a, "--auto-space")    == 0) { cli->auto_space = true; continue; }
         if (strcmp(a, "--unthrottled")   == 0) { cli->unthrottled = true; continue; }
+        if (strcmp(a, "--pilot-replies-stderr") == 0) { cli->pilot_reply_stderr = true; continue; }
 
         if (starts_with(a, "--")) {
             fprintf(stderr, "unknown option: %s\n%s", a, USAGE);
@@ -686,6 +708,12 @@ int main(int argc, char **argv) {
 
     Paste paste;
     paste_init(&paste);
+
+    Pilot pilot;
+    pilot.fd = -1;
+    if (cli.pilot_enabled)
+        pilot_open(&pilot, cli.pilot_link, cli.pilot_target0,
+                   cli.pilot_reply_stderr);
 
     webgui_init(&pcw, &disp, &paste);
     webgui_set_log(false);   /* --web now goes through websvc_run(); this path is toast-only */
@@ -980,6 +1008,7 @@ int main(int argc, char **argv) {
                 printf("disk-event: drive %c ejected\n", 'A' + drive);
             }
         }
+        pilot_tick(&pilot, &pcw, &disp, &paste);
         paste_tick(&paste, &pcw.kbd);
         webgui_poll();
 
@@ -1173,6 +1202,7 @@ int main(int argc, char **argv) {
                 gifcap_frame(gc, disp.fb);
         }
         webgui_frame();
+        pilot_post_frame(&pilot, &pcw, &disp, frame + 1);
 
         if (frame == screenshot_frame) {
             display_save_ppm(&disp, screenshot_path);

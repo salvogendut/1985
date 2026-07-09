@@ -120,3 +120,10 @@ void display_toggle_fullscreen(Display *d);
 
 /* Write PPM (P6) of the current framebuffer to path. Returns 0/-1. */
 int  display_save_ppm(Display *d, const char *path);
+
+u32  display_hash(Display *d);
+void display_copy_visible(Display *d, u32 *dst);
+bool display_changed_rect(Display *d, u32 *prev,
+                          int *x, int *y, int *w, int *h);
+bool display_save_crop_ppm(Display *d, const char *path,
+                           int x, int y, int w, int h, int scale);

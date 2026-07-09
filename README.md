@@ -103,6 +103,12 @@ FDC command state, AY synth state, and serial / printer buffers are
 not preserved — save at the `A>` prompt for safest results. CLI also
 accepts `--load-sna FILE`.
 
+Automation — `--pilot[=ARG]` opens a PTY compatible with 1984's
+auto-pilot interface for scripted keyboard, mouse/joystick, snapshot,
+hash, crop, and wait commands. `ARG` may be a symlink path for the PTY
+or the initial target `mouse` / `joystick`; `--pilot-replies-stderr`
+mirrors replies into headless logs.
+
 Still stubbed: 9512 daisywheel fidelity, and most game-side
 hardware extensions.
 

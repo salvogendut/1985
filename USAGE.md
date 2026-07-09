@@ -19,6 +19,8 @@
 | `--exit-after N` | Quit after frame N (headless capture) |
 | `--dump-at N` | Dump CPU, memory and FDC state at frame N |
 | `--unthrottled` | Disable 50 Hz host pacing for diagnostics |
+| `--pilot[=ARG]` | Open a PTY auto-pilot. `ARG` may be a symlink path or initial target `mouse`/`joystick` |
+| `--pilot-replies-stderr` | Mirror pilot replies to stderr, useful in headless automation logs |
 | `--monitor-pty` | Open a PTY for the F8 monitor |
 | `--kbd-pty` | Open a PTY that injects keystrokes |
 | `--symbols PATH` | Load SDCC `.map` for the F8 disassembler |
