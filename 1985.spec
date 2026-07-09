@@ -1,5 +1,5 @@
 Name:           1985
-Version:        0.4.5
+Version:        0.4.6
 Release:        1%{?dist}
 Summary:        Amstrad PCW 8256 / 8512 / 9512 emulator
 
@@ -16,6 +16,8 @@ BuildRequires:  pkgconfig(cairo)
 BuildRequires:  desktop-file-utils
 BuildRequires:  libappstream-glib
 BuildRequires:  systemd-rpm-macros
+%{?systemd_requires}
+Requires(pre):  systemd
 
 %description
 1985 is an Amstrad PCW emulator written in C with SDL3, a sibling
@@ -69,23 +71,42 @@ autoreconf -fiv
 desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.salvogendut.Emulator1985.desktop
 appstream-util validate-relax --nonet %{buildroot}%{_datadir}/metainfo/io.github.salvogendut.Emulator1985.metainfo.xml
 
+%pre
+# Dedicated, shell-less system account the 1985-web.service unit runs as
+# (shared with 1984's equivalent unit if both packages are installed) —
+# never the interactive user who happens to enable the service.
+%sysusers_create_inline u emulator - "1984/1985 Web Service" /var/lib/emulator /usr/sbin/nologin
+
 %post
-%systemd_user_post 1985-web.service
+%systemd_post 1985-web.service
 
 %preun
-%systemd_user_preun 1985-web.service
+%systemd_preun 1985-web.service
+
+%postun
+%systemd_postun_with_restart 1985-web.service
 
 %files
 %license LICENSE
 %doc README.md INSTALL.md USAGE.md
 %{_bindir}/%{name}
 %{_mandir}/man1/%{name}.1*
-%{_userunitdir}/1985-web.service
+%{_unitdir}/1985-web.service
 %{_datadir}/applications/io.github.salvogendut.Emulator1985.desktop
 %{_datadir}/metainfo/io.github.salvogendut.Emulator1985.metainfo.xml
 %{_datadir}/icons/hicolor/*/apps/io.github.salvogendut.Emulator1985.png
 
 %changelog
+* Thu Jul 09 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.6-1
+- 1985-web.service is now a sandboxed system unit running as a dedicated,
+  shell-less 'emulator' account (created via sysusers, shared with 1984's
+  equivalent unit) instead of a systemd --user unit running as whoever
+  enables it; heavy systemd sandboxing (ProtectSystem=strict,
+  NoNewPrivileges, no capabilities, etc.) added on top. Session-config
+  upload can no longer redirect disk/boot-ROM/printer/PTY paths to
+  arbitrary host locations, and Web Service session cookies now come from
+  the OS CSPRNG instead of seeded libc rand().
+
 * Thu Jul 02 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.5-1
 - F8 bit-4 polarity fix: CP/M+ now configures the full 256-line PAL screen
   instead of a 200-line NTSC one — fixes AMX Desk's clipped desktop and

@@ -21,6 +21,7 @@
 #ifndef _WIN32
 #include <ifaddrs.h>
 #include <sys/stat.h>
+#include <sys/random.h>
 #include <dirent.h>
 #endif
 
@@ -306,12 +307,29 @@ static bool cookie_token(const char *cookie_header, char *out, size_t outsz) {
     return false;
 }
 
+/* Session cookies gate full control of a session (keystrokes, mouse, disk
+ * mount, config rebuild) purely by possession, so the token must not be
+ * guessable -- draw raw bytes from the OS CSPRNG rather than libc rand(),
+ * which is unsuitable for anything security-sensitive. */
 static void gen_token(char *out) {
-    static bool seeded = false;
-    if (!seeded) { srand((unsigned)SDL_GetPerformanceCounter()); seeded = true; }
     static const char hex[] = "0123456789abcdef";
-    for (int i = 0; i < WS_TOKEN_LEN; i++)
-        out[i] = hex[rand() % 16];
+    unsigned char raw[WS_TOKEN_LEN / 2];
+    bool have_entropy = false;
+#ifndef _WIN32
+    have_entropy = getentropy(raw, sizeof(raw)) == 0;
+#endif
+    if (!have_entropy) {
+        /* Fallback for platforms/sandboxes without getentropy(): still
+         * seed once from a high-resolution counter, but this path should
+         * not be reachable on any of our supported targets. */
+        static bool seeded = false;
+        if (!seeded) { srand((unsigned)SDL_GetPerformanceCounter()); seeded = true; }
+        for (size_t i = 0; i < sizeof(raw); i++) raw[i] = (unsigned char)rand();
+    }
+    for (int i = 0; i < WS_TOKEN_LEN / 2; i++) {
+        out[i * 2]     = hex[raw[i] >> 4];
+        out[i * 2 + 1] = hex[raw[i] & 0xF];
+    }
     out[WS_TOKEN_LEN] = '\0';
 }
 
@@ -617,11 +635,32 @@ static bool mount_disk_bytes(Session *s, int drive, const void *data, size_t len
     return ok;
 }
 
+/* /session/config lets an anonymous remote client upload a 1985.conf to
+ * retune display/audio/hardware settings for their own session -- but every
+ * path-typed field (disk/boot-ROM/printer/serial-PTY-link) resolves to a
+ * host filesystem location when apply_runtime_config() runs. Left
+ * unchecked, a client could point e.g. ExtPdfPrinterDir or DriveA at an
+ * arbitrary host path -- a real file write/read primitive. Disk mounting
+ * already has its own sandboxed endpoint (/disk, writes under
+ * s->upload_dir), so no legitimate use of this endpoint needs to set any of
+ * these fields: keep whatever the session already had for all of them and
+ * only let the upload affect non-path settings. */
+static void preserve_host_paths(Config *cfg, const Config *cur) {
+#define KEEP(field) memcpy(cfg->field, cur->field, sizeof(cfg->field))
+    KEEP(drive_a); KEEP(drive_b);
+    KEEP(last_disk_dir); KEEP(last_snap_dir); KEEP(last_boot_rom_dir);
+    KEEP(boot_rom_dir);
+    KEEP(ext_serial_pty_link);
+    KEEP(ext_pdf_printer_dir);
+#undef KEEP
+}
+
 /* Tear this session's PCW down and rebuild it from an uploaded 1985.conf,
  * in place — same cookie, same slot, same clients. */
 static bool rebuild_from_config_file(Session *s, const char *path) {
     Config cfg;
     config_load(&cfg, path);
+    preserve_host_paths(&cfg, &s->cfg);
     session_release_input(s);
     disk_eject(&s->pcw.fdc.drive[0]);
     disk_eject(&s->pcw.fdc.drive[1]);
