@@ -24,6 +24,7 @@
 #include "notify.h"
 #include "shutter_wav.h"
 #include "webgui.h"
+#include "websvc.h"
 
 /* PCW DK'tronics AY clock — same 1 MHz the CPC sibling uses for its
  * AY-3-8912. Real DK'tronics divides off the PCW system clock; 1 MHz
@@ -507,7 +508,7 @@ static void leds_track_event(Display *disp, SDL_WindowID window_id,
  * once at startup (right after pcw_init) and again on F5 (right after
  * pcw_cold_boot) so a cold reset puts the machine into the exact same
  * shape as a fresh process launch. */
-static void apply_runtime_config(PCW *pcw, const Config *cfg) {
+void apply_runtime_config(PCW *pcw, const Config *cfg) {
     /* Region (PAL/NTSC) drives frame cadence, ticks-per-frame, and
      * the visible-window clamp. Sampled at frame-loop entry, so the
      * caller will normally have cold-booted before getting here. */
@@ -572,20 +573,24 @@ int main(int argc, char **argv) {
     Cli cli;
     if (parse_cli(argc, argv, &cli) < 0) return 1;
 
+    /* --web is "emulator as a service": a self-contained multi-session
+     * daemon, not just a headless flavor of the classic single-PCW loop.
+     * Dispatch here before config_load() ever touches the host user's
+     * real config — every session boots from clean defaults instead
+     * (see websvc.c's session_create()). */
+    if (cli.web)
+        return websvc_run(cli.web_port ? cli.web_port : 1985);
+
     Config cfg;
     config_load(&cfg, cli.config_path);
 
     if (cli.memory_kb)   cfg.memory_kb = cli.memory_kb;
     if (cli.disk_a)      snprintf(cfg.drive_a, sizeof(cfg.drive_a), "%s", cli.disk_a);
     if (cli.disk_b)      snprintf(cfg.drive_b, sizeof(cfg.drive_b), "%s", cli.disk_b);
-    if (cli.web) {
-        cfg.web_gui = true;
-        if (cli.web_port) cfg.web_port = cli.web_port;
-        /* --web means "web appliance": completely headless, the browser
-         * is the only interface. The overlay toggle and the web_gui
-         * config key start the server WITHOUT hiding the host window. */
-        cli.headless = true;
-    }
+    /* cli.web already returned above via websvc_run(); reaching this
+     * point means the classic single-PCW path — either fully
+     * interactive, or headless-via-web_gui=true in the config file /
+     * the F9 overlay toggle, neither of which forces --headless. */
     if (cli.headless) {
         /* Truly windowless: force the offscreen video and dummy audio
          * drivers with OVERRIDE priority so a session's DISPLAY /
@@ -683,7 +688,7 @@ int main(int argc, char **argv) {
     paste_init(&paste);
 
     webgui_init(&pcw, &disp, &paste);
-    webgui_set_log(cli.web);   /* --web = headless service: log to stderr */
+    webgui_set_log(false);   /* --web now goes through websvc_run(); this path is toast-only */
     if (cfg.web_gui)
         webgui_start(cfg.web_port);
 

@@ -32,6 +32,7 @@ dist_man1_MANS = 1985.1
 	src/snapshot.c \
 	src/symbols.c \
 	src/webgui.c \
+	src/websvc.c \
 	src/z80.c \
 	src/z80dis.c
 
@@ -70,6 +71,7 @@ noinst_HEADERS = \
 	src/types.h \
 	src/webgui.h \
 	src/webgui_page.h \
+	src/websvc.h \
 	src/z80.h \
 	src/z80dis.h
 

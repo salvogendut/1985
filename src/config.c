@@ -221,6 +221,21 @@ static void ensure_parent(const char *path) {
     MKDIR(tmp);
 }
 
+/* Parent directory for Web Service (--web) per-session scratch dirs — one
+ * subdirectory per live session (see websvc.c), removed when that session
+ * is destroyed. Sibling of the config dir. Returns 0 on success. */
+int config_websvc_dir(char *out, size_t sz) {
+    char conf_path[PATH_MAX];
+    default_path(conf_path, sizeof(conf_path));
+    char *slash = strrchr(conf_path, '/');
+    if (!slash) return -1;
+    *slash = '\0';   /* conf_path is now the ~/.config/1985 directory */
+    snprintf(out, sz, "%s/web_sessions", conf_path);
+    ensure_parent(out);   /* creates ~/.config/1985 (out's parent) */
+    MKDIR(out);
+    return 0;
+}
+
 void config_defaults(Config *c) {
     memset(c, 0, sizeof(*c));
     c->model                = PCW_MODEL_8256;

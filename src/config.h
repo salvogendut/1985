@@ -156,6 +156,15 @@ typedef struct {
 
 void config_defaults(Config *c);
 
+/* Re-apply every config-driven setting pcw_init/pcw_cold_boot doesn't
+ * cover by itself (printer, disks, serial/PerryFi/CPS, AY-sound, LEDs).
+ * Defined in main.c; shared by the classic single-instance path and each
+ * Web Service session (websvc.c). */
+void apply_runtime_config(PCW *pcw, const Config *cfg);
+
+/* Parent directory for Web Service per-session scratch dirs; see config.c. */
+int config_websvc_dir(char *out, size_t sz);
+
 /* If path is NULL, ~/.config/1985/1985.conf is used. */
 void config_load(Config *c, const char *path);
 int  config_save(const Config *c);
