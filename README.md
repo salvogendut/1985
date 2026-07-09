@@ -106,23 +106,41 @@ accepts `--load-sna FILE`.
 Still stubbed: 9512 daisywheel fidelity, and most game-side
 hardware extensions.
 
-**Web GUI** — an embedded HTTP server (`--web[=PORT]`, or the Web GUI
-toggle under Advanced in the F9 overlay) serves the emulator to any
-browser on the network: live screen as a multipart GIF stream
-(in-tree encoder, no dependencies, ~25 fps with change detection),
-and full input capture — click the screen and the browser's keyboard
-**and mouse** (pointer lock, relative motion into the configured
-AMX / Kempston / Keymouse device) belong to the PCW until
-**Ctrl+Enter** releases them — plus paste-text and reset controls.
-`--web` implies `--headless` (offscreen video, dummy audio): no
-window on the host, the browser is the only interface, with
-lifecycle logging to stderr for journald. For a permanent web
-appliance a systemd user unit is installed as `1985-web.service`:
-`systemctl --user enable --now 1985-web` (add `loginctl
-enable-linger` to start at boot). **Security note: it binds
-`0.0.0.0` with no authentication — anyone on your network can watch
-and type. Enable it only on networks you trust.** Ported from
-[1984](https://github.com/salvogendut/1984)'s Web GUI.
+**Web GUI** — an embedded HTTP server (the Web GUI toggle under Advanced
+in the F9 overlay, or `web_gui`/`web_port` in the config file) serves the
+**one currently running machine** to any browser on the network: live
+screen as a multipart GIF stream (in-tree encoder, no dependencies, ~25
+fps with change detection), and full input capture — click the screen
+and the browser's keyboard **and mouse** (pointer lock, relative motion
+into the configured AMX / Kempston / Keymouse device) belong to the PCW
+until **Ctrl+Enter** releases them — plus paste-text and reset controls.
+Starting it from the overlay or the config key leaves the host window
+visible; this is the "watch/control the machine I'm sitting at" mode.
+
+**Web Service** (`--web[=PORT]`) — "emulator as a service": every
+distinct browser (cookie jar) gets its **own, fully isolated PCW
+instance** on first visit, automatically. Up to 4 concurrent sessions; a
+session with no attached viewer for 10 minutes is destroyed to free the
+slot, and a 5th concurrent session gets a "busy" page instead of a
+machine. Sessions always boot from clean defaults — never the host
+user's real `~/.config/1985/1985.conf` — but a session can upload its
+own `.conf` via the page's "Load session config…" control to rewrite
+just that session's boot state. Each session also gets per-drive
+"Load .dsk…" upload buttons, scoped to that session's own
+`~/.config/1985/web_sessions/<token>/` directory. `--web` implies
+`--headless`: no window on the host at all, and it is a genuinely
+separate, self-contained server (`src/websvc.c`) — not just a headless
+flavor of the Web GUI above. For a permanent web appliance a systemd
+user unit is installed as `1985-web.service`: `systemctl --user enable
+--now 1985-web` gives you a multi-user browser-only PCW service (add
+`loginctl enable-linger` to start at boot).
+
+**Security note (both modes): they bind `0.0.0.0` with no
+authentication — anyone on your network can watch and type. Web
+Service's session isolation means a new browser gets a new *machine*,
+not new *credentials*. Enable either only on networks you trust.**
+Ported from [1984](https://github.com/salvogendut/1984)'s Web GUI and
+Web Service.
 
 <p align="center">
   <img src="screenshots/cpm.png" alt="CP/M+ boot banner and A&gt; prompt" width="380">
