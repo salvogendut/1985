@@ -53,6 +53,10 @@ void kbd_synth_joystick_chords(const Keyboard *k, u8 *kbd_window);
 /* SDL keyboard event → matrix update. */
 void kbd_handle(Keyboard *k, const SDL_KeyboardEvent *e);
 
+/* Direct SDL scancode press / release used by the pilot PTY. Returns
+ * false when the scancode has no PCW matrix mapping. */
+bool kbd_sdl_key(Keyboard *k, SDL_Scancode scancode, bool down);
+
 /* Direct press / release used by the paste helper. */
 void kbd_press  (Keyboard *k, int row, int bit);
 void kbd_release(Keyboard *k, int row, int bit);

@@ -278,6 +278,18 @@ void kbd_release(Keyboard *k, int row, int bit) {
     k->row[row] &= (u8)~(1 << bit);
 }
 
+bool kbd_sdl_key(Keyboard *k, SDL_Scancode scancode, bool down) {
+    MatrixPos p;
+    if (scancode >= SDL_SCANCODE_F1 && scancode <= SDL_SCANCODE_F8)
+        p = pcw_fkey_pos(scancode);
+    else
+        p = sdl_to_matrix(scancode);
+    if (p.row < 0) return false;
+    if (down) kbd_press(k, p.row, p.bit);
+    else      kbd_release(k, p.row, p.bit);
+    return true;
+}
+
 void kbd_handle(Keyboard *k, const SDL_KeyboardEvent *e) {
     /* PCW f1..f8 are reached via Shift+F1..Shift+F8. On key-down we
      * only press the matrix bit when Shift is actually held — otherwise

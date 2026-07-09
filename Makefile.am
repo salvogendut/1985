@@ -24,6 +24,7 @@ dist_man1_MANS = 1985.1
 	src/overlay.c \
 	src/paste.c \
 	src/pcw.c \
+	src/pilot.c \
 	src/perryfi.c \
 	src/pcwmouse.c \
 	src/printer.c \
@@ -58,6 +59,7 @@ noinst_HEADERS = \
 	src/overlay.h \
 	src/paste.h \
 	src/pcw.h \
+	src/pilot.h \
 	src/perryfi.h \
 	src/pcwmouse.h \
 	src/printer.h \
