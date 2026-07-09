@@ -8,6 +8,7 @@
  * GET  /        auto-creates a session on first visit (Set-Cookie), or
  *               re-serves the page for an existing session's cookie
  * GET  /stream  multipart/x-mixed-replace stream of GIF frames
+ * GET  /audio   streaming WAV (44.1 kHz mono s16)
  * POST /key     ?c=<SDL scancode name>&d=1|0&m=1(shift)   key down/up
  * POST /mouse   ?dx=&dy=&b=&d=                            relative mouse
  * POST /paste   body = text typed via the paste queue

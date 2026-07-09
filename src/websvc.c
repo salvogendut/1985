@@ -61,20 +61,24 @@ typedef struct Session {
     size_t    last_gif_len;
     uint32_t  last_hash;
     uint64_t  last_encode_ms;
+    uint8_t   audio_bytes[PCW_AUDIO_SAMPLES_FRAME * sizeof(s16)];
+    size_t    audio_len;
+    uint64_t  audio_seq;
     int       decim;
     bool      mbtn_held[3];
     char      cookie[WS_TOKEN_LEN + 1];
     char      upload_dir[PATH_MAX];
     uint64_t  created_ms;
     uint64_t  last_attached_ms;   /* refreshed whenever a streaming client attaches */
-    int       attached;           /* count of currently WC_STREAMING clients */
+    int       attached;           /* currently attached video/audio stream clients */
 } Session;
 
 typedef enum {
     WC_FREE = 0,
     WC_READ_REQUEST,
     WC_READ_UPLOAD,
-    WC_STREAMING
+    WC_STREAMING,
+    WC_AUDIO_STREAM
 } WcState;
 
 typedef enum { WS_UPLOAD_DISK, WS_UPLOAD_CONFIG } UploadKind;
@@ -96,6 +100,7 @@ typedef struct {
     bool     close_after_send;
     uint32_t sent_hash;
     uint64_t sent_ms;
+    uint64_t sent_audio_seq;
 } WebClient;
 
 /* The page is identical to the Web GUI's; webgui_page.h *defines* (not just
@@ -119,6 +124,19 @@ static uint32_t frame_hash(const u32 *fb) {
         h *= 16777619u;
     }
     return h;
+}
+
+static void session_audio_store(Session *s, const s16 *samples, int frames) {
+    if (!s || !samples || frames <= 0) return;
+    if (frames > PCW_AUDIO_SAMPLES_FRAME)
+        frames = PCW_AUDIO_SAMPLES_FRAME;
+    for (int i = 0; i < frames; i++) {
+        uint16_t v = (uint16_t)samples[i];
+        s->audio_bytes[i * 2] = (uint8_t)v;
+        s->audio_bytes[i * 2 + 1] = (uint8_t)(v >> 8);
+    }
+    s->audio_len = (size_t)frames * 2u;
+    s->audio_seq++;
 }
 
 /* ---------- logging (always on — this IS the headless daemon) ---------- */
@@ -183,11 +201,41 @@ static bool wc_printf(WebClient *c, const char *fmt, ...) {
     return wc_out(c, buf, (size_t)n);
 }
 
+static void le16(uint8_t *p, uint16_t v) {
+    p[0] = (uint8_t)v;
+    p[1] = (uint8_t)(v >> 8);
+}
+
+static void le32(uint8_t *p, uint32_t v) {
+    p[0] = (uint8_t)v;
+    p[1] = (uint8_t)(v >> 8);
+    p[2] = (uint8_t)(v >> 16);
+    p[3] = (uint8_t)(v >> 24);
+}
+
+static void wav_stream_header(uint8_t hdr[44]) {
+    const uint32_t data_bytes = 0x7fffffffU - 36U;
+    memcpy(hdr + 0, "RIFF", 4);
+    le32(hdr + 4, 36U + data_bytes);
+    memcpy(hdr + 8, "WAVE", 4);
+    memcpy(hdr + 12, "fmt ", 4);
+    le32(hdr + 16, 16);
+    le16(hdr + 20, 1);                         /* PCM */
+    le16(hdr + 22, 1);                         /* mono */
+    le32(hdr + 24, PCW_AUDIO_SAMPLE_RATE);
+    le32(hdr + 28, PCW_AUDIO_SAMPLE_RATE * 16U / 8U);
+    le16(hdr + 32, 16U / 8U);                  /* block align */
+    le16(hdr + 34, 16);                        /* bits per sample */
+    memcpy(hdr + 36, "data", 4);
+    le32(hdr + 40, data_bytes);
+}
+
 static void wc_close(WebClient *c) {
-    if (c->state == WC_STREAMING && c->sess) {
+    if ((c->state == WC_STREAMING || c->state == WC_AUDIO_STREAM) && c->sess) {
         c->sess->attached--;
         c->sess->last_attached_ms = SDL_GetTicks();
-        wlog("session %s: viewer %s disconnected", c->sess->cookie, c->ip);
+        wlog("session %s: %s stream %s disconnected", c->sess->cookie,
+             c->state == WC_AUDIO_STREAM ? "audio" : "video", c->ip);
     }
     if (c->fd >= 0) sock_close(c->fd);
     free(c->out);
@@ -434,6 +482,7 @@ static bool session_build(Session *s, Config *cfg) {
     bootstrap_set_override_dir(&s->pcw.boot, s->cfg.boot_rom_dir);
     bootstrap_reset(&s->pcw.boot);
     apply_runtime_config(&s->pcw, &s->cfg);
+    pcw_audio_init(&s->pcw);
     paste_init(&s->paste);
     s->enc = gifcap_open_mem(DISPLAY_W, DISPLAY_H, DISPLAY_W, DISPLAY_H, 4);
     if (!s->enc) {
@@ -444,6 +493,8 @@ static bool session_build(Session *s, Config *cfg) {
     s->last_gif_len = 0;
     s->last_hash = 0;
     s->last_encode_ms = 0;
+    s->audio_len = 0;
+    s->audio_seq = 0;
     s->decim = 0;
     memset(s->mbtn_held, 0, sizeof(s->mbtn_held));
     return true;
@@ -529,6 +580,22 @@ static void route_stream(WebClient *c) {
     s->attached++;
     s->last_attached_ms = SDL_GetTicks();
     wlog("session %s: viewer %s started streaming", s->cookie, c->ip);
+}
+
+static void route_audio(WebClient *c) {
+    Session *s = c->sess;
+    uint8_t hdr[44];
+    wav_stream_header(hdr);
+    wc_printf(c, "HTTP/1.1 200 OK\r\n"
+                 "Content-Type: audio/wav\r\n"
+                 "Cache-Control: no-store\r\n"
+                 "Connection: close\r\n\r\n");
+    wc_out(c, hdr, sizeof(hdr));
+    c->state = WC_AUDIO_STREAM;
+    c->sent_audio_seq = 0;
+    s->attached++;
+    s->last_attached_ms = SDL_GetTicks();
+    wlog("session %s: audio stream %s started", s->cookie, c->ip);
 }
 
 /* Key events go through kbd_handle() — the same choke point the SDL
@@ -783,6 +850,7 @@ static void route(WebClient *c, const char *method, char *path,
     c->sess = s;
 
     if (strcmp(path, "/stream") == 0 && get) route_stream(c);
+    else if (strcmp(path, "/audio") == 0 && get) route_audio(c);
     else if (strcmp(path, "/status") == 0 && get) route_status(s, c);
     else if (strcmp(path, "/key") == 0)   route_key(s, c, query);
     else if (strcmp(path, "/mouse") == 0) route_mouse(s, c, query);
@@ -892,7 +960,7 @@ static bool try_dispatch(WebClient *c) {
         return false;
 
     route(c, method, target, c->req + head_len, content_len, token);
-    if (asked_close && c->state != WC_STREAMING)
+    if (asked_close && c->state != WC_STREAMING && c->state != WC_AUDIO_STREAM)
         c->close_after_send = true;
 
     int consumed = head_len + content_len;
@@ -970,7 +1038,28 @@ static void ws_poll(void) {
             wc_send(&g_clients[i]);
 }
 
+static void session_audio_frame(Session *s) {
+    if (s->audio_len == 0) return;
+
+    for (int i = 0; i < WS_MAX_CLIENTS; i++) {
+        WebClient *c = &g_clients[i];
+        if (c->sess != s || c->state != WC_AUDIO_STREAM ||
+            c->out_len != c->out_off)
+            continue;
+        if (c->sent_audio_seq == s->audio_seq) continue;
+        c->out_off = c->out_len = 0;
+        if (!wc_out(c, s->audio_bytes, s->audio_len)) {
+            wc_close(c);
+            continue;
+        }
+        c->sent_audio_seq = s->audio_seq;
+        wc_send(c);
+    }
+}
+
 static void session_frame(Session *s, uint64_t now) {
+    session_audio_frame(s);
+
     if ((s->decim ^= 1) != 0) return;   /* 25 fps cap */
 
     bool want = false;
@@ -1062,6 +1151,9 @@ int websvc_run(int port) {
             if (!s->in_use) continue;
             paste_tick(&s->paste, &s->pcw.kbd);
             pcw_frame(&s->pcw);
+            s16 abuf[PCW_AUDIO_SAMPLES_FRAME];
+            pcw_render_audio_frame(&s->pcw, abuf);
+            session_audio_store(s, abuf, PCW_AUDIO_SAMPLES_FRAME);
             /* Converts roller-RAM into disp.fb — the classic main loop
              * does this right after pcw_frame() too; without it the
              * framebuffer never updates and the stream looks frozen. */

@@ -27,12 +27,6 @@
 #include "websvc.h"
 #include "pilot.h"
 
-/* PCW DK'tronics AY clock — same 1 MHz the CPC sibling uses for its
- * AY-3-8912. Real DK'tronics divides off the PCW system clock; 1 MHz
- * is the conventional rate for the audible bandwidth modelled here. */
-#define AY_AUDIO_RATE         44100
-#define AY_SAMPLES_FRAME      (AY_AUDIO_RATE / 50)
-#define AY_CLOCK_HZ           1000000
 #define MAX_PASTE_EVENTS      16
 
 #ifndef PROG_GIT_COMMIT
@@ -657,7 +651,7 @@ int main(int argc, char **argv) {
 
     /* SDL audio for the DK'tronics AY chip. Stream stays open for the
      * lifetime of the run; render_silence when ay isn't present. */
-    SDL_AudioSpec ayspec = { SDL_AUDIO_S16, 1, AY_AUDIO_RATE };
+    SDL_AudioSpec ayspec = { SDL_AUDIO_S16, 1, PCW_AUDIO_SAMPLE_RATE };
     SDL_AudioStream *ay_stream =
         SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
                                   &ayspec, NULL, NULL);
@@ -669,12 +663,12 @@ int main(int argc, char **argv) {
                 SDL_GetError());
     } else if (cfg.debug_traces) {
         fprintf(stderr, "audio: S16 mono %d Hz playback stream opened\n",
-                AY_AUDIO_RATE);
+                PCW_AUDIO_SAMPLE_RATE);
     }
 
     /* PCW built-in beeper. pcw_init() already constructed the struct;
      * now that we know the audio sample rate, configure the phase step. */
-    beeper_init(&pcw.beeper, AY_AUDIO_RATE);
+    pcw_audio_init(&pcw);
 
     /* Camera-shutter SFX for F4 — same approach as 1984. Decode the
      * embedded WAV once, open a dedicated audio stream, and clear+push
@@ -1082,15 +1076,12 @@ int main(int argc, char **argv) {
 
         /* Render one frame of AY audio (clears to silence when AY is
          * absent — keeps the SDL stream pacing steady). */
-        if (ay_stream) {
-            s16 abuf[AY_SAMPLES_FRAME];
-            aysound_render(&pcw.ay, abuf, AY_SAMPLES_FRAME,
-                           AY_CLOCK_HZ, AY_AUDIO_RATE);
-            /* Mix the PCW built-in beeper on top of the AY output —
-             * the BEL (^G) tone, boot-ROM error blips, and any game
-             * that toggles F8 cmd 0x0B/0x0C all come through here. */
-            beeper_render(&pcw.beeper, abuf, AY_SAMPLES_FRAME);
-            SDL_PutAudioStreamData(ay_stream, abuf, sizeof(abuf));
+        if (ay_stream || webgui_active()) {
+            s16 abuf[PCW_AUDIO_SAMPLES_FRAME];
+            pcw_render_audio_frame(&pcw, abuf);
+            webgui_audio(abuf, PCW_AUDIO_SAMPLES_FRAME);
+            if (ay_stream)
+                SDL_PutAudioStreamData(ay_stream, abuf, sizeof(abuf));
         }
         /* Auto-open the monitor on a breakpoint hit and refresh the
          * disasm pane after a single-step. */

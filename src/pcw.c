@@ -321,6 +321,16 @@ void pcw_cold_boot(PCW *pcw, PcwModel model, int memory_kb) {
         beeper_set_audio_rate(&pcw->beeper, beeper_audio_rate);
 }
 
+void pcw_audio_init(PCW *pcw) {
+    beeper_init(&pcw->beeper, PCW_AUDIO_SAMPLE_RATE);
+}
+
+void pcw_render_audio_frame(PCW *pcw, s16 *buf) {
+    aysound_render(&pcw->ay, buf, PCW_AUDIO_SAMPLES_FRAME,
+                   PCW_AY_CLOCK_HZ, PCW_AUDIO_SAMPLE_RATE);
+    beeper_render(&pcw->beeper, buf, PCW_AUDIO_SAMPLES_FRAME);
+}
+
 void pcw_reset(PCW *pcw) {
     bootstrap_reset(&pcw->boot);
     mem_reset(&pcw->mem);
