@@ -116,7 +116,8 @@ hardware extensions.
 in the F9 overlay, or `web_gui`/`web_port` in the config file) serves the
 **one currently running machine** to any browser on the network: live
 screen as a multipart GIF stream (in-tree encoder, no dependencies, ~25
-fps with change detection), and full input capture — click the screen
+fps with change detection), browser-started audio as a streaming 44.1 kHz
+mono WAV feed, and full input capture — click the screen
 and the browser's keyboard **and mouse** (pointer lock, relative motion
 into the configured AMX / Kempston / Keymouse device) belong to the PCW
 until **Ctrl+Enter** releases them — plus paste-text and reset controls.
@@ -125,7 +126,8 @@ visible; this is the "watch/control the machine I'm sitting at" mode.
 
 **Web Service** (`--web[=PORT]`) — "emulator as a service": every
 distinct browser (cookie jar) gets its **own, fully isolated PCW
-instance** on first visit, automatically. Up to 4 concurrent sessions; a
+instance** on first visit, automatically, with the same video and
+browser-started audio streams as the Web GUI. Up to 4 concurrent sessions; a
 session with no attached viewer for 10 minutes is destroyed to free the
 slot, and a 5th concurrent session gets a "busy" page instead of a
 machine. Sessions always boot from clean defaults — never the host

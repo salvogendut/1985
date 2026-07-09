@@ -24,6 +24,10 @@
 
 typedef enum { PCW_MODEL_8256 = 0, PCW_MODEL_8512, PCW_MODEL_9512 } PcwModel;
 
+#define PCW_AUDIO_SAMPLE_RATE    44100
+#define PCW_AUDIO_SAMPLES_FRAME  (PCW_AUDIO_SAMPLE_RATE / 50)
+#define PCW_AY_CLOCK_HZ          1000000
+
 /* Live host-joystick state. main.c refreshes it from the gamepad each
  * frame; pcw.c bus_io_read packs it to the wire format dictated by
  * `type` when 0x9F (Kempston) or 0xE0 (Cascade) is polled. DKsound
@@ -86,6 +90,9 @@ void pcw_reset(PCW *pcw);
  * — F5 (warm reset) only re-runs pcw_reset and would leave stale
  * paging / fdc / asic state from the previous configuration. */
 void pcw_cold_boot(PCW *pcw, PcwModel model, int memory_kb);
+
+void pcw_audio_init(PCW *pcw);
+void pcw_render_audio_frame(PCW *pcw, s16 *buf);
 
 /* Run one emulated frame's worth of cycles. */
 void pcw_frame(PCW *pcw);

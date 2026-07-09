@@ -3,6 +3,7 @@
  *
  * GET  /        self-contained HTML page (video + keyboard/mouse/paste)
  * GET  /stream  multipart/x-mixed-replace stream of GIF frames
+ * GET  /audio   streaming WAV (44.1 kHz mono s16)
  * GET  /status  {"mouse":bool} — machine facts for the page
  * POST /key     ?c=<SDL scancode name>&d=1|0[&m=1]   key down/up (+shift mod)
  * POST /mouse   ?dx=&dy= | ?b=0..2&d=1|0             PCW mouse motion/buttons
@@ -41,4 +42,5 @@ bool webgui_active(void);
 int  webgui_port(void);       /* port currently listening on, 0 if inactive */
 
 void webgui_poll(void);       /* per frame BEFORE pcw_frame */
+void webgui_audio(const s16 *samples, int frames);
 void webgui_frame(void);      /* per frame AFTER pcw_frame */
