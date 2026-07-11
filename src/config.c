@@ -269,6 +269,12 @@ void config_defaults(Config *c) {
              "/tmp/1985-serial");
 }
 
+bool config_mouse_input_enabled(const Config *c) {
+    return c
+        && c->ext_sanpollo_backplane
+        && c->input_device == INPUT_DEVICE_MOUSE;
+}
+
 void config_load(Config *c, const char *path) {
     config_defaults(c);
     if (path) snprintf(c->path, sizeof(c->path), "%s", path);

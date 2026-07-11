@@ -246,10 +246,7 @@ static void apply_pdf_printer(Overlay *ov) {
 
 static void apply_input_device(Overlay *ov) {
     if (!ov->pcw) return;
-    bool board_on = ov->cfg->ext_sanpollo_backplane
-                 && ov->cfg->ext_dktronics;
-    bool mouse_on = board_on
-                 && ov->cfg->input_device == INPUT_DEVICE_MOUSE;
+    bool mouse_on = config_mouse_input_enabled(ov->cfg);
     pcwmouse_configure(&ov->pcw->mouse, mouse_on, ov->cfg->mouse_type);
     if (mouse_on)
         aysound_set_joystick(&ov->pcw->ay, 0xFF);
@@ -1076,8 +1073,7 @@ static void close_overlay(Overlay *ov, bool save) {
             bool dk_on = ov->cfg->ext_sanpollo_backplane && ov->cfg->ext_dktronics;
             aysound_init(&ov->pcw->ay, dk_on);
             pcwmouse_configure(&ov->pcw->mouse,
-                               dk_on
-                               && ov->cfg->input_device == INPUT_DEVICE_MOUSE,
+                               config_mouse_input_enabled(ov->cfg),
                                ov->cfg->mouse_type);
             apply_pdf_printer(ov);
         }

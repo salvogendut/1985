@@ -64,12 +64,13 @@ Extensions available (Extensions tab, gated on PCW Backplane):
 - **DK'TRONICS Sound & Joystick** — AY-3-8912 PSG + DB9 joystick port
   at I/O `0xA9-0xAB`. 1985 ships a register-accurate AY model with
   tone/noise/envelope, mixed to mono 16-bit and routed through SDL3's
-  default audio device. Extensions ▸ Input Device selects a host
-  joystick or mouse. Joystick mode reads the first SDL gamepad and
+  default audio device. Joystick mode reads the first SDL gamepad and
   supports the native DKsound bit layout or a generic Atari layout.
-  Mouse mode supports AMX (`0xA0-0xA3`) and Kempston (`0xD0-0xD4`);
-  click the emulator window to capture relative host-mouse input and
-  press Ctrl+Enter to release it.
+- **Mouse input** — Extensions ▸ Input Device selects Mouse independently
+  of DK'sound and exposes the captured host mouse through the protocol
+  selected in Advanced: AMX (`0xA0-0xA3`), Kempston (`0xD0-0xD4`), or
+  Keymouse (keyboard scan overlay). Click the emulator window to capture
+  relative movement and buttons; press Ctrl+Enter to release them.
 
 Decorative video modes (Advanced ▸ Video mode) reinterpret the 1bpp
 roller-RAM at host render time — these are ahistorical novelties (no

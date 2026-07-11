@@ -1,5 +1,15 @@
 bin_PROGRAMS = 1985
 
+check_PROGRAMS = test_pcwmouse
+TESTS = $(check_PROGRAMS)
+
+test_pcwmouse_SOURCES = \
+	tests/test_pcwmouse.c \
+	src/config.c \
+	src/pcwmouse.c
+test_pcwmouse_CPPFLAGS = -I$(srcdir)/src
+test_pcwmouse_CFLAGS = $(AM_CFLAGS) -Wall -Wextra
+
 dist_man1_MANS = 1985.1
 
 1985_SOURCES = \

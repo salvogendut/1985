@@ -156,6 +156,10 @@ typedef struct {
 
 void config_defaults(Config *c);
 
+/* The mouse interfaces are independent backplane peripherals; DK'sound
+ * controls only the AY/joystick board and must not gate host mouse input. */
+bool config_mouse_input_enabled(const Config *c);
+
 /* Re-apply every config-driven setting pcw_init/pcw_cold_boot doesn't
  * cover by itself (printer, disks, serial/PerryFi/CPS, AY-sound, LEDs).
  * Defined in main.c; shared by the classic single-instance path and each

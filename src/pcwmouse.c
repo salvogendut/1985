@@ -122,7 +122,9 @@ bool pcwmouse_handles_port(const PcwMouse *m, u8 lo) {
     if (!m->present) return false;
     if (m->type == MOUSE_TYPE_AMX)
         return lo >= 0xA0 && lo <= 0xA3;
-    return lo >= 0xD0 && lo <= 0xD4;
+    if (m->type == MOUSE_TYPE_KEMPSTON)
+        return lo >= 0xD0 && lo <= 0xD4;
+    return false;
 }
 
 static u8 read_amx(PcwMouse *m, u8 lo) {

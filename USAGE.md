@@ -46,15 +46,16 @@
   only), PCW Backplane, Tinker toggle.
 - **Media** — drive A and B file pickers.
 - **Extensions** (only when the PCW Backplane is enabled) — serial port,
-  PerryFi, DK'tronics sound, and Input Device (Mouse / Joystick).
+  PerryFi, DK'tronics sound, and Input Device (Mouse / Joystick). Mouse
+  input uses the captured host mouse and does not require DK'tronics sound.
 - **Advanced** (hidden unless `tinker=true`) — smoothing, Real CRT
   scanlines/brightness/contrast/RGB controls, tint (green / amber /
   white), tint mode (normal / glow), video mode, Region, Status line
   (shown / hidden — a real CRT hides the guest's bottom 8 scanlines,
   where CP/M keeps its status row, in overscan), Mouse type (AMX /
-  Kempston), Joystick type, printer mode/model, debug toggles, serial
-  mode/path, PerryFi mode, snapshot load/save, Notifications (screen /
-  console / off).
+  Kempston / Keymouse), Joystick type, printer mode/model, debug toggles,
+  serial mode/path, PerryFi mode, snapshot load/save, Notifications
+  (screen / console / off).
 
 ## Notifications
 

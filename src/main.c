@@ -468,12 +468,6 @@ static int load_raw_image(PCW *pcw, const char *path, u16 base) {
     return 0;
 }
 
-static bool mouse_input_enabled(const Config *cfg) {
-    return cfg->ext_sanpollo_backplane
-        && cfg->ext_dktronics
-        && cfg->input_device == INPUT_DEVICE_MOUSE;
-}
-
 static void set_mouse_capture(Display *disp, PcwMouse *mouse,
                               bool *captured, bool enable) {
     if (*captured == enable) return;
@@ -567,7 +561,7 @@ void apply_runtime_config(PCW *pcw, const Config *cfg) {
     multilink_set_present(&pcw->multilink,
                           cfg->ext_sanpollo_backplane && cfg->ext_multilink);
     pcwmouse_configure(&pcw->mouse,
-                       dk_on && cfg->input_device == INPUT_DEVICE_MOUSE,
+                       config_mouse_input_enabled(cfg),
                        cfg->mouse_type);
 
     leds_set_enabled(LED_FDC_A, true);
@@ -756,7 +750,7 @@ int main(int argc, char **argv) {
             if (monitor_handle_event(mon, &ev)) continue;
             if (overlay_handle_event(&ov, &ev)) {
                 if (mouse_captured
-                    && (ov.visible || !mouse_input_enabled(&cfg)))
+                    && (ov.visible || !config_mouse_input_enabled(&cfg)))
                     set_mouse_capture(&disp, &pcw.mouse,
                                       &mouse_captured, false);
                 if (ov.visible)
@@ -940,7 +934,7 @@ int main(int argc, char **argv) {
                     break;
                 case SDL_EVENT_MOUSE_BUTTON_DOWN:
                     if (ev.button.windowID != SDL_GetWindowID(disp.win)
-                        || !mouse_input_enabled(&cfg))
+                        || !config_mouse_input_enabled(&cfg))
                         break;
                     if (!mouse_captured) {
                         set_mouse_capture(&disp, &pcw.mouse,
@@ -970,7 +964,7 @@ int main(int argc, char **argv) {
         }
 
         if (mouse_captured
-            && (ov.visible || !mouse_input_enabled(&cfg)))
+            && (ov.visible || !config_mouse_input_enabled(&cfg)))
             set_mouse_capture(&disp, &pcw.mouse, &mouse_captured, false);
 
         if (paste_pending && frame >= cli.paste_at) {

@@ -27,6 +27,12 @@ roms/*
 /src/.deps/
 /src/.dirstamp
 /1985
+/test_pcwmouse
+/test-suite.log
+/test_pcwmouse.log
+/test_pcwmouse.trs
+/tests/.deps/
+/tests/.dirstamp
 /autom4te.cache/
 
 # Runtime screenshots and F6 captures
