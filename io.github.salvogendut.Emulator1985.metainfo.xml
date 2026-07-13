@@ -28,6 +28,11 @@
   <url type="bugtracker">https://github.com/salvogendut/1985/issues</url>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.4.7" date="2026-07-13">
+      <description>
+        <p>PerryFi gains a PerryNet binary-protocol mode with TCP, UDP, pull-based receive and firmware time support. A browser-based Web GUI now provides isolated, sandboxed sessions with web audio streaming. Pilot/autopilot control supports scripted testing, and the default monochrome monitor uses the brighter reference green tint.</p>
+      </description>
+    </release>
     <release version="0.4.5" date="2026-07-02">
       <description>
         <p>Screen-accuracy fix: the F8 50/60 Hz status bit had inverted polarity, so CP/M configured a 200-line NTSC screen — AMX Desk's desktop was clipped and its trash bin unreachable. The full 256-line PAL screen now works, the F-key strip moved to its own band so the CP/M status line row is no longer covered, and a new Advanced "Status line" toggle can hide that row the way real CRT overscan does. Video rendering is ~2.5x faster. New --disk-event CLI flag scripts mid-run disk swaps for headless testing.</p>

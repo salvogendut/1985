@@ -1,5 +1,5 @@
 Name:           1985
-Version:        0.4.6
+Version:        0.4.7
 Release:        1%{?dist}
 Summary:        Amstrad PCW 8256 / 8512 / 9512 emulator
 
@@ -97,6 +97,17 @@ appstream-util validate-relax --nonet %{buildroot}%{_datadir}/metainfo/io.github
 %{_datadir}/icons/hicolor/*/apps/io.github.salvogendut.Emulator1985.png
 
 %changelog
+* Mon Jul 13 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.7-1
+- Add PerryNet mode for PerryFi, including TCP, UDP, pull-based receive and
+  firmware time support (#153, #155, #164).
+- Add the browser-based Web GUI and isolated Web Service, with path-confined
+  uploads, CSPRNG session tokens and a sandboxed systemd unit (#157, #159,
+  #161).
+- Add pilot/autopilot control for scripted testing and web audio streaming
+  (#163, #165).
+- Use the brighter reference green as the default monochrome monitor tint
+  (#152).
+
 * Thu Jul 09 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.6-1
 - 1985-web.service is now a sandboxed system unit running as a dedicated,
   shell-less 'emulator' account (created via sysusers, shared with 1984's
