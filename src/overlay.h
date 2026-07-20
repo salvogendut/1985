@@ -18,6 +18,7 @@ typedef enum {
     OV_STATE_KEYS         = 2,
     OV_STATE_EDIT         = 3,
     OV_STATE_EDIT_CONFIRM = 4,
+    OV_STATE_FILE_BROWSER = 5,
 } OvState;
 
 typedef enum {
@@ -32,6 +33,7 @@ typedef enum {
 
 struct PCW;
 struct Display;
+struct OverlayBrowserEntry;
 
 typedef struct {
     bool        visible;
@@ -49,7 +51,21 @@ typedef struct {
     DiskType    dialog_disk_type;/* format for an in-flight DIALOG_DISK_NEW */
     char        dialog_path[PATH_MAX];
     bool        dialog_ready;
+    bool        dialog_failed;
+    char        dialog_error[256];
     bool        needs_cold_boot;
+    /* Built-in SDL-rendered disk browser. This is forced by --sdl-fm,
+     * available directly with Shift+Enter, and used automatically if
+     * the native file-dialog provider reports an error. */
+    bool        sdl_fm;
+    int         browser_drive;
+    char        browser_dir[PATH_MAX];
+    char        browser_error[256];
+    struct OverlayBrowserEntry *browser_entries;
+    int         browser_entry_count;
+    int         browser_entry_capacity;
+    int         browser_row;
+    int         browser_scroll;
     /* Inline text editor state (OV_STATE_EDIT). The target field a
      * commit writes back to is identified by `edit_target`. */
     char        edit_buf [PATH_MAX];
@@ -57,7 +73,9 @@ typedef struct {
     int         edit_target;     /* e.g. 1 = ext_serial_pty_link */
 } Overlay;
 
-void overlay_init(Overlay *ov, Config *cfg, struct PCW *pcw, struct Display *disp);
+void overlay_init(Overlay *ov, Config *cfg, struct PCW *pcw,
+                  struct Display *disp, bool sdl_fm);
+void overlay_quit(Overlay *ov);
 
 bool overlay_handle_event(Overlay *ov, SDL_Event *ev);
 void overlay_render(Overlay *ov, SDL_Renderer *r);

@@ -46,6 +46,7 @@ static const char *USAGE =
 "  --memory KB                 RAM size: 256, 512 or 2048\n"
 "  --disk-a PATH               mount .dsk in drive A\n"
 "  --disk-b PATH               mount .dsk in drive B\n"
+"  --sdl-fm                    force the built-in SDL disk-image browser\n"
 "  --boot-ems PATH             load raw EMS/EMT image at 0000h\n"
 "  --auto-space                send SPACE once after boot image appears\n"
 "  --paste TEXT                type TEXT after boot (\\n = Enter)\n"
@@ -100,6 +101,7 @@ typedef struct {
     const char *gif_out;
     bool        auto_space;
     bool        unthrottled;
+    bool        sdl_fm;           /* force built-in Media disk browser */
     CliPasteEvent paste_event[MAX_PASTE_EVENTS];
     int         paste_event_count;
     CliDiskEvent disk_event[MAX_PASTE_EVENTS];
@@ -386,6 +388,7 @@ static int parse_cli(int argc, char **argv, Cli *cli) {
         }
         if (strcmp(a, "--auto-space") == 0) { cli->auto_space = true; continue; }
         if (strcmp(a, "--unthrottled") == 0) { cli->unthrottled = true; continue; }
+        if (strcmp(a, "--sdl-fm") == 0) { cli->sdl_fm = true; continue; }
         if (strcmp(a, "--pilot-replies-stderr") == 0) { cli->pilot_reply_stderr = true; continue; }
         if ((v = eq_value(a, "--web")) && *v) {
             int p = atoi(v);
@@ -425,6 +428,7 @@ static int parse_cli(int argc, char **argv, Cli *cli) {
         if (strcmp(a, "--pilot")         == 0) { cli->pilot_enabled = true; continue; }
         if (strcmp(a, "--auto-space")    == 0) { cli->auto_space = true; continue; }
         if (strcmp(a, "--unthrottled")   == 0) { cli->unthrottled = true; continue; }
+        if (strcmp(a, "--sdl-fm")        == 0) { cli->sdl_fm = true; continue; }
         if (strcmp(a, "--pilot-replies-stderr") == 0) { cli->pilot_reply_stderr = true; continue; }
 
         if (starts_with(a, "--")) {
@@ -641,7 +645,7 @@ int main(int argc, char **argv) {
     if (cli.boot_ems && load_raw_image(&pcw, cli.boot_ems, 0) < 0) return 1;
 
     Overlay ov;
-    overlay_init(&ov, &cfg, &pcw, &disp);
+    overlay_init(&ov, &cfg, &pcw, &disp, cli.sdl_fm);
 
     /* F8 memory monitor / disassembler — lives in its own SDL window
      * created hidden; SDLK_F8 reveals it. Survives the lifetime of
@@ -1236,6 +1240,7 @@ int main(int argc, char **argv) {
     if (sfx_buf)    SDL_free(sfx_buf);
     paste_free(&paste);
     printer_shutdown(&pcw.printer);
+    overlay_quit(&ov);
     display_quit(&disp);
     return 0;
 }
