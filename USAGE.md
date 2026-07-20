@@ -8,6 +8,7 @@
 | `--memory KB` | RAM size: 256, 512 or 2048 |
 | `--disk-a PATH` | Mount `.dsk` image in drive A |
 | `--disk-b PATH` | Mount `.dsk` image in drive B |
+| `--sdl-fm` | Force the built-in SDL disk browser instead of the platform file dialog |
 | `--paste TEXT` | Type TEXT after boot (`\n` becomes Enter) |
 | `--paste-at N` | Delay `--paste` until frame N |
 | `--paste-event N:TEXT` | Inject TEXT at frame N; repeat for scripted input |
@@ -44,7 +45,10 @@
 
 - **General** — model (8256 / 8512 / 9512), RAM, Second drive (8256
   only), PCW Backplane, Tinker toggle.
-- **Media** — drive A and B file pickers.
+- **Media** — drive A and B file pickers. Enter uses the platform file
+  dialog, while Shift+Enter opens the built-in keyboard-driven DSK browser.
+  If the platform dialog is unavailable, 1985 falls back to the built-in
+  browser automatically. Use `--sdl-fm` to force it for every disk selection.
 - **Extensions** (only when the PCW Backplane is enabled) — serial port,
   PerryFi, DK'tronics sound, and Input Device (Mouse / Joystick).
 - **Advanced** (hidden unless `tinker=true`) — smoothing, Real CRT

@@ -42,6 +42,11 @@ Mount a .dsk image in drive A.
 .BI --disk-b= PATH
 Mount a .dsk image in drive B.
 .TP
+.B --sdl-fm
+Force the built-in SDL disk-image browser for the Media tab instead of the
+platform file dialog. This keeps drive selection usable on minimal systems
+without an XDG portal or another native dialog provider.
+.TP
 .BI --paste= TEXT
 Type TEXT verbatim after boot.
 .TP
@@ -189,7 +194,8 @@ Four tabs:
 .B General
 (model, RAM, Second drive on 8256, PCW Backplane, Tinker),
 .B Media
-(drive A / B file pickers),
+(drive A / B file pickers; Enter uses the platform dialog, Shift+Enter opens
+the built-in browser, and native-dialog errors fall back automatically),
 .B Extensions
 (serial port, PerryFi, DK'tronics sound, Input Device: Mouse/Joystick \(em
 appears only when the PCW Backplane is plugged in),
