@@ -45,8 +45,8 @@ second drive on an 8256; both of those controls live in the General tab.
 | Multilink | Extensions | Required; probe compatibility only |
 
 The Advanced tab is hidden until **Tinker** is enabled in General. It contains
-the detailed display, input, serial, printer, networking, snapshot, web, and
-diagnostic settings.
+the detailed display, GIF capture, input, serial, printer, networking,
+snapshot, web, and diagnostic settings.
 
 ## Floppy media
 
@@ -77,6 +77,11 @@ hidden with **Status line**.
 CGA1, CGA2, and EGA modes reinterpret the monochrome framebuffer with period
 colour palettes. These modes are host-side visual experiments; they do not
 represent colour hardware that PCW software can program.
+
+F6 records an animated GIF using the resolution, frame-rate, and encoder
+profile under Advanced. The built-in encoder has no external dependencies;
+when available, optional FFmpeg optimization can reduce the completed file.
+The same profile applies to `--gif-out`.
 
 The stock 3.75 kHz PCW beeper is emulated. The DK'TRONICS extension adds an
 AY-3-8912 with tone, noise, and envelope output through SDL audio.

@@ -26,6 +26,12 @@ roms/*
 /config.log
 /src/.deps/
 /src/.dirstamp
+/tests/.deps/
+/tests/.dirstamp
+/test-gifcap
+/test-gifcap.log
+/test-gifcap.trs
+/test-suite.log
 /1985
 /autom4te.cache/
 

@@ -14,6 +14,7 @@ dist_man1_MANS = 1985.1
 	src/display.c \
 	src/fdc.c \
 	src/gifcap.c \
+	src/ffmpeg_gif.c \
 	src/kbd.c \
 	src/leds.c \
 	src/main.c \
@@ -50,6 +51,7 @@ noinst_HEADERS = \
 	src/display.h \
 	src/fdc.h \
 	src/gifcap.h \
+	src/ffmpeg_gif.h \
 	src/kbd.h \
 	src/leds.h \
 	src/mem.h \
@@ -76,6 +78,12 @@ noinst_HEADERS = \
 	src/websvc.h \
 	src/z80.h \
 	src/z80dis.h
+
+check_PROGRAMS = test-gifcap
+TESTS = $(check_PROGRAMS)
+test_gifcap_SOURCES = tests/test_gifcap.c src/gifcap.c
+test_gifcap_CPPFLAGS = -I$(top_srcdir)/src
+test_gifcap_CFLAGS = $(AM_CFLAGS) -Wall -Wextra
 
 if WITH_CAIRO
 CAIRO_DEFINE = -DHAVE_CAIRO=1
