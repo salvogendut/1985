@@ -1,5 +1,5 @@
 Name:           1985
-Version:        0.4.7
+Version:        0.4.8
 Release:        1%{?dist}
 Summary:        Amstrad PCW 8256 / 8512 / 9512 emulator
 
@@ -97,6 +97,13 @@ appstream-util validate-relax --nonet %{buildroot}%{_datadir}/metainfo/io.github
 %{_datadir}/icons/hicolor/*/apps/io.github.salvogendut.Emulator1985.png
 
 %changelog
+* Wed Jul 22 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.8-1
+- Add configurable GIF output resolutions and frame rates with PAL/NTSC-aware
+  cadence and optional FFmpeg post-capture optimization.
+- Keep the dependency-free GIF encoder as the default and safe fallback.
+- Add a built-in keyboard-driven disk picker with automatic fallback when
+  the platform file dialog is unavailable.
+
 * Mon Jul 13 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.7-1
 - Add PerryNet mode for PerryFi, including TCP, UDP, pull-based receive and
   firmware time support (#153, #155, #164).
