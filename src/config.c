@@ -257,6 +257,9 @@ void config_defaults(Config *c) {
     c->joystick_type        = JOYSTICK_TYPE_DKSOUND;
     c->turbo                = false;
     c->tinker               = false;
+    c->gif_width            = GIF_CAPTURE_WIDTH_DEFAULT;
+    c->gif_fps              = GIF_CAPTURE_FPS_DEFAULT;
+    c->gif_ffmpeg           = false;
     c->show_status_line     = true;
     c->debug                = false;
     c->notifications        = NOTIFY_MODE_SCREEN;
@@ -368,6 +371,20 @@ void config_load(Config *c, const char *path) {
         else if (strcmp(k, "ext_print_sink")          == 0) c->ext_print_sink = parse_sink(v, c->ext_print_sink);
         else if (strcmp(k, "printer_centronics_9512") == 0) c->printer_centronics_9512 = parse_bool(v, c->printer_centronics_9512);
         else if (strcmp(k, "tinker")               == 0) c->tinker = parse_bool(v, c->tinker);
+        else if (strcmp(k, "gif_resolution")        == 0) {
+            int w = 0, h = 0;
+            char trailing = '\0';
+            if (sscanf(v, "%dx%d%c", &w, &h, &trailing) == 2 &&
+                (w == 720 || w == 540 || w == 360 || w == 240 || w == 180) &&
+                h == (w * 3) / 4)
+                c->gif_width = w;
+        }
+        else if (strcmp(k, "gif_fps")               == 0) {
+            int fps = atoi(v);
+            if (fps == 25 || fps == 20 || fps == 10 || fps == 5)
+                c->gif_fps = fps;
+        }
+        else if (strcmp(k, "gif_ffmpeg")            == 0) c->gif_ffmpeg = parse_bool(v, c->gif_ffmpeg);
         else if (strcmp(k, "status_line")          == 0) c->show_status_line = parse_bool(v, c->show_status_line);
         else if (strcmp(k, "boot_rom_dir")         == 0) snprintf(c->boot_rom_dir, sizeof(c->boot_rom_dir), "%s", v);
         else if (strcmp(k, "debug")                == 0) c->debug  = parse_bool(v, c->debug);
@@ -474,6 +491,10 @@ int config_save(const Config *c) {
 
     fprintf(f, "[advanced]\n");
     fprintf(f, "tinker = %s\n", bool_to_str(c->tinker));
+    fprintf(f, "gif_resolution = %dx%d\n", c->gif_width,
+            (c->gif_width * 3) / 4);
+    fprintf(f, "gif_fps = %d\n", c->gif_fps);
+    fprintf(f, "gif_ffmpeg = %s\n", bool_to_str(c->gif_ffmpeg));
     fprintf(f, "status_line = %s\n", bool_to_str(c->show_status_line));
     fprintf(f, "boot_rom_dir = %s\n", c->boot_rom_dir);
     fprintf(f, "debug = %s\n", bool_to_str(c->debug));

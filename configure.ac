@@ -45,6 +45,16 @@ AC_MSG_NOTICE([PDF printer backend: $with_cairo])
 
 AC_CHECK_LIB([m], [sqrt], [], [AC_MSG_ERROR([libm not found])])
 
+# ffmpeg is optional. The built-in GIF encoder remains the default and works
+# without it; when found, users may enable a post-capture optimization pass.
+AC_PATH_PROG([FFMPEG], [ffmpeg], [])
+AS_IF([test -n "$FFMPEG"],
+      [AC_DEFINE_UNQUOTED([FFMPEG_PATH], ["$FFMPEG"],
+           [Path to ffmpeg binary for GIF optimization])
+       AC_DEFINE([HAVE_FFMPEG], [1], [ffmpeg available for GIF optimization])
+       AC_MSG_NOTICE([GIF optimization enabled via $FFMPEG])],
+      [AC_MSG_NOTICE([GIF optimization disabled (no ffmpeg found)])])
+
 case $host_os in
   mingw*|cygwin*|msys*)
     WIN_LIBS="-lws2_32"

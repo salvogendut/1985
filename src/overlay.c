@@ -6,6 +6,7 @@
 #include "leds.h"
 #include "notify.h"
 #include "webgui.h"
+#include "ffmpeg_gif.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,6 +51,9 @@ static ExtRow ext_row_at(const Config *cfg, int row) {
 
 typedef enum {
     TINK_SMOOTHING = 0,
+    TINK_GIF_RESOLUTION,
+    TINK_GIF_FPS,
+    TINK_GIF_ENCODER,
     TINK_REAL_CRT,
     TINK_CRT_SCANLINES,
     TINK_CRT_BRIGHTNESS,
@@ -87,6 +91,9 @@ typedef enum {
 static TinkerRow tinker_row_at(const Overlay *ov, int row) {
     int r = 0;
     if (row == r++) return TINK_SMOOTHING;
+    if (row == r++) return TINK_GIF_RESOLUTION;
+    if (row == r++) return TINK_GIF_FPS;
+    if (row == r++) return TINK_GIF_ENCODER;
     if (row == r++) return TINK_REAL_CRT;
     if (ov->cfg->real_crt) {
         if (row == r++) return TINK_CRT_SCANLINES;
@@ -143,7 +150,26 @@ static int cycle_crt_percent(int v, int lo, int hi) {
     return v;
 }
 
-static bool reset_tinker_crt_item(Overlay *ov) {
+static int cycle_gif_width(int width) {
+    switch (width) {
+        case 720: return 540;
+        case 540: return 360;
+        case 360: return 240;
+        case 240: return 180;
+        default:  return 720;
+    }
+}
+
+static int cycle_gif_fps(int fps) {
+    switch (fps) {
+        case 25: return 20;
+        case 20: return 10;
+        case 10: return 5;
+        default: return 25;
+    }
+}
+
+static bool reset_tinker_item(Overlay *ov) {
     if (ov->section != OV_TINKER)
         return false;
 
@@ -154,8 +180,20 @@ static bool reset_tinker_crt_item(Overlay *ov) {
     int old_red = ov->cfg->crt_red;
     int old_green = ov->cfg->crt_green;
     int old_blue = ov->cfg->crt_blue;
+    int old_gif_width = ov->cfg->gif_width;
+    int old_gif_fps = ov->cfg->gif_fps;
+    bool old_gif_ffmpeg = ov->cfg->gif_ffmpeg;
 
     switch (tinker_row_at(ov, ov->row)) {
+        case TINK_GIF_RESOLUTION:
+            ov->cfg->gif_width = GIF_CAPTURE_WIDTH_DEFAULT;
+            break;
+        case TINK_GIF_FPS:
+            ov->cfg->gif_fps = GIF_CAPTURE_FPS_DEFAULT;
+            break;
+        case TINK_GIF_ENCODER:
+            ov->cfg->gif_ffmpeg = false;
+            break;
         case TINK_REAL_CRT:
             ov->cfg->real_crt = false;
             ov->cfg->crt_scanlines = DISPLAY_CRT_SCANLINES_DEFAULT;
@@ -187,14 +225,19 @@ static bool reset_tinker_crt_item(Overlay *ov) {
             return false;
     }
 
-    if (old_real_crt != ov->cfg->real_crt ||
-        old_scanlines != ov->cfg->crt_scanlines ||
-        old_brightness != ov->cfg->crt_brightness ||
-        old_contrast != ov->cfg->crt_contrast ||
-        old_red != ov->cfg->crt_red ||
-        old_green != ov->cfg->crt_green ||
-        old_blue != ov->cfg->crt_blue) {
-        overlay_apply_crt(ov);
+    bool crt_changed = old_real_crt != ov->cfg->real_crt ||
+                       old_scanlines != ov->cfg->crt_scanlines ||
+                       old_brightness != ov->cfg->crt_brightness ||
+                       old_contrast != ov->cfg->crt_contrast ||
+                       old_red != ov->cfg->crt_red ||
+                       old_green != ov->cfg->crt_green ||
+                       old_blue != ov->cfg->crt_blue;
+    bool changed = crt_changed || old_gif_width != ov->cfg->gif_width ||
+                   old_gif_fps != ov->cfg->gif_fps ||
+                   old_gif_ffmpeg != ov->cfg->gif_ffmpeg;
+    if (changed) {
+        if (crt_changed)
+            overlay_apply_crt(ov);
         ov->dirty = true;
     }
     return true;
@@ -444,6 +487,15 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
         case OV_TINKER:
             switch (tinker_row_at(ov, row)) {
                 case TINK_SMOOTHING: snprintf(label, lsz, "Smoothing"); snprintf(val, vsz, "%s", bool_str(cfg->fullscreen_smoothing)); break;
+                case TINK_GIF_RESOLUTION: snprintf(label, lsz, "GIF resolution"); snprintf(val, vsz, "%dx%d", cfg->gif_width, (cfg->gif_width * 3) / 4); break;
+                case TINK_GIF_FPS: snprintf(label, lsz, "GIF frame rate"); snprintf(val, vsz, "%d fps", cfg->gif_fps); break;
+                case TINK_GIF_ENCODER:
+                    snprintf(label, lsz, "GIF encoder");
+                    snprintf(val, vsz, "%s",
+                             !FFMPEG_GIF_SUPPORTED
+                                 ? "built-in [ffmpeg unavailable]"
+                                 : cfg->gif_ffmpeg ? "FFmpeg optimize" : "built-in");
+                    break;
                 case TINK_REAL_CRT: snprintf(label, lsz, "Real CRT"); snprintf(val, vsz, "%s", cfg->real_crt ? "enabled" : "disabled"); break;
                 case TINK_CRT_SCANLINES: snprintf(label, lsz, "Scanlines"); snprintf(val, vsz, "%d%%", cfg->crt_scanlines); break;
                 case TINK_CRT_BRIGHTNESS: snprintf(label, lsz, "Brightness"); snprintf(val, vsz, "%d%%", cfg->crt_brightness); break;
@@ -1126,6 +1178,20 @@ static void activate(Overlay *ov, SDL_Keymod mods) {
                         display_set_smoothing(ov->disp, c->fullscreen_smoothing);
                     ov->dirty = true;
                     break;
+                case TINK_GIF_RESOLUTION:
+                    c->gif_width = cycle_gif_width(c->gif_width);
+                    ov->dirty = true;
+                    break;
+                case TINK_GIF_FPS:
+                    c->gif_fps = cycle_gif_fps(c->gif_fps);
+                    ov->dirty = true;
+                    break;
+                case TINK_GIF_ENCODER:
+                    if (FFMPEG_GIF_SUPPORTED) {
+                        c->gif_ffmpeg = !c->gif_ffmpeg;
+                        ov->dirty = true;
+                    }
+                    break;
                 case TINK_REAL_CRT:
                     c->real_crt = !c->real_crt;
                     overlay_apply_crt(ov);
@@ -1576,7 +1642,7 @@ bool overlay_handle_event(Overlay *ov, SDL_Event *ev) {
         case SDLK_BACKSPACE:
             if (ov->section == OV_MEDIA && (ov->row == 0 || ov->row == 1))
                 eject_disk(ov, ov->row);
-            else if (reset_tinker_crt_item(ov))
+            else if (reset_tinker_item(ov))
                 break;
             else if (ov->section == OV_TINKER && ov->cfg->tinker
                   && tinker_row_at(ov, ov->row) == TINK_BOOT_ROM

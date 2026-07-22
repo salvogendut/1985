@@ -45,6 +45,8 @@ typedef enum {
 #define DISPLAY_CRT_BRIGHTNESS_DEFAULT 100
 #define DISPLAY_CRT_CONTRAST_DEFAULT 100
 #define DISPLAY_CRT_RGB_DEFAULT 100
+#define GIF_CAPTURE_WIDTH_DEFAULT 720
+#define GIF_CAPTURE_FPS_DEFAULT   25
 
 typedef struct {
     /* [machine] */
@@ -129,6 +131,9 @@ typedef struct {
 
     /* [advanced] */
     bool     tinker;
+    int      gif_width;          /* output width; height is width * 3 / 4 */
+    int      gif_fps;            /* animated GIF frame rate: 5, 10, 20, or 25 */
+    bool     gif_ffmpeg;         /* optimize completed GIFs with FFmpeg */
     bool     show_status_line;   /* Show the guest's bottom 8 scanlines
                                   * (CP/M status row). A real CRT hides
                                   * them in overscan; default shown. */

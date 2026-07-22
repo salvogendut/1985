@@ -50,6 +50,11 @@ ext_pdf_printer_dir     =
 [advanced]
 # Set tinker=true to unlock the Advanced tab in the F9 overlay.
 tinker = false
+# Animated GIF profile used by F6 and --gif-out. Resolutions preserve the
+# PCW display's corrected 4:3 aspect ratio; FFmpeg optimization is optional.
+gif_resolution = 720x540
+gif_fps = 25
+gif_ffmpeg = false
 # false crops the guest's bottom 8 scanlines (CP/M status row), like a
 # real CRT's overscan — on real hardware that row is never visible.
 status_line = true

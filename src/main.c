@@ -1,4 +1,5 @@
 #include <SDL3/SDL.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,6 +15,7 @@
 #include "roller.h"
 #include "snapshot.h"
 #include "gifcap.h"
+#include "ffmpeg_gif.h"
 #include "leds.h"
 #include "z80dis.h"
 #include "mem.h"
@@ -28,6 +30,93 @@
 #include "pilot.h"
 
 #define MAX_PASTE_EVENTS      16
+
+typedef struct {
+    GifCap  *encoder;
+    uint64_t interval_ns;
+    uint64_t elapsed_ns;
+    bool     first_frame;
+    bool     optimize;
+    char    *path;
+} GifCapture;
+
+static bool gif_capture_width_supported(int width) {
+    return width == 720 || width == 540 || width == 360 ||
+           width == 240 || width == 180;
+}
+
+static bool gif_capture_fps_supported(int fps) {
+    return fps == 25 || fps == 20 || fps == 10 || fps == 5;
+}
+
+static bool gif_capture_start(GifCapture *capture, const char *path,
+                              const Config *cfg) {
+    if (!capture || !path || !path[0] || capture->encoder)
+        return false;
+
+    int width = gif_capture_width_supported(cfg->gif_width)
+              ? cfg->gif_width : GIF_CAPTURE_WIDTH_DEFAULT;
+    int fps = gif_capture_fps_supported(cfg->gif_fps)
+            ? cfg->gif_fps : GIF_CAPTURE_FPS_DEFAULT;
+    int height = (width * 3) / 4;
+
+    capture->encoder = gifcap_open(path, DISPLAY_W, DISPLAY_H,
+                                   width, height, 100 / fps);
+    if (!capture->encoder)
+        return false;
+
+    capture->optimize = cfg->gif_ffmpeg && FFMPEG_GIF_SUPPORTED;
+    if (capture->optimize) {
+        size_t path_len = strlen(path) + 1;
+        capture->path = malloc(path_len);
+        if (capture->path)
+            memcpy(capture->path, path, path_len);
+        else
+            capture->optimize = false;
+    }
+    capture->interval_ns = 1000000000ULL / (uint64_t)fps;
+    capture->elapsed_ns = 0;
+    capture->first_frame = true;
+    fprintf(stderr, "[videocap] recording to %s\n", path);
+    return true;
+}
+
+static void gif_capture_stop(GifCapture *capture) {
+    if (!capture || !capture->encoder)
+        return;
+
+    int frames = gifcap_frame_count(capture->encoder);
+    gifcap_close(capture->encoder);
+    capture->encoder = NULL;
+    fprintf(stderr, "[videocap] GIF stopped (%d frames)\n", frames);
+    if (capture->optimize && capture->path)
+        ffmpeg_gif_optimize(capture->path);
+
+    free(capture->path);
+    capture->path = NULL;
+    capture->optimize = false;
+    capture->interval_ns = 0;
+    capture->elapsed_ns = 0;
+    capture->first_frame = false;
+}
+
+static void gif_capture_frame(GifCapture *capture, const uint32_t *pixels,
+                              uint64_t emulated_frame_ns) {
+    if (!capture || !capture->encoder)
+        return;
+
+    bool due = capture->first_frame;
+    capture->first_frame = false;
+    if (!due) {
+        capture->elapsed_ns += emulated_frame_ns;
+        if (capture->elapsed_ns >= capture->interval_ns) {
+            capture->elapsed_ns %= capture->interval_ns;
+            due = true;
+        }
+    }
+    if (due && !gifcap_frame(capture->encoder, pixels))
+        gif_capture_stop(capture);
+}
 
 #ifndef PROG_GIT_COMMIT
 #define PROG_GIT_COMMIT "unknown"
@@ -57,7 +146,7 @@ static const char *USAGE =
 "  --load-sna PATH             load .sna at init (stub)\n"
 "  --save-sna-at N:PATH        save .sna at frame N (stub)\n"
 "  --screenshot-at N:PATH      save PPM at frame N and exit\n"
-"  --gif-out PATH              record GIF until exit\n"
+"  --gif-out PATH              record GIF using the configured capture profile\n"
 "  --exit-after N              quit after frame N\n"
 "  --dump-at N                 dump CPU, memory and FDC state at frame N\n"
 "  --unthrottled               disable 50 Hz frame pacing (diagnostics)\n"
@@ -724,14 +813,10 @@ int main(int argc, char **argv) {
     int  auto_space_frame = 120;
     bool auto_space_down = false;
 
-    GifCap *gc = NULL;
-    int gc_skip = 0;   /* halve to 25 fps for F6-triggered captures */
+    GifCapture capture = {0};
     if (cli.gif_out) {
-        /* PCW framebuffer is 720x256 non-square pixels; stretch to
-         * 720x540 for a 4:3 GIF, matching 1984's output. */
-        gc = gifcap_open(cli.gif_out, DISPLAY_W, DISPLAY_H,
-                         DISPLAY_W, DISPLAY_W * 3 / 4, 4);
-        if (!gc) fprintf(stderr, "gif-out: failed to open %s\n", cli.gif_out);
+        if (!gif_capture_start(&capture, cli.gif_out, &cfg))
+            fprintf(stderr, "gif-out: failed to open %s\n", cli.gif_out);
     }
 
     char screenshot_path[512] = {0};
@@ -881,12 +966,8 @@ int main(int argc, char **argv) {
                         case SDLK_F6: {
                             /* Toggle GIF capture. Auto-name in CWD on start;
                              * finalise and report frame count on stop. */
-                            if (gc) {
-                                int n = gifcap_frame_count(gc);
-                                gifcap_close(gc);
-                                gc = NULL;
-                                if (cfg.debug_traces)
-                                    fprintf(stderr, "[videocap] GIF stopped (%d frames)\n", n);
+                            if (capture.encoder) {
+                                gif_capture_stop(&capture);
                             } else {
                                 char path[256];
                                 time_t t = time(NULL);
@@ -896,15 +977,8 @@ int main(int argc, char **argv) {
                                              "1985-%Y%m%d-%H%M%S.gif", lt);
                                 else
                                     snprintf(path, sizeof(path), "1985-capture.gif");
-                                /* 4 cs = 25 fps; halve frame rate to keep size manageable. */
-                                gc = gifcap_open(path, DISPLAY_W, DISPLAY_H,
-                                                 DISPLAY_W, DISPLAY_W * 3 / 4, 4);
-                                if (!gc) {
+                                if (!gif_capture_start(&capture, path, &cfg)) {
                                     fprintf(stderr, "[videocap] GIF open failed for '%s'\n", path);
-                                } else {
-                                    gc_skip = 0;
-                                    if (cfg.debug_traces)
-                                        fprintf(stderr, "[videocap] recording to %s\n", path);
                                 }
                             }
                             break;
@@ -1192,10 +1266,10 @@ int main(int argc, char **argv) {
             leds_render_hover(disp.renderer, ww, wh);
         }
 
-        if (gc) {
-            if ((gc_skip ^= 1) == 0)
-                gifcap_frame(gc, disp.fb);
-        }
+        gif_capture_frame(&capture, disp.fb,
+                          pcw.asic.refresh_60hz
+                              ? 1000000000ULL / 60ULL
+                              : 1000000000ULL / 50ULL);
         webgui_frame();
         pilot_post_frame(&pilot, &pcw, &disp, frame + 1);
 
@@ -1230,7 +1304,7 @@ int main(int argc, char **argv) {
     if (pcw.fdc.drive[1].dirty && cfg.drive_b[0])
         disk_save(&pcw.fdc.drive[1], cfg.drive_b);
 
-    if (gc) gifcap_close(gc);
+    gif_capture_stop(&capture);
     webgui_stop();
     set_mouse_capture(&disp, &pcw.mouse, &mouse_captured, false);
     monitor_destroy(mon);
