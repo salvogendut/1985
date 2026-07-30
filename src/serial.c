@@ -1,5 +1,10 @@
 /* serial.c — see serial.h. Pattern lifted from 1984's usifac.c. */
 
+/* _XOPEN_SOURCE hides Darwin's BSD interfaces unless this is requested. */
+#if defined(__APPLE__)
+#define _DARWIN_C_SOURCE 1
+#endif
+
 #define _XOPEN_SOURCE 600   /* posix_openpt, grantpt, unlockpt, ptsname */
 #define _DEFAULT_SOURCE     /* glibc: cfmakeraw, MSG_NOSIGNAL */
 #if defined(__FreeBSD__) || defined(__DragonFly__) || defined(__OpenBSD__) || defined(__NetBSD__)

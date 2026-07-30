@@ -1,5 +1,10 @@
 /* pilot.c — host-PTY "auto-pilot" input device for 1985. See pilot.h. */
 
+/* _XOPEN_SOURCE hides Darwin's BSD interfaces unless this is requested. */
+#if defined(__APPLE__)
+#define _DARWIN_C_SOURCE 1
+#endif
+
 #define _XOPEN_SOURCE 600
 #define _DEFAULT_SOURCE
 #if defined(__FreeBSD__) || defined(__DragonFly__) || defined(__OpenBSD__) || defined(__NetBSD__)
