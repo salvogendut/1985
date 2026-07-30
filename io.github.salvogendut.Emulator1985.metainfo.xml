@@ -28,6 +28,11 @@
   <url type="bugtracker">https://github.com/salvogendut/1985/issues</url>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.4.9" date="2026-07-30">
+      <description>
+        <p>Tagged releases now include self-contained macOS application bundles for Apple Silicon and Intel, with runtime libraries, icon, license and ROM resources included. Cross-platform CI tests Linux, Windows and both macOS architectures before publishing, and packaged ROMs are resolved from the application resource directory.</p>
+      </description>
+    </release>
     <release version="0.4.8" date="2026-07-22">
       <description>
         <p>GIF capture now offers configurable output resolutions and frame rates with PAL/NTSC-aware cadence, plus optional FFmpeg post-capture optimization while retaining the dependency-free encoder as a safe fallback. A built-in keyboard-driven disk picker takes over when the platform file dialog is unavailable.</p>

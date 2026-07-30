@@ -1,5 +1,5 @@
 Name:           1985
-Version:        0.4.8
+Version:        0.4.9
 Release:        1%{?dist}
 Summary:        Amstrad PCW 8256 / 8512 / 9512 emulator
 
@@ -97,6 +97,12 @@ appstream-util validate-relax --nonet %{buildroot}%{_datadir}/metainfo/io.github
 %{_datadir}/icons/hicolor/*/apps/io.github.salvogendut.Emulator1985.png
 
 %changelog
+* Thu Jul 30 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.9-1
+- Add self-contained macOS application bundles for Apple Silicon and Intel.
+- Run the test suite on Linux, Windows and both macOS architectures in CI.
+- Resolve bundled ROMs from the application resource directory and restore
+  Darwin visibility for PTY-backed serial, monitor and pilot interfaces.
+
 * Wed Jul 22 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.8-1
 - Add configurable GIF output resolutions and frame rates with PAL/NTSC-aware
   cadence and optional FFmpeg post-capture optimization.

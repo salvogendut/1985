@@ -30,6 +30,8 @@ jobs:
           ./configure
       - name: Build
         run: make -j$(nproc)
+      - name: Test
+        run: make check
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
@@ -87,6 +89,8 @@ jobs:
           ./configure --without-cairo
       - name: Build
         run: make -j$(nproc)
+      - name: Test
+        run: make check
       - name: Stage binary + DLLs
         run: |
           mkdir dist
@@ -102,6 +106,45 @@ jobs:
         with:
           name: 1985-windows-x86_64
           path: dist/
+
+  macos:
+    name: macOS (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build deps
+        run: brew install autoconf automake pkg-config sdl3 cairo dylibbundler
+      - name: Configure
+        run: |
+          autoreconf -iv
+          ./configure
+      - name: Build
+        run: make -j$(sysctl -n hw.logicalcpu)
+      - name: Test
+        run: make check
+      - name: Package app bundle
+        run: |
+          version="$(sed -n 's/^PACKAGE_VERSION = //p' Makefile)"
+          sh packaging/macos/package.sh ./1985 dist/1985.app "$version"
+          (cd /tmp && \
+            SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
+            "$GITHUB_WORKSPACE/dist/1985.app/Contents/MacOS/1985" \
+            --config=/dev/null --unthrottled --exit-after=100)
+          ditto -c -k --sequesterRsrc --keepParent \
+            dist/1985.app "dist/1985-macos-${{ matrix.arch }}.zip"
+      - name: Upload app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: 1985-macos-${{ matrix.arch }}
+          path: dist/1985-macos-${{ matrix.arch }}.zip
 
   flatpak:
     name: Flatpak (x86_64)
@@ -133,7 +176,7 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    needs: [linux, windows, flatpak]
+    needs: [linux, windows, macos, flatpak]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -159,6 +202,12 @@ jobs:
 
           # Windows: zip the full bundle (exe + DLLs + roms)
           (cd artifacts/1985-windows-x86_64 && zip -r "../../assets/1985-${tag}-windows-x86_64.zip" .)
+
+          # macOS: self-contained app bundles for Apple Silicon and Intel.
+          cp artifacts/1985-macos-arm64/1985-macos-arm64.zip \
+             "assets/1985-${tag}-macos-arm64.zip"
+          cp artifacts/1985-macos-x86_64/1985-macos-x86_64.zip \
+             "assets/1985-${tag}-macos-x86_64.zip"
 
           # Flatpak: single-file bundle, installable with `flatpak install`
           cp artifacts/1985-flatpak-x86_64/1985.flatpak "assets/1985-${tag}-x86_64.flatpak"

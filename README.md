@@ -210,15 +210,18 @@ and [FLATPAK.md](FLATPAK.md) for Flatpak builds.
 
 Tagged `v*` builds are published on the
 [GitHub Releases page](https://github.com/salvogendut/1985/releases) with a
-Linux x86_64 binary, Fedora RPM, Windows x86_64 zip, and Flatpak bundle. Pushes
-to `main` also produce workflow artifacts; pull requests run the Linux and
-Windows builds, while the slower Flatpak job runs for `main`, tags, and manual
-workflow dispatches.
+Linux x86_64 binary, Fedora RPM, Windows x86_64 ZIP, macOS application bundles
+for Apple Silicon and Intel, and a Flatpak bundle. Pushes to `main` also
+produce workflow artifacts; pull requests run the Linux, Windows, and macOS
+builds, while the slower Flatpak job runs for `main`, tags, and manual workflow
+dispatches.
 
-The Windows zip includes `1985.exe`, SDL3 and runtime DLLs, and the optional
-ROM directory. The embedded bootstrap remains the fallback if no external ROM
-is found. First-run diagnostics are written to `1985.log` beside the
-executable.
+The Windows ZIP and macOS bundles include SDL3 and other required runtime
+libraries plus the optional ROM directory. The embedded bootstrap remains the
+fallback if no external ROM is found. The macOS bundles are ad-hoc signed
+rather than Developer ID notarized, so the first launch may require
+right-clicking the application and selecting **Open**. First-run diagnostics
+are written to `1985.log` beside the executable.
 
 ## Keyboard shortcuts
 
