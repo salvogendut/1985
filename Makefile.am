@@ -137,5 +137,6 @@ dist_icon512_DATA  = icons/512x512/apps/io.github.salvogendut.Emulator1985.png
 
 EXTRA_DIST = LICENSE README.md INSTALL.md USAGE.md Development.md \
              1985.conf.example icons/1985.rc icons/1985.ico \
+             roms/README.md roms/pcw_boot.rom \
              src/webgui_page.html tools/gen_webgui_page.sh \
-             packaging/1985-web.service.in
+             packaging/1985-web.service.in packaging/macos/package.sh

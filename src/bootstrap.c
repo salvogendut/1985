@@ -1,4 +1,5 @@
 #include "bootstrap.h"
+#include <SDL3/SDL_filesystem.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -58,6 +59,7 @@ static int try_rom(const char *path, u8 *out, int max_len,
  *   Windows:
  *     %APPDATA%/1985/roms/pcw_boot.rom
  *   Always:
+ *     <application base>/roms/pcw_boot.rom
  *     ./roms/pcw_boot.rom
  *     roms/pcw_boot.rom
  *
@@ -104,6 +106,11 @@ static int load_rom_file(u8 *out, int max_len,
     if (home && home[0]) {
         snprintf(buf, sizeof(buf),
                  "%s/.config/1985/roms/pcw_boot.rom", home);
+        if ((n = try_rom(buf, out, max_len, chosen, chosen_cap)) > 0) return n;
+    }
+    const char *base = SDL_GetBasePath();
+    if (base && base[0]) {
+        snprintf(buf, sizeof(buf), "%sroms/pcw_boot.rom", base);
         if ((n = try_rom(buf, out, max_len, chosen, chosen_cap)) > 0) return n;
     }
     if ((n = try_rom("roms/pcw_boot.rom",   out, max_len, chosen, chosen_cap)) > 0) return n;
