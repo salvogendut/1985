@@ -137,7 +137,7 @@ jobs:
           (cd /tmp && \
             SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
             "$GITHUB_WORKSPACE/dist/1985.app/Contents/MacOS/1985" \
-            --config=/dev/null --headless --unthrottled --exit-after=100)
+            --config=/dev/null --unthrottled --exit-after=100)
           ditto -c -k --sequesterRsrc --keepParent \
             dist/1985.app "dist/1985-macos-${{ matrix.arch }}.zip"
       - name: Upload app bundle
