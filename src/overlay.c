@@ -20,6 +20,29 @@
 #define VAL_X    144
 #define BROWSER_VISIBLE_ROWS 18
 
+/* SDL3 debug font cell is ~8 logical pixels wide / tall. */
+#define ABOUT_TEXT "1985 Amstrad PCW emulator (c) 2026 salvogendut"
+
+typedef struct {
+    float x, y, w, h;               /* outer dialog box */
+    float ok_x, ok_y, ok_w, ok_h;   /* OK button */
+} AboutRects;
+
+/* About dialog geometry in logical pixels (debug-font cell ≈ 8px). Shared
+ * by the renderer and the mouse hit-test so the OK button is detected
+ * exactly where it is drawn. */
+static void about_rects(float lw, float lh, AboutRects *a) {
+    float tw = strlen(ABOUT_TEXT) * 8;
+    a->w = tw + 24;
+    a->h = 8 + 6 + (8 + 8) + 16;
+    a->x = (lw - a->w) / 2.0f;
+    a->y = (lh - a->h) / 2.0f;
+    a->ok_w = 2 * 8 + 16;
+    a->ok_h = 8 + 8;
+    a->ok_x = a->x + (a->w - a->ok_w) / 2.0f;
+    a->ok_y = a->y + 8 + 8 + 6;
+}
+
 typedef struct OverlayBrowserEntry {
     char *name;
     bool  directory;
@@ -258,6 +281,7 @@ typedef enum {
     GEN_BACKPLANE,
     GEN_TURBO,
     GEN_TINKER,
+    GEN_ABOUT,
 } GenRow;
 
 static GenRow gen_row_at(const Config *cfg, int row) {
@@ -271,6 +295,7 @@ static GenRow gen_row_at(const Config *cfg, int row) {
     if (row == r++) return GEN_BACKPLANE;
     if (row == r++) return GEN_TURBO;
     if (row == r++) return GEN_TINKER;
+    if (row == r++) return GEN_ABOUT;
     return GEN_NONE;
 }
 
@@ -316,8 +341,10 @@ static const char *section_title(OvSection s) {
 static int row_count(const Overlay *ov, OvSection s) {
     switch (s) {
         case OV_GENERAL:
-            /* model, memory, [second drive on 8256], printer, backplane, turbo, tinker */
-            return ov->cfg->model == PCW_MODEL_8256 ? 7 : 6;
+            /* model, memory, [second drive on 8256], printer, backplane,
+             * turbo, tinker, about (every model gets the About row at the
+             * very bottom). */
+            return ov->cfg->model == PCW_MODEL_8256 ? 8 : 7;
         case OV_MEDIA:
             /* 8256 shipped with a single floppy; 8512/9512 had two.
              * Users can bolt a second drive onto an 8256 via the
@@ -443,6 +470,7 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                 case GEN_BACKPLANE:    snprintf(label, lsz, "PCW Backplane"); snprintf(val, vsz, "%s", bool_str(cfg->ext_sanpollo_backplane));  break;
                 case GEN_TURBO:        snprintf(label, lsz, "Turbo");         snprintf(val, vsz, "%s", cfg->turbo ? "yes (8 MHz)" : "no (4 MHz)"); break;
                 case GEN_TINKER:       snprintf(label, lsz, "Tinker");        snprintf(val, vsz, "%s", bool_str(cfg->tinker));                  break;
+                case GEN_ABOUT:        snprintf(label, lsz, "About");                                                                    break;
                 case GEN_NONE: default: break;
             }
             break;
@@ -1118,6 +1146,9 @@ static void activate(Overlay *ov, SDL_Keymod mods) {
                     c->tinker = !c->tinker;
                     ov->dirty = true;
                     break;
+                case GEN_ABOUT:
+                    ov->state = OV_STATE_ABOUT;
+                    break;
                 case GEN_NONE: default: break;
             }
             break;
@@ -1598,11 +1629,44 @@ bool overlay_handle_event(Overlay *ov, SDL_Event *ev) {
         return true;
     }
 
+    /* About dialog: clicking its OK button closes it (Enter/Esc also work). */
+    if (ev->type == SDL_EVENT_MOUSE_BUTTON_DOWN && ov->visible &&
+        ov->state == OV_STATE_ABOUT && ev->button.button == SDL_BUTTON_LEFT) {
+        float lw = DISPLAY_LOGICAL_W;
+        float lh = ov->disp ? (float)ov->disp->logical_h : (float)DISPLAY_LOGICAL_H;
+        AboutRects a;
+        about_rects(lw, lh, &a);
+        float mx = 0.0f, my = 0.0f;
+        if (ov->disp &&
+            SDL_RenderCoordinatesFromWindow(ov->disp->renderer,
+                                            ev->button.x, ev->button.y,
+                                            &mx, &my)) {
+            if (mx >= a.ok_x && mx < a.ok_x + a.ok_w &&
+                my >= a.ok_y && my < a.ok_y + a.ok_h)
+                ov->state = OV_STATE_MENU;
+        }
+        return true;
+    }
+
     if (ev->type != SDL_EVENT_KEY_DOWN) return true;
 
     if (ov->state == OV_STATE_KEYS) {
         /* Any key dismisses the help panel. */
         ov->state = OV_STATE_MENU;
+        return true;
+    }
+
+    /* ---- About dialog ---- */
+    if (ov->state == OV_STATE_ABOUT) {
+        switch (ev->key.key) {
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER:
+        case SDLK_ESCAPE:
+            ov->state = OV_STATE_MENU;
+            break;
+        default:
+            break;
+        }
         return true;
     }
 
@@ -1979,6 +2043,33 @@ void overlay_render(Overlay *ov, SDL_Renderer *r) {
                   line1, 255, 255, 255);
         draw_text(r, (int)(bx + (box_w - l2w) / 2.0f), (int)(by + 6 + FONT_H + 8),
                   line2, 200, 200, 100);
+    }
+
+    /* ---- About dialog ---- */
+    if (ov->state == OV_STATE_ABOUT) {
+        int ww = DISPLAY_LOGICAL_W;
+        int wh = ov->disp ? ov->disp->logical_h : DISPLAY_LOGICAL_H;
+        const int FONT_W = 8;
+
+        /* Dim everything behind the dialog */
+        fill_rect(r, 0, 0, (float)ww, (float)wh, 0, 0, 0, 140);
+
+        AboutRects a;
+        about_rects((float)ww, (float)wh, &a);
+
+        fill_rect(r, a.x, a.y, a.w, a.h, 25, 25, 60, 255);
+        draw_rect_outline(r, a.x, a.y, a.w, a.h, 70, 90, 200);
+
+        int tw = (int)strlen(ABOUT_TEXT) * FONT_W;
+        draw_text(r, (int)(a.x + (a.w - tw) / 2.0f), (int)(a.y + 8),
+                  ABOUT_TEXT, 255, 255, 255);
+
+        /* OK button — closes the dialog when clicked (or Enter/Esc). */
+        fill_rect(r, a.ok_x, a.ok_y, a.ok_w, a.ok_h, 50, 60, 120, 255);
+        draw_rect_outline(r, a.ok_x, a.ok_y, a.ok_w, a.ok_h, 120, 140, 220);
+        int ok_tw = 2 * FONT_W;
+        draw_text(r, (int)(a.ok_x + (a.ok_w - ok_tw) / 2.0f), (int)(a.ok_y + 4),
+                  "OK", 255, 255, 255);
     }
 }
 
