@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="default" style="--screen-aspect: 720 / 512;">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#121416">
+<title>Javascript 1985</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="theme-default.css">
+<link rel="stylesheet" href="theme-retro-crt.css">
+<link rel="stylesheet" href="theme-sapporo.css">
+<link rel="stylesheet" href="theme-sapporo-dark.css">
+</head>
+<body>
+<main class="workbench">
+  <header class="masthead">
+    <div class="brand-lockup">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <div>
+        <p class="eyebrow">Amstrad PCW emulator</p>
+        <h1>Javascript <strong>1985</strong></h1>
+      </div>
+    </div>
+    <div class="masthead-meta">
+      <span>WASM / 50 HZ</span>
+      <div class="theme-picker">
+        <button id="themeButton" class="theme-button" type="button"
+                aria-haspopup="true" aria-expanded="false" aria-controls="themeMenu">
+          Theme: <strong id="themeName">Default</strong>
+        </button>
+        <div id="themeMenu" class="theme-menu" role="menu" hidden>
+          <button type="button" role="menuitemradio" aria-checked="true" data-theme="default">
+            <i class="theme-swatch swatch-default" aria-hidden="true"></i>
+            <span><strong>Default</strong><small>Hi-fi receiver</small></span>
+          </button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-theme="retro-crt">
+            <i class="theme-swatch swatch-crt" aria-hidden="true"></i>
+            <span><strong>Retro CRT</strong><small>Phosphor terminal</small></span>
+          </button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-theme="sapporo">
+            <i class="theme-swatch swatch-sapporo" aria-hidden="true"></i>
+            <span><strong>Sapporo</strong><small>Transit computer</small></span>
+          </button>
+          <button type="button" role="menuitemradio" aria-checked="false" data-theme="sapporo-dark">
+            <i class="theme-swatch swatch-sapporo-dark" aria-hidden="true"></i>
+            <span><strong>Sapporo Dark</strong><small>Solarized transit</small></span>
+          </button>
+        </div>
+      </div>
+      <span class="power-state"><i id="ledPower" class="led led-green"></i> System</span>
+    </div>
+  </header>
+
+  <section class="receiver" aria-label="Javascript 1985 emulator">
+    <div class="receiver-top">
+      <div class="model-bank">
+        <label for="model">Machine</label>
+        <div class="select-shell">
+          <select id="model">
+            <option value="0">PCW 8256</option>
+            <option value="1">PCW 8512</option>
+            <option value="2">PCW 9512</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="display-panel" role="status" aria-live="polite">
+        <span class="display-label">System monitor</span>
+        <span id="status">Loading emulator...</span>
+      </div>
+
+      <div class="activity-bank" aria-label="Activity indicators">
+        <div><i id="ledA" class="led led-green"></i><span>Drive A</span></div>
+        <div><i id="ledB" class="led led-green"></i><span>Drive B</span></div>
+        <div><i id="ledInput" class="led led-amber"></i><span>Input</span></div>
+        <div><i id="ledAudio" class="led led-green"></i><span>Audio</span></div>
+      </div>
+    </div>
+
+    <div id="screenStage" class="screen-stage">
+      <img class="screen-brand" src="brand-1985.png" alt="1985"
+           width="512" height="512" draggable="false">
+      <div id="screenFrame" class="screen-frame">
+        <div class="screen-glass">
+          <canvas id="screen" width="720" height="512" tabindex="0"
+                  aria-label="Amstrad PCW display"></canvas>
+          <div class="scanline-overlay" aria-hidden="true"></div>
+          <div id="screenHint" class="screen-hint">Click display for keyboard</div>
+          <div id="dropHint" class="drop-hint">Drop DSK media here</div>
+        </div>
+        <div class="screen-badge">
+          <span>Green monitor</span>
+          <span id="screenMode">720 x 512 / Sharp</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="control-deck">
+      <section class="deck-module transport-module" aria-labelledby="transport-title">
+        <div class="module-heading">
+          <span id="transport-title">Transport</span>
+          <small>System</small>
+        </div>
+        <div class="transport-row">
+          <button id="reset" class="deck-key danger-key" type="button">
+            <span class="key-icon">RST</span><small>Reset</small>
+          </button>
+          <button id="fullscreen" class="deck-key" type="button">
+            <span class="key-icon">FULL</span><small>Screen</small>
+          </button>
+          <button id="fitScreen" class="deck-key" type="button">
+            <span class="key-icon">FIT</span><small>Size</small>
+          </button>
+          <button id="expansion" class="deck-key expansion-key" type="button">
+            <span class="key-icon">AUX</span><small>Expansion</small>
+          </button>
+        </div>
+      </section>
+
+      <section class="deck-module media-module" aria-labelledby="media-title">
+        <div class="module-heading">
+          <span id="media-title">Media deck</span>
+          <small>Floppy disk</small>
+        </div>
+        <div class="media-slots">
+          <article id="diskSlotA" class="media-slot">
+            <div class="cassette-window" aria-hidden="true">
+              <i></i><span>DSK</span><i></i>
+            </div>
+            <div class="media-copy">
+              <strong>Drive A</strong>
+              <span id="disknameA">No disk loaded</span>
+            </div>
+            <div class="media-actions">
+              <label class="small-key" for="diskfileA">Load</label>
+              <button id="diskEjectA" class="small-key" type="button" disabled>Eject</button>
+            </div>
+            <input class="visually-hidden" type="file" id="diskfileA" accept=".dsk,.DSK">
+          </article>
+
+          <article id="diskSlotB" class="media-slot">
+            <div class="cassette-window" aria-hidden="true">
+              <i></i><span>DSK</span><i></i>
+            </div>
+            <div class="media-copy">
+              <strong>Drive B</strong>
+              <span id="disknameB">No disk loaded</span>
+            </div>
+            <div class="media-actions">
+              <label class="small-key" for="diskfileB">Load</label>
+              <button id="diskEjectB" class="small-key" type="button" disabled>Eject</button>
+            </div>
+            <input class="visually-hidden" type="file" id="diskfileB" accept=".dsk,.DSK">
+          </article>
+        </div>
+      </section>
+
+      <section class="deck-module input-module" aria-labelledby="input-title">
+        <div class="module-heading">
+          <span id="input-title">Input channel</span>
+          <small>Keyboard &amp; gamepad</small>
+        </div>
+        <div class="input-switches">
+          <label class="toggle-control">
+            <input type="checkbox" id="joytoggle" checked>
+            <span class="toggle-track"><i></i></span>
+            <span><strong>Joystick</strong><small>USB gamepad</small></span>
+          </label>
+        </div>
+        <button id="joydetect" class="wide-key" type="button">Detect controller</button>
+        <div class="input-readout">
+          <span id="joystatus">Joystick: waiting for gamepad...</span>
+        </div>
+      </section>
+
+      <section class="deck-module screen-module" aria-labelledby="screen-title">
+        <div class="module-heading">
+          <span id="screen-title">Picture</span>
+          <small>Display control</small>
+        </div>
+        <div class="dial-row">
+          <div class="rotary" aria-hidden="true"><i id="sizeNeedle"></i></div>
+          <label for="screenScale">
+            <span>Display size</span>
+            <strong id="scaleValue">100%</strong>
+          </label>
+          <input id="screenScale" type="range" min="70" max="100" step="5" value="100">
+        </div>
+        <label class="toggle-control compact-toggle">
+          <input type="checkbox" id="pixelToggle" checked>
+          <span class="toggle-track"><i></i></span>
+          <span><strong>Sharp pixels</strong><small>Nearest-neighbour scaling</small></span>
+        </label>
+      </section>
+    </div>
+
+    <footer class="receiver-footer">
+      <span>1985 browser edition</span>
+      <span>Keyboard active when the display is focused</span>
+    </footer>
+  </section>
+</main>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="gamepad.js"></script>
+<script src="media-url.js"></script>
+<script src="1985.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+/build/
+/dist/
+/*.o
+/*.ppm
+/poc.js
+/poc.wasm
+/1985.js
+/1985.wasm
