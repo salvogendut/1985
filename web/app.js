@@ -55,7 +55,7 @@ function showToast(message) {
 }
 
 const THEMES = {
-  "default": "Default",
+  "pcw8256": "PCW8256",
   "retro-crt": "Retro CRT",
   "sapporo": "Sapporo",
   "sapporo-dark": "Sapporo Dark",
@@ -65,6 +65,17 @@ const themePickerEl = document.querySelector(".theme-picker");
 const themeButtonEl = $("themeButton");
 const themeMenuEl = $("themeMenu");
 const themeNameEl = $("themeName");
+let releaseVirtualKeyboard = () => {};
+
+function resolveTheme(theme) {
+  if (typeof theme !== "string") return null;
+  const normalized = theme.trim().toLowerCase();
+  for (const [id, label] of Object.entries(THEMES)) {
+    if (normalized === id.toLowerCase() || normalized === label.toLowerCase())
+      return id;
+  }
+  return null;
+}
 
 function setThemeMenu(open) {
   themeMenuEl.hidden = !open;
@@ -72,7 +83,8 @@ function setThemeMenu(open) {
 }
 
 function applyTheme(theme, persist = true) {
-  const selected = Object.hasOwn(THEMES, theme) ? theme : "default";
+  const selected = resolveTheme(theme) || "pcw8256";
+  if (selected !== "pcw8256") releaseVirtualKeyboard();
   document.documentElement.dataset.theme = selected;
   themeNameEl.textContent = THEMES[selected];
   for (const option of themeMenuEl.querySelectorAll("[data-theme]"))
@@ -84,10 +96,12 @@ function applyTheme(theme, persist = true) {
   }
 }
 
-let savedTheme = "default";
+let savedTheme = "pcw8256";
 try {
-  savedTheme = localStorage.getItem(THEME_STORAGE_KEY) || "default";
-} catch (_) {}
+  savedTheme = localStorage.getItem(THEME_STORAGE_KEY) || "pcw8256";
+} catch (_) {
+  // Keep the PCW8256 theme when storage access is unavailable.
+}
 const requestedTheme = new URLSearchParams(window.location.search).get("theme");
 applyTheme(requestedTheme || savedTheme, false);
 
@@ -112,6 +126,22 @@ themePickerEl.addEventListener("keydown", event => {
 document.addEventListener("click", event => {
   if (!themePickerEl.contains(event.target)) setThemeMenu(false);
 });
+
+const pcwKeyboardEl = document.querySelector(".pcw8256-keyboard");
+const pcwKeyboardKeysEl = $("pcwKeyboardKeys");
+const pcwKeyboardToggleEl = $("pcwKeyboardToggle");
+
+function setPcwKeyboardOpen(open) {
+  pcwKeyboardEl.dataset.keyboardOpen = String(open);
+  pcwKeyboardKeysEl.hidden = !open;
+  pcwKeyboardToggleEl.setAttribute("aria-expanded", String(open));
+  pcwKeyboardToggleEl.textContent = open ? "Hide keyboard" : "Show keyboard";
+}
+
+pcwKeyboardToggleEl.addEventListener("click", () => {
+  setPcwKeyboardOpen(pcwKeyboardKeysEl.hidden);
+});
+setPcwKeyboardOpen(false);
 
 function pulseInputLed() {
   ledInputEl.classList.add("on");
@@ -188,6 +218,113 @@ create1985().then(m => {
   let joyEnabled = true;
   let ledStateA = 0;
   const heldKeys = new Set();
+  const virtualKeys = new Set();
+  const latchedVirtualModifiers = new Set();
+
+  function pressVirtualKey(scancode) {
+    if (virtualKeys.has(scancode)) return;
+    const alreadyPressed = heldKeys.has(scancode);
+    virtualKeys.add(scancode);
+    if (!alreadyPressed) m._poc_key(scancode, 1);
+  }
+
+  function releaseVirtualKey(scancode) {
+    if (!virtualKeys.delete(scancode)) return;
+    if (!heldKeys.has(scancode)) m._poc_key(scancode, 0);
+  }
+
+  function setModifierUi(scancode, active) {
+    for (const button of pcwKeyboardKeysEl.querySelectorAll(
+      `[data-modifier][data-scancode="${scancode}"]`
+    )) {
+      button.classList.toggle("latched", active);
+      button.setAttribute("aria-pressed", String(active));
+    }
+  }
+
+  function releaseLatchedModifiers() {
+    for (const scancode of latchedVirtualModifiers) {
+      releaseVirtualKey(scancode);
+      setModifierUi(scancode, false);
+    }
+    latchedVirtualModifiers.clear();
+  }
+
+  function toggleVirtualModifier(scancode) {
+    if (latchedVirtualModifiers.delete(scancode)) {
+      releaseVirtualKey(scancode);
+      setModifierUi(scancode, false);
+    } else {
+      latchedVirtualModifiers.add(scancode);
+      pressVirtualKey(scancode);
+      setModifierUi(scancode, true);
+    }
+  }
+
+  function releaseAllVirtualKeys() {
+    for (const scancode of [...virtualKeys]) releaseVirtualKey(scancode);
+    latchedVirtualModifiers.clear();
+    for (const button of pcwKeyboardKeysEl.querySelectorAll("[data-scancode]")) {
+      button.classList.remove("active", "latched");
+      if (button.hasAttribute("data-modifier"))
+        button.setAttribute("aria-pressed", "false");
+    }
+  }
+
+  function virtualKeyButton(target) {
+    return target.closest("button[data-scancode]");
+  }
+
+  pcwKeyboardKeysEl.addEventListener("pointerdown", event => {
+    const button = virtualKeyButton(event.target);
+    if (!button) return;
+    event.preventDefault();
+    startAudio();
+    const scancode = Number(button.dataset.scancode);
+    if (button.hasAttribute("data-modifier")) {
+      toggleVirtualModifier(scancode);
+    } else {
+      pressVirtualKey(scancode);
+      button.classList.add("active");
+      button.setPointerCapture(event.pointerId);
+    }
+    pulseInputLed();
+  });
+
+  function finishVirtualPointer(event) {
+    const button = virtualKeyButton(event.target);
+    if (!button || button.hasAttribute("data-modifier")) return;
+    releaseVirtualKey(Number(button.dataset.scancode));
+    button.classList.remove("active");
+    releaseLatchedModifiers();
+  }
+
+  pcwKeyboardKeysEl.addEventListener("pointerup", finishVirtualPointer);
+  pcwKeyboardKeysEl.addEventListener("pointercancel", finishVirtualPointer);
+  pcwKeyboardKeysEl.addEventListener("lostpointercapture", finishVirtualPointer);
+  pcwKeyboardKeysEl.addEventListener("click", event => {
+    if (event.detail !== 0) return;
+    const button = virtualKeyButton(event.target);
+    if (!button) return;
+    startAudio();
+    const scancode = Number(button.dataset.scancode);
+    if (button.hasAttribute("data-modifier")) {
+      toggleVirtualModifier(scancode);
+    } else {
+      pressVirtualKey(scancode);
+      button.classList.add("active");
+      setTimeout(() => {
+        releaseVirtualKey(scancode);
+        button.classList.remove("active");
+        releaseLatchedModifiers();
+      }, 90);
+    }
+    pulseInputLed();
+  });
+  pcwKeyboardToggleEl.addEventListener("click", () => {
+    if (pcwKeyboardKeysEl.hidden) releaseAllVirtualKeys();
+  });
+  releaseVirtualKeyboard = releaseAllVirtualKeys;
 
   function clearDiskAUi() {
     disknameAEl.textContent = "No disk loaded";
@@ -496,8 +633,9 @@ create1985().then(m => {
     event.preventDefault();
     startAudio();
     if (!heldKeys.has(scancode)) {
+      const alreadyPressed = virtualKeys.has(scancode);
       heldKeys.add(scancode);
-      m._poc_key(scancode, 1);
+      if (!alreadyPressed) m._poc_key(scancode, 1);
       pulseInputLed();
     }
   });
@@ -506,12 +644,15 @@ create1985().then(m => {
     if (scancode === undefined || !heldKeys.has(scancode)) return;
     event.preventDefault();
     heldKeys.delete(scancode);
-    m._poc_key(scancode, 0);
+    if (!virtualKeys.has(scancode)) m._poc_key(scancode, 0);
   });
   canvas.addEventListener("blur", () => {
-    for (const scancode of heldKeys) m._poc_key(scancode, 0);
+    for (const scancode of heldKeys) {
+      if (!virtualKeys.has(scancode)) m._poc_key(scancode, 0);
+    }
     heldKeys.clear();
   });
+  window.addEventListener("blur", releaseAllVirtualKeys);
 
   for (const eventName of ["dragenter", "dragover"]) {
     screenFrame.addEventListener(eventName, event => {
