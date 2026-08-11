@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="default" style="--screen-aspect: 720 / 512;">
+<html lang="en" data-theme="pcw8256" style="--screen-aspect: 720 / 512;">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#121416">
+<meta name="theme-color" content="#202321">
 <title>Javascript 1985</title>
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="theme-default.css">
+<link rel="stylesheet" href="theme-pcw8256.css">
 <link rel="stylesheet" href="theme-retro-crt.css">
 <link rel="stylesheet" href="theme-sapporo.css">
 <link rel="stylesheet" href="theme-sapporo-dark.css">
@@ -26,12 +26,12 @@
       <div class="theme-picker">
         <button id="themeButton" class="theme-button" type="button"
                 aria-haspopup="true" aria-expanded="false" aria-controls="themeMenu">
-          Theme: <strong id="themeName">Default</strong>
+          Theme: <strong id="themeName">PCW8256</strong>
         </button>
         <div id="themeMenu" class="theme-menu" role="menu" hidden>
-          <button type="button" role="menuitemradio" aria-checked="true" data-theme="default">
-            <i class="theme-swatch swatch-default" aria-hidden="true"></i>
-            <span><strong>Default</strong><small>Hi-fi receiver</small></span>
+          <button type="button" role="menuitemradio" aria-checked="true" data-theme="pcw8256">
+            <i class="theme-swatch swatch-pcw8256" aria-hidden="true"></i>
+            <span><strong>PCW8256</strong><small>Green monitor office system</small></span>
           </button>
           <button type="button" role="menuitemradio" aria-checked="false" data-theme="retro-crt">
             <i class="theme-swatch swatch-crt" aria-hidden="true"></i>
@@ -78,6 +78,15 @@
     </div>
 
     <div id="screenStage" class="screen-stage">
+      <div class="pcw-monitor-label" aria-hidden="true">
+        <strong>AMSTRAD PCW8256</strong>
+        <span>Personal Computer Word Processor</span>
+      </div>
+      <div class="pcw-drive-fascia" aria-hidden="true">
+        <i class="pcw-drive-slot"></i>
+        <b>Green<br>Monitor</b>
+        <small>Office<br>Automation</small>
+      </div>
       <img class="screen-brand" src="brand-1985.png" alt="1985"
            width="512" height="512" draggable="false">
       <div id="screenFrame" class="screen-frame">
@@ -192,6 +201,100 @@
           <span><strong>Sharp pixels</strong><small>Nearest-neighbour scaling</small></span>
         </label>
       </section>
+    </div>
+
+    <div class="pcw8256-keyboard" data-keyboard-open="false">
+      <div class="pcw-keyboard-bar">
+        <span>PCW8256 keyboard</span>
+        <button id="pcwKeyboardToggle" type="button" aria-expanded="false"
+                aria-controls="pcwKeyboardKeys">Show keyboard</button>
+      </div>
+
+      <div id="pcwKeyboardKeys" class="pcw8256-keybed" role="group"
+           aria-label="Amstrad PCW8256 keyboard" hidden>
+        <div class="pcw-key-row">
+          <button type="button" class="pcw-key pcw-key-stop pcw-key-wide" data-scancode="41"><span>STOP</span></button>
+          <button type="button" class="pcw-key" data-scancode="30"><span>1</span><small>!</small></button>
+          <button type="button" class="pcw-key" data-scancode="31"><span>2</span><small>&quot;</small></button>
+          <button type="button" class="pcw-key" data-scancode="32"><span>3</span><small>#</small></button>
+          <button type="button" class="pcw-key" data-scancode="33"><span>4</span><small>$</small></button>
+          <button type="button" class="pcw-key" data-scancode="34"><span>5</span><small>%</small></button>
+          <button type="button" class="pcw-key" data-scancode="35"><span>6</span><small>&amp;</small></button>
+          <button type="button" class="pcw-key" data-scancode="36"><span>7</span><small>'</small></button>
+          <button type="button" class="pcw-key" data-scancode="37"><span>8</span><small>(</small></button>
+          <button type="button" class="pcw-key" data-scancode="38"><span>9</span><small>)</small></button>
+          <button type="button" class="pcw-key" data-scancode="39"><span>0</span><small>_</small></button>
+          <button type="button" class="pcw-key" data-scancode="45"><span>-</span><small>=</small></button>
+          <button type="button" class="pcw-key" data-scancode="46"><span>^</span><small>~</small></button>
+          <button type="button" class="pcw-key pcw-key-wide" data-scancode="42"><span>DEL</span><small>BACK</small></button>
+          <button type="button" class="pcw-key pcw-key-editor pcw-key-wide" data-scancode="76"><span>DEL</span><small>RIGHT</small></button>
+          <button type="button" class="pcw-key pcw-key-editor pcw-key-wide" data-scancode="77"><span>CAN</span></button>
+        </div>
+        <div class="pcw-key-row">
+          <button type="button" class="pcw-key pcw-key-wide" data-scancode="43"><span>TAB</span></button>
+          <button type="button" class="pcw-key" data-scancode="20"><span>Q</span></button>
+          <button type="button" class="pcw-key" data-scancode="26"><span>W</span></button>
+          <button type="button" class="pcw-key" data-scancode="8"><span>E</span></button>
+          <button type="button" class="pcw-key" data-scancode="21"><span>R</span></button>
+          <button type="button" class="pcw-key" data-scancode="23"><span>T</span></button>
+          <button type="button" class="pcw-key" data-scancode="28"><span>Y</span></button>
+          <button type="button" class="pcw-key" data-scancode="24"><span>U</span></button>
+          <button type="button" class="pcw-key" data-scancode="12"><span>I</span></button>
+          <button type="button" class="pcw-key" data-scancode="18"><span>O</span></button>
+          <button type="button" class="pcw-key" data-scancode="19"><span>P</span></button>
+          <button type="button" class="pcw-key" data-scancode="47"><span>[</span><small>{</small></button>
+          <button type="button" class="pcw-key" data-scancode="48"><span>]</span><small>}</small></button>
+          <button type="button" class="pcw-key pcw-key-return" data-scancode="40"><span>RETURN</span></button>
+          <button type="button" class="pcw-key pcw-key-editor pcw-key-wide" data-scancode="73"><span>CUT</span></button>
+          <button type="button" class="pcw-key pcw-key-editor pcw-key-wide" data-scancode="74"><span>COPY</span></button>
+          <button type="button" class="pcw-key pcw-key-editor pcw-key-wide" data-scancode="75"><span>PASTE</span></button>
+        </div>
+        <div class="pcw-key-row">
+          <button type="button" class="pcw-key pcw-key-lock" data-scancode="57"><span>SHIFT</span><small>LOCK</small></button>
+          <button type="button" class="pcw-key" data-scancode="4"><span>A</span></button>
+          <button type="button" class="pcw-key" data-scancode="22"><span>S</span></button>
+          <button type="button" class="pcw-key" data-scancode="7"><span>D</span></button>
+          <button type="button" class="pcw-key" data-scancode="9"><span>F</span></button>
+          <button type="button" class="pcw-key" data-scancode="10"><span>G</span></button>
+          <button type="button" class="pcw-key" data-scancode="11"><span>H</span></button>
+          <button type="button" class="pcw-key" data-scancode="13"><span>J</span></button>
+          <button type="button" class="pcw-key" data-scancode="14"><span>K</span></button>
+          <button type="button" class="pcw-key" data-scancode="15"><span>L</span></button>
+          <button type="button" class="pcw-key" data-scancode="51"><span>;</span><small>+</small></button>
+          <button type="button" class="pcw-key" data-scancode="52"><span>:</span><small>*</small></button>
+          <button type="button" class="pcw-key" data-scancode="49" aria-label="Backslash"><span>\</span><small>|</small></button>
+          <button type="button" class="pcw-key pcw-key-enter pcw-key-wide" data-scancode="88"><span>ENTER</span></button>
+          <button type="button" class="pcw-key pcw-key-editor pcw-key-wide" data-scancode="78"><span>DOC</span><small>PAGE</small></button>
+        </div>
+        <div class="pcw-key-row">
+          <button type="button" class="pcw-key pcw-key-modifier pcw-key-extra-wide" data-scancode="225" data-modifier aria-pressed="false"><span>SHIFT</span></button>
+          <button type="button" class="pcw-key" data-scancode="29"><span>Z</span></button>
+          <button type="button" class="pcw-key" data-scancode="27"><span>X</span></button>
+          <button type="button" class="pcw-key" data-scancode="6"><span>C</span></button>
+          <button type="button" class="pcw-key" data-scancode="25"><span>V</span></button>
+          <button type="button" class="pcw-key" data-scancode="5"><span>B</span></button>
+          <button type="button" class="pcw-key" data-scancode="17"><span>N</span></button>
+          <button type="button" class="pcw-key" data-scancode="16"><span>M</span></button>
+          <button type="button" class="pcw-key" data-scancode="54"><span>,</span><small>&lt;</small></button>
+          <button type="button" class="pcw-key" data-scancode="55"><span>.</span><small>&gt;</small></button>
+          <button type="button" class="pcw-key" data-scancode="56"><span>/</span><small>?</small></button>
+          <button type="button" class="pcw-key pcw-key-editor pcw-key-wide" data-scancode="70"><span>PTR</span></button>
+          <button type="button" class="pcw-key pcw-key-cursor" data-scancode="82"><span>UP</span></button>
+          <button type="button" class="pcw-key pcw-key-modifier pcw-key-extra-wide" data-scancode="229" data-modifier aria-pressed="false"><span>SHIFT</span></button>
+        </div>
+        <div class="pcw-key-row pcw-key-row-space">
+          <button type="button" class="pcw-key pcw-key-modifier pcw-key-wide" data-scancode="226" data-modifier aria-pressed="false"><span>ALT</span></button>
+          <button type="button" class="pcw-key pcw-key-modifier pcw-key-wide" data-scancode="224" data-modifier aria-pressed="false"><span>EXTRA</span></button>
+          <button type="button" class="pcw-key pcw-key-space" data-scancode="44"><span>SPACE</span></button>
+          <button type="button" class="pcw-key pcw-key-cursor" data-scancode="80"><span>LEFT</span></button>
+          <button type="button" class="pcw-key pcw-key-cursor" data-scancode="81"><span>DOWN</span></button>
+          <button type="button" class="pcw-key pcw-key-cursor" data-scancode="79"><span>RIGHT</span></button>
+          <button type="button" class="pcw-key pcw-key-function" data-scancode="58"><span>F1</span><small>F2</small></button>
+          <button type="button" class="pcw-key pcw-key-function" data-scancode="60"><span>F3</span><small>F4</small></button>
+          <button type="button" class="pcw-key pcw-key-function" data-scancode="62"><span>F5</span><small>F6</small></button>
+          <button type="button" class="pcw-key pcw-key-function" data-scancode="64"><span>F7</span><small>F8</small></button>
+        </div>
+      </div>
     </div>
 
     <footer class="receiver-footer">

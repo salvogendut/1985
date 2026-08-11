@@ -5,6 +5,20 @@ Build the browser edition with Emscripten and serve the publish directory:
     make -C web
     python3 -m http.server 8080 --directory web/dist
 
+## Interface themes
+
+PCW8256 is the default interface theme. It uses the grey monitor and keyboard
+shells, recessed green display, drive fascia and product labels associated with
+the original PCW 8256. Retro CRT, Sapporo and Sapporo Dark remain available
+from the theme menu. The selection is saved in the browser; it can also be set
+with `?theme=pcw8256` (theme names and labels are accepted case-insensitively).
+
+The PCW8256 theme includes a show/hide on-screen keyboard. Its keys feed the
+same PCW matrix as the physical keyboard. SHIFT, EXTRA and ALT latch for the
+next non-modifier key, allowing the paired PCW function keys to be selected.
+The packaged page also includes the 1985 application icon as part of the
+monitor fascia.
+
 ## Server-hosted media
 
 Media URLs are resolved relative to the page URL. A disk can be mounted in
