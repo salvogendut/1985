@@ -12,6 +12,36 @@
 <link rel="stylesheet" href="theme-sapporo-dark.css">
 </head>
 <body>
+<div id="expansionBackdrop" class="expansion-backdrop" aria-hidden="true"></div>
+<aside id="expansionPanel" class="expansion-panel" role="dialog" aria-modal="true"
+       aria-labelledby="expansionTitle" aria-hidden="true">
+  <header class="expansion-panel-header">
+    <div>
+      <span>Auxiliary bus</span>
+      <h2 id="expansionTitle">Expansion bay</h2>
+    </div>
+    <button id="expansionClose" class="expansion-close" type="button"
+            aria-label="Close expansion bay"><i aria-hidden="true"></i></button>
+  </header>
+
+  <div class="expansion-device-list">
+    <section class="expansion-device" aria-labelledby="dksoundTitle">
+      <div class="expansion-device-heading">
+        <span class="expansion-device-mark" aria-hidden="true">AY</span>
+        <div>
+          <h3 id="dksoundTitle">DK'sound</h3>
+          <span>AY-3-8912</span>
+        </div>
+      </div>
+      <label class="toggle-control expansion-device-toggle">
+        <input type="checkbox" id="dksoundToggle">
+        <span class="toggle-track"><i></i></span>
+        <span><strong>Board power</strong><small id="dksoundState" aria-live="polite">Disabled</small></span>
+      </label>
+    </section>
+  </div>
+</aside>
+
 <main class="workbench">
   <header class="masthead">
     <div class="brand-lockup">
@@ -129,7 +159,8 @@
           <button id="fitScreen" class="deck-key" type="button">
             <span class="key-icon">FIT</span><small>Size</small>
           </button>
-          <button id="expansion" class="deck-key expansion-key" type="button">
+          <button id="expansion" class="deck-key expansion-key" type="button"
+                  aria-expanded="false" aria-controls="expansionPanel">
             <span class="key-icon">AUX</span><small>Expansion</small>
           </button>
         </div>

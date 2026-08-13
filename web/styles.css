@@ -381,6 +381,196 @@ button:disabled, [aria-disabled="true"] { opacity: .42; cursor: not-allowed; }
 .mode-lamp { flex: 0 0 auto; width: 14px; height: 14px; border: 2px solid #090a0a; border-radius: 50%; background: conic-gradient(#e94132, #e2c732, #3bb36e, #377ed2, #e94132); box-shadow: inset 0 0 2px #fff, 0 0 5px rgba(255,255,255,.18); }
 .color-mode-key.active .mode-lamp { background: #70ef91; box-shadow: inset 0 0 2px #fff, 0 0 9px rgba(112,239,145,.85); }
 
+body.expansion-open { overflow: hidden; }
+
+.expansion-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  visibility: hidden;
+  background: rgba(3,4,4,.66);
+  opacity: 0;
+  transition: opacity .2s, visibility 0s linear .2s;
+}
+
+.expansion-panel {
+  position: fixed;
+  z-index: 81;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: grid;
+  width: min(370px, calc(100vw - 24px));
+  grid-template-rows: auto 1fr;
+  overflow: auto;
+  color: #e3e4de;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.055), transparent 18%),
+    #181b1a;
+  border-right: 2px solid var(--panel-edge);
+  box-shadow: 18px 0 55px rgba(0,0,0,.62), inset -1px 0 rgba(255,255,255,.08);
+  transform: translateX(-102%);
+  visibility: hidden;
+  transition: transform .22s ease, visibility 0s linear .22s;
+}
+
+body.expansion-open .expansion-backdrop {
+  visibility: visible;
+  opacity: 1;
+  transition-delay: 0s;
+}
+
+body.expansion-open .expansion-panel {
+  visibility: visible;
+  transform: translateX(0);
+  transition-delay: 0s;
+}
+
+.expansion-panel-header {
+  display: flex;
+  min-height: 116px;
+  padding: 30px 27px 24px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #080909;
+  background: linear-gradient(#303432, #232725);
+  box-shadow: inset 0 -1px rgba(255,255,255,.07);
+}
+
+.expansion-panel-header span,
+.expansion-panel-header h2 {
+  display: block;
+  margin: 0;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.expansion-panel-header span {
+  margin-bottom: 7px;
+  color: #858b86;
+  font: 700 9px/1 ui-monospace, monospace;
+}
+
+.expansion-panel-header h2 {
+  color: #f0f1ea;
+  font: 800 18px/1 Arial, Helvetica, sans-serif;
+}
+
+.expansion-close {
+  position: relative;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid #080909;
+  border-radius: 3px;
+  color: #d8dad3;
+  background: linear-gradient(#555a57, #292d2b);
+  box-shadow: inset 0 1px rgba(255,255,255,.15), 0 3px #0a0b0a;
+  cursor: pointer;
+}
+
+.expansion-close:hover { background: linear-gradient(#686d69, #343936); }
+.expansion-close:active { transform: translateY(2px); box-shadow: 0 1px #0a0b0a; }
+.expansion-close i::before,
+.expansion-close i::after {
+  position: absolute;
+  top: 18px;
+  left: 10px;
+  width: 17px;
+  height: 2px;
+  content: "";
+  background: currentColor;
+}
+.expansion-close i::before { transform: rotate(45deg); }
+.expansion-close i::after { transform: rotate(-45deg); }
+
+.expansion-device-list {
+  align-self: stretch;
+  background:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 5px),
+    #111412;
+}
+
+.expansion-device {
+  display: grid;
+  min-height: 156px;
+  padding: 26px 27px;
+  align-content: center;
+  gap: 25px;
+  border-bottom: 1px solid #353a36;
+  box-shadow: inset 0 -1px #070807;
+}
+
+.expansion-device-heading {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.expansion-device-mark {
+  display: grid;
+  width: 48px;
+  height: 40px;
+  place-items: center;
+  border: 2px solid #080908;
+  color: var(--amber);
+  background: #222622;
+  box-shadow: inset 0 0 0 1px #4d534e, 0 2px #080908;
+  font: 900 13px/1 ui-monospace, monospace;
+}
+
+.expansion-device-heading h3,
+.expansion-device-heading span {
+  overflow-wrap: anywhere;
+  letter-spacing: 0;
+}
+
+.expansion-device-heading h3 {
+  margin: 0;
+  color: #e9eae4;
+  font: 800 14px/1.15 Arial, Helvetica, sans-serif;
+  text-transform: uppercase;
+}
+
+.expansion-device-heading div > span {
+  display: block;
+  margin-top: 6px;
+  color: #7f8580;
+  font: 600 9px/1 ui-monospace, monospace;
+  text-transform: uppercase;
+}
+
+.expansion-device-toggle {
+  width: 100%;
+  min-height: 43px;
+  padding: 8px 10px;
+  border: 1px solid #080908;
+  background: #1c201d;
+  box-shadow: inset 0 1px rgba(255,255,255,.055);
+}
+
+.expansion-device-toggle > span:last-child { min-width: 0; }
+.expansion-device-toggle strong { color: #dfe1da; }
+.expansion-device-toggle small { color: #818780; }
+.expansion-device-toggle > input:focus-visible + .toggle-track {
+  outline: 2px solid var(--amber);
+  outline-offset: 3px;
+}
+
+.expansion-key[aria-expanded="true"] {
+  color: #fff;
+  box-shadow: inset 0 0 0 2px var(--amber), 0 3px 0 #0c0d0e, 0 4px 5px rgba(0,0,0,.35);
+}
+
+.expansion-key.has-expansion .key-icon { text-shadow: 0 0 7px var(--amber); }
+
+@media (prefers-reduced-motion: reduce) {
+  .expansion-backdrop,
+  .expansion-panel { transition: none; }
+}
+
 .receiver-footer { display: flex; justify-content: space-between; gap: 20px; padding: 11px clamp(16px, 2.5vw, 32px); border-top: 1px solid #343738; color: #666a68; background: #121416; font: 700 8px/1 ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; }
 
 .toast { position: fixed; z-index: 20; right: 22px; bottom: 22px; max-width: min(380px, calc(100vw - 44px)); padding: 12px 15px; border: 1px solid #6b5732; border-radius: 4px; color: #f2dec0; background: rgba(24,20,14,.95); box-shadow: 0 10px 30px #000; font: 600 11px/1.35 ui-monospace, monospace; opacity: 0; transform: translateY(12px); transition: opacity .2s, transform .2s; pointer-events: none; }
@@ -418,6 +608,9 @@ button:disabled, [aria-disabled="true"] { opacity: .42; cursor: not-allowed; }
 }
 
 @media (max-width: 560px) {
+  .expansion-panel { width: min(340px, calc(100vw - 12px)); }
+  .expansion-panel-header { min-height: 96px; padding: 23px 20px 19px; }
+  .expansion-device { padding: 23px 20px; }
   .workbench { padding-top: 16px; }
   .masthead { align-items: center; }
   .brand-mark { display: none; }

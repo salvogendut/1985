@@ -19,6 +19,17 @@ next non-modifier key, allowing the paired PCW function keys to be selected.
 The packaged page also includes the 1985 application icon as part of the
 monitor fascia.
 
+## Expansion bay
+
+The AUX key opens a left-side expansion bay. The DK'sound AY-3-8912 board can
+be connected and disconnected while the emulator is running, and its state is
+saved in the browser. The selection survives warm resets and machine changes.
+
+PerryFi remains native-only for now. As described in the
+[Emscripten networking documentation](https://emscripten.org/docs/porting/networking.html),
+browser pages cannot open arbitrary TCP or UDP sockets directly, so the WASM
+edition will need a WebSocket relay before PerryFi can provide guest networking.
+
 ## Server-hosted media
 
 Media URLs are resolved relative to the page URL. `disk` mounts Drive A and

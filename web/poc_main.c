@@ -10,6 +10,7 @@
  *   - poc_eject_disk(): eject drive A
  *   - poc_eject_disk_b(): eject drive B
  *   - poc_autorun():  queue paste command after a frame-counted boot delay
+ *   - poc_set_dksound(): connect or disconnect the DK'tronics sound board
  *   - poc_disk_activity(): bit mask for active drive A/B indicators
  *   - poc_audio_*():  ring-buffer access for beeper + AY audio (mono s16)
  *
@@ -31,6 +32,7 @@ static Display g_display;
 static Paste g_paste;
 static int g_autorun_frames;
 static char g_autorun_command[256];
+static bool g_dksound_enabled;
 
 /* ---- audio ring buffer (mono s16, 4 seconds @ 44.1 kHz) ---- */
 #define AUDIO_RING_SAMPLES (44100 * 4)
@@ -82,6 +84,7 @@ static int poc_init_model_impl(int model) {
         default: return -1;
     }
     pcw_init(&g_pcw, m, memory_kb);
+    aysound_init(&g_pcw.ay, g_dksound_enabled);
     beeper_set_audio_rate(&g_pcw.beeper, PCW_AUDIO_SAMPLE_RATE);
     return 0;
 }
@@ -182,6 +185,18 @@ EMSCRIPTEN_KEEPALIVE void poc_joy(int col, int pressed) {
     if (pressed) joy_state &= ~mask;
     else         joy_state |=  mask;
     aysound_set_joystick(&g_pcw.ay, joy_state);
+}
+
+EMSCRIPTEN_KEEPALIVE int poc_set_dksound(int enabled) {
+    bool present = enabled != 0;
+    g_dksound_enabled = present;
+    if (g_pcw.ay.present != present)
+        aysound_init(&g_pcw.ay, present);
+    return g_pcw.ay.present ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE int poc_dksound_enabled(void) {
+    return g_pcw.ay.present ? 1 : 0;
 }
 
 EMSCRIPTEN_KEEPALIVE int poc_disk_motor(void) { return g_pcw.fdc.motor_on ? 1 : 0; }
