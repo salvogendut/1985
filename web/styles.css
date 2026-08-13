@@ -240,7 +240,7 @@ canvas {
   width: 100%;
   height: 100%;
   cursor: default;
-  image-rendering: pixelated;
+  image-rendering: auto;
 }
 canvas.mouse-ready { cursor: crosshair; }
 canvas.mouse-captured { cursor: none; }
