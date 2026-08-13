@@ -21,14 +21,55 @@ monitor fascia.
 
 ## Expansion bay
 
-The AUX key opens a left-side expansion bay. The DK'sound AY-3-8912 board can
-be connected and disconnected while the emulator is running, and its state is
-saved in the browser. The selection survives warm resets and machine changes.
+The AUX key opens a left-side expansion bay. DK'sound and PerryFi can be
+connected and disconnected while the emulator is running. PerryFi offers the
+same AT Hayes and PerryNet TCP/IP device models as native 1985. Expansion
+state, PerryFi mode, and relay endpoint are saved in the browser and survive
+warm resets and machine changes.
 
-PerryFi remains native-only for now. As described in the
-[Emscripten networking documentation](https://emscripten.org/docs/porting/networking.html),
-browser pages cannot open arbitrary TCP or UDP sockets directly, so the WASM
-edition will need a WebSocket relay before PerryFi can provide guest networking.
+Browsers cannot open arbitrary TCP or UDP sockets. The WASM PerryFi therefore
+uses the restricted WebSocket relay in `web/relay`; the emulated CPS8256,
+Hayes parser, and PerryNet SLIP/CRC firmware model still run inside WASM.
+
+For local use, install and start the relay:
+
+```bash
+npm --prefix web/relay ci
+PERRYFI_ORIGINS=http://localhost:8080 npm --prefix web/relay start
+```
+
+Then set **AUX > PerryFi > Relay endpoint** to
+`ws://127.0.0.1:1985/perryfi`. It can also be supplied without changing the
+saved value:
+
+```text
+http://localhost:8080/?perryfiRelay=ws%3A%2F%2F127.0.0.1%3A1985%2Fperryfi
+```
+
+For an HTTPS deployment, reverse-proxy `/perryfi` to the relay and set
+`PERRYFI_ORIGINS` to the exact public page origin. The default browser endpoint
+is then the same-origin `wss://.../perryfi`. A separately hosted relay can be
+entered in AUX, but it must use `wss://`; a static GitHub Pages deployment
+cannot provide the relay process itself.
+
+Relay configuration is supplied through environment variables:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PERRYFI_RELAY_HOST` | `127.0.0.1` | Listen address |
+| `PERRYFI_RELAY_PORT` | `1985` | Listen port |
+| `PERRYFI_RELAY_PATH` | `/perryfi` | WebSocket path |
+| `PERRYFI_ORIGINS` | local origins only | Comma-separated browser origins |
+| `PERRYFI_TOKEN` | unset | Optional token, supplied as `?token=...` on the endpoint |
+| `PERRYFI_TCP_PORTS` | `23,70,80,443,2323` | Permitted outbound TCP ports |
+| `PERRYFI_UDP_PORTS` | `123` | Permitted outbound UDP ports |
+
+The relay resolves hostnames itself and connects to the approved numeric
+address, rejects private, loopback, link-local, multicast, and documentation
+ranges, limits each browser to four channels, and bounds payloads, queued
+bytes, connection time, and idle time. UDP uses ephemeral local ports and only
+forwards replies from destinations previously contacted by that channel. Keep
+those restrictions in place when publishing it on the Internet.
 
 ## Server-hosted media
 

@@ -141,7 +141,10 @@ PerryFi attaches to that serial line and has two selectable models:
 Both modes are firmware simulations that use the host network; the emulator
 does not model an ESP8266 radio. AT settings are held for the current emulation
 session rather than persisted by `AT&W`. Host serial and PerryFi socket
-backends are not currently available in the Windows build.
+backends are not currently available in the Windows build. The WASM edition
+exposes PerryFi in its AUX expansion bay and carries its DNS, TCP, and UDP
+traffic through the separately deployed restricted WebSocket relay documented
+in [`web/README.md`](web/README.md).
 
 The Multilink option implements the probe ports and returns the standard
 "ring broken" response so Multilink-aware software can finish detection. It

@@ -43,12 +43,14 @@ typedef enum {
 
 typedef struct {
     bool open;
+    bool pending;
     bool pull_rx;
     int  fd;
 } PerryfiTcpChannel;
 
 typedef struct {
     bool open;
+    bool pending;
     int  fd;
     u16  local_port;
 } PerryfiUdpChannel;
@@ -94,6 +96,18 @@ typedef struct Perryfi {
     char   pn_ssid[64];
     PerryfiTcpChannel pn_tcp[PERRYNET_MAX_TCP];
     PerryfiUdpChannel pn_udp[PERRYNET_MAX_UDP];
+
+#ifdef __EMSCRIPTEN__
+    /* Guest requests whose browser relay operation is still in flight. */
+    bool web_dns_pending;
+    u8   web_dns_seq;
+    u8   web_dns_channel;
+    bool web_hayes_connecting;
+    u8   web_tcp_seq[PERRYNET_MAX_TCP];
+    u8   web_tcp_channel[PERRYNET_MAX_TCP];
+    u8   web_udp_seq[PERRYNET_MAX_UDP];
+    u8   web_udp_channel[PERRYNET_MAX_UDP];
+#endif
 } Perryfi;
 
 void perryfi_init    (Perryfi *p, bool enable, PerryfiMode mode);
@@ -107,3 +121,11 @@ void perryfi_poll(Perryfi *p);
 bool perryfi_rx_pop (Perryfi *p, u8 *out);
 bool perryfi_tx_push(Perryfi *p, u8 b);
 bool perryfi_rx_has (const Perryfi *p);
+
+#ifdef __EMSCRIPTEN__
+/* Completion entry points called by the browser bridge. */
+void perryfi_web_dns_result(Perryfi *p, u8 status, const u8 address[4]);
+void perryfi_web_tcp_open_result(Perryfi *p, int slot, u8 status,
+                                 const u8 address[4], u16 port);
+void perryfi_web_udp_open_result(Perryfi *p, int slot, u8 status, u16 port);
+#endif

@@ -36,6 +36,13 @@ const expansionBackdropEl = $("expansionBackdrop");
 const expansionCloseEl = $("expansionClose");
 const dksoundToggleEl = $("dksoundToggle");
 const dksoundStateEl = $("dksoundState");
+const perryfiToggleEl = $("perryfiToggle");
+const perryfiStateEl = $("perryfiState");
+const perryfiModeEls = [...document.querySelectorAll('input[name="perryfiMode"]')];
+const perryfiEndpointEl = $("perryfiEndpoint");
+const perryfiRelayStateEl = $("perryfiRelayState");
+const perryfiRelayStateWrapEl = perryfiRelayStateEl.closest(".relay-state");
+const perryfiBridge = globalThis.JS1985PerryfiBridge;
 const ctx = canvas.getContext("2d");
 const W = 720;
 const H = 256;
@@ -63,19 +70,36 @@ function showToast(message) {
 }
 
 const DKSOUND_STORAGE_KEY = "javascript1985.expansion.dksound";
+const PERRYFI_STORAGE_KEY = "javascript1985.expansion.perryfi";
+const PERRYFI_MODE_STORAGE_KEY = "javascript1985.expansion.perryfiMode";
+const PERRYFI_ENDPOINT_STORAGE_KEY = "javascript1985.expansion.perryfiEndpoint";
 let dksoundEnabled = false;
+let perryfiEnabled = false;
+let perryfiMode = 0;
+let perryfiEndpoint = perryfiBridge ? perryfiBridge.endpoint : "";
 let applyDksoundHardware = () => {};
+let applyPerryfiHardware = () => {};
 
 try {
   dksoundEnabled = localStorage.getItem(DKSOUND_STORAGE_KEY) === "true";
+  perryfiEnabled = localStorage.getItem(PERRYFI_STORAGE_KEY) === "true";
+  perryfiMode = localStorage.getItem(PERRYFI_MODE_STORAGE_KEY) === "1" ? 1 : 0;
+  const storedEndpoint = localStorage.getItem(PERRYFI_ENDPOINT_STORAGE_KEY);
+  if (storedEndpoint !== null) perryfiEndpoint = storedEndpoint;
 } catch (_) {
   // Keep optional hardware disconnected when storage is unavailable.
+}
+
+function updateExpansionIndicator() {
+  expansionButtonEl.classList.toggle(
+    "has-expansion", dksoundEnabled || perryfiEnabled
+  );
 }
 
 function updateDksoundUi() {
   dksoundToggleEl.checked = dksoundEnabled;
   dksoundStateEl.textContent = dksoundEnabled ? "Enabled" : "Disabled";
-  expansionButtonEl.classList.toggle("has-expansion", dksoundEnabled);
+  updateExpansionIndicator();
 }
 
 function setDksoundEnabled(enabled, persist = true, announce = false) {
@@ -89,6 +113,65 @@ function setDksoundEnabled(enabled, persist = true, announce = false) {
   }
   if (announce)
     showToast("DK'sound " + (dksoundEnabled ? "enabled" : "disabled"));
+}
+
+function updatePerryfiUi() {
+  perryfiToggleEl.checked = perryfiEnabled;
+  perryfiStateEl.textContent = perryfiEnabled ? "Enabled" : "Disabled";
+  for (const input of perryfiModeEls)
+    input.checked = Number(input.value) === perryfiMode;
+  updateExpansionIndicator();
+}
+
+function setPerryfiEnabled(enabled, persist = true, announce = false) {
+  perryfiEnabled = Boolean(enabled);
+  updatePerryfiUi();
+  applyPerryfiHardware(perryfiEnabled, perryfiMode);
+  if (persist) {
+    try {
+      localStorage.setItem(PERRYFI_STORAGE_KEY, String(perryfiEnabled));
+    } catch (_) {}
+  }
+  if (announce)
+    showToast("PerryFi " + (perryfiEnabled ? "enabled" : "disabled"));
+}
+
+function setPerryfiMode(mode, persist = true, announce = false) {
+  perryfiMode = Number(mode) === 1 ? 1 : 0;
+  updatePerryfiUi();
+  applyPerryfiHardware(perryfiEnabled, perryfiMode);
+  if (persist) {
+    try {
+      localStorage.setItem(PERRYFI_MODE_STORAGE_KEY, String(perryfiMode));
+    } catch (_) {}
+  }
+  if (announce)
+    showToast("PerryFi mode: " + (perryfiMode ? "TCP/IP" : "AT Hayes"));
+}
+
+function updatePerryfiRelayStatus(status, detail = "") {
+  const labels = {
+    disabled: "Relay disabled",
+    connecting: "Relay connecting",
+    online: "Relay online",
+    offline: "Relay offline",
+    error: "Relay error",
+  };
+  perryfiRelayStateWrapEl.dataset.state = status;
+  perryfiRelayStateEl.textContent = labels[status] || "Relay offline";
+  perryfiRelayStateEl.title = detail;
+}
+
+function applyPerryfiEndpoint(value, persist = true) {
+  perryfiEndpoint = value.trim();
+  const accepted = perryfiBridge && perryfiBridge.setEndpoint(perryfiEndpoint);
+  perryfiEndpointEl.setAttribute("aria-invalid", String(!accepted));
+  if (accepted && persist) {
+    try {
+      localStorage.setItem(PERRYFI_ENDPOINT_STORAGE_KEY, perryfiEndpoint);
+    } catch (_) {}
+  }
+  return accepted;
 }
 
 function expansionFocusableElements() {
@@ -142,8 +225,29 @@ document.addEventListener("keydown", event => {
 dksoundToggleEl.addEventListener("change", () => {
   setDksoundEnabled(dksoundToggleEl.checked, true, true);
 });
+perryfiToggleEl.addEventListener("change", () => {
+  setPerryfiEnabled(perryfiToggleEl.checked, true, true);
+});
+for (const input of perryfiModeEls) {
+  input.addEventListener("change", () => {
+    if (input.checked) setPerryfiMode(input.value, true, true);
+  });
+}
+perryfiEndpointEl.addEventListener("change", () => {
+  if (!applyPerryfiEndpoint(perryfiEndpointEl.value, true))
+    showToast("Invalid PerryFi relay endpoint");
+});
+
+try {
+  const queryEndpoint = new URLSearchParams(window.location.search).get("perryfiRelay");
+  if (queryEndpoint !== null) perryfiEndpoint = queryEndpoint;
+} catch (_) {}
+perryfiEndpointEl.value = perryfiEndpoint;
+applyPerryfiEndpoint(perryfiEndpoint, false);
+if (perryfiBridge) perryfiBridge.onStatus(updatePerryfiRelayStatus);
 setExpansionPanelOpen(false, false);
 updateDksoundUi();
+updatePerryfiUi();
 
 const THEMES = {
   "pcw8256": "PCW8256",
@@ -320,6 +424,25 @@ create1985().then(m => {
   };
   applyDksoundHardware(dksoundEnabled);
 
+  perryfiBridge.attachModule(m);
+  applyPerryfiHardware = (enabled, mode) => {
+    const expectedEnabled = Boolean(enabled);
+    const expectedMode = Number(mode) === 1 ? 1 : 0;
+    let actualEnabled = Boolean(m._poc_perryfi_enabled());
+    let actualMode = m._poc_perryfi_mode();
+    if (actualEnabled !== expectedEnabled || actualMode !== expectedMode) {
+      m._poc_set_perryfi(expectedEnabled ? 1 : 0, expectedMode);
+      actualEnabled = Boolean(m._poc_perryfi_enabled());
+      actualMode = m._poc_perryfi_mode();
+    }
+    if (actualEnabled !== perryfiEnabled || actualMode !== perryfiMode) {
+      perryfiEnabled = actualEnabled;
+      perryfiMode = actualMode;
+      updatePerryfiUi();
+    }
+  };
+  applyPerryfiHardware(perryfiEnabled, perryfiMode);
+
   function pressVirtualKey(scancode) {
     if (virtualKeys.has(scancode)) return;
     const alreadyPressed = heldKeys.has(scancode);
@@ -451,6 +574,7 @@ create1985().then(m => {
     currentModel = model;
     modelEl.value = String(model);
     applyDksoundHardware(dksoundEnabled);
+    applyPerryfiHardware(perryfiEnabled, perryfiMode);
     releaseAllJoy();
     clearDiskAUi();
     clearDiskBUi();

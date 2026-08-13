@@ -1,0 +1,17 @@
+{
+  "name": "1985-perryfi-relay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Restricted WebSocket to TCP/UDP relay for Javascript 1985 PerryFi",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "ws": "^8.21.3"
+  }
+}

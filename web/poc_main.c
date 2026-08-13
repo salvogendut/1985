@@ -11,6 +11,7 @@
  *   - poc_eject_disk_b(): eject drive B
  *   - poc_autorun():  queue paste command after a frame-counted boot delay
  *   - poc_set_dksound(): connect or disconnect the DK'tronics sound board
+ *   - poc_set_perryfi(): connect PerryFi in Hayes or PerryNet mode
  *   - poc_disk_activity(): bit mask for active drive A/B indicators
  *   - poc_audio_*():  ring-buffer access for beeper + AY audio (mono s16)
  *
@@ -33,6 +34,8 @@ static Paste g_paste;
 static int g_autorun_frames;
 static char g_autorun_command[256];
 static bool g_dksound_enabled;
+static bool g_perryfi_enabled;
+static PerryfiMode g_perryfi_mode = PERRYFI_MODE_HAYES;
 
 /* ---- audio ring buffer (mono s16, 4 seconds @ 44.1 kHz) ---- */
 #define AUDIO_RING_SAMPLES (44100 * 4)
@@ -85,6 +88,8 @@ static int poc_init_model_impl(int model) {
     }
     pcw_init(&g_pcw, m, memory_kb);
     aysound_init(&g_pcw.ay, g_dksound_enabled);
+    perryfi_init(&g_pcw.perryfi, g_perryfi_enabled, g_perryfi_mode);
+    cps_set_present(&g_pcw.cps, g_perryfi_enabled);
     beeper_set_audio_rate(&g_pcw.beeper, PCW_AUDIO_SAMPLE_RATE);
     return 0;
 }
@@ -197,6 +202,60 @@ EMSCRIPTEN_KEEPALIVE int poc_set_dksound(int enabled) {
 
 EMSCRIPTEN_KEEPALIVE int poc_dksound_enabled(void) {
     return g_pcw.ay.present ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE int poc_set_perryfi(int enabled, int mode) {
+    g_perryfi_enabled = enabled != 0;
+    g_perryfi_mode = mode == (int)PERRYFI_MODE_PERRYNET
+        ? PERRYFI_MODE_PERRYNET : PERRYFI_MODE_HAYES;
+    perryfi_shutdown(&g_pcw.perryfi);
+    perryfi_init(&g_pcw.perryfi, g_perryfi_enabled, g_perryfi_mode);
+    cps_set_present(&g_pcw.cps, g_perryfi_enabled);
+    return g_pcw.perryfi.present ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE int poc_perryfi_enabled(void) {
+    return g_pcw.perryfi.present ? 1 : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE int poc_perryfi_mode(void) {
+    return (int)g_pcw.perryfi.mode;
+}
+
+EMSCRIPTEN_KEEPALIVE void poc_perryfi_dns_result(int status,
+                                                 int a, int b, int c, int d) {
+    const u8 address[4] = { (u8)a, (u8)b, (u8)c, (u8)d };
+    perryfi_web_dns_result(&g_pcw.perryfi, (u8)status, address);
+}
+
+EMSCRIPTEN_KEEPALIVE void poc_perryfi_tcp_open_result(int slot, int status,
+                                                       int a, int b, int c, int d,
+                                                       int port) {
+    const u8 address[4] = { (u8)a, (u8)b, (u8)c, (u8)d };
+    perryfi_web_tcp_open_result(&g_pcw.perryfi, slot, (u8)status,
+                                address, (u16)port);
+}
+
+EMSCRIPTEN_KEEPALIVE void poc_perryfi_udp_open_result(int slot, int status,
+                                                       int port) {
+    perryfi_web_udp_open_result(&g_pcw.perryfi, slot, (u8)status, (u16)port);
+}
+
+/* Test hooks exercise the actual serial firmware protocol without needing
+ * to script guest DART register traffic. */
+EMSCRIPTEN_KEEPALIVE int poc_perryfi_serial_write(const u8 *data, int len) {
+    if (!data || len < 0) return -1;
+    for (int i = 0; i < len; i++)
+        if (!perryfi_tx_push(&g_pcw.perryfi, data[i])) return i;
+    return len;
+}
+
+EMSCRIPTEN_KEEPALIVE int poc_perryfi_serial_read(u8 *data, int max_len) {
+    if (!data || max_len < 0) return -1;
+    int count = 0;
+    while (count < max_len && perryfi_rx_pop(&g_pcw.perryfi, &data[count]))
+        count++;
+    return count;
 }
 
 EMSCRIPTEN_KEEPALIVE int poc_disk_motor(void) { return g_pcw.fdc.motor_on ? 1 : 0; }
