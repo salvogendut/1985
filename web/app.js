@@ -26,6 +26,8 @@ const toastEl = $("toast");
 const ledPowerEl = $("ledPower");
 const ledAEl = $("ledA");
 const ledBEl = $("ledB");
+const pcwDriveLedAEl = $("pcwDriveLedA");
+const pcwDriveLedBEl = $("pcwDriveLedB");
 const ledInputEl = $("ledInput");
 const ledAudioEl = $("ledAudio");
 const ctx = canvas.getContext("2d");
@@ -216,7 +218,7 @@ create1985().then(m => {
   let nextAudioStart = 0;
   let prevGamepad = null;
   let joyEnabled = true;
-  let ledStateA = 0;
+  let driveActivityState = -1;
   const heldKeys = new Set();
   const virtualKeys = new Set();
   const latchedVirtualModifiers = new Set();
@@ -693,12 +695,17 @@ create1985().then(m => {
     else showToast("Use a DSK disk image");
   });
 
-  function updateLed() {
-    const on = m._poc_disk_motor();
-    if (on !== ledStateA) {
-      ledStateA = on;
-      ledAEl.classList.toggle("on", Boolean(on));
-    }
+  function updateDriveLeds() {
+    const activity = m._poc_disk_activity();
+    if (activity === driveActivityState) return;
+    driveActivityState = activity;
+
+    const driveAActive = Boolean(activity & 0x01);
+    const driveBActive = Boolean(activity & 0x02);
+    ledAEl.classList.toggle("on", driveAActive);
+    ledBEl.classList.toggle("on", driveBActive);
+    pcwDriveLedAEl.classList.toggle("on", driveAActive);
+    pcwDriveLedBEl.classList.toggle("on", driveBActive);
   }
 
   let lastFrame = 0;
@@ -708,7 +715,7 @@ create1985().then(m => {
       lastFrame += 20;
       scheduleAudio();
       pollGamepad();
-      updateLed();
+      updateDriveLeds();
     }
 
     const pixels = m.HEAPU32.subarray(framebuffer >> 2, (framebuffer >> 2) + W * H);

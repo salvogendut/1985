@@ -10,7 +10,7 @@
  *   - poc_eject_disk(): eject drive A
  *   - poc_eject_disk_b(): eject drive B
  *   - poc_autorun():  queue paste command after a frame-counted boot delay
- *   - poc_disk_motor(): drive A motor activity indicator
+ *   - poc_disk_activity(): bit mask for active drive A/B indicators
  *   - poc_audio_*():  ring-buffer access for beeper + AY audio (mono s16)
  *
  * No SDL runtime is used — the browser reads the framebuffer and the audio
@@ -185,5 +185,9 @@ EMSCRIPTEN_KEEPALIVE void poc_joy(int col, int pressed) {
 }
 
 EMSCRIPTEN_KEEPALIVE int poc_disk_motor(void) { return g_pcw.fdc.motor_on ? 1 : 0; }
+EMSCRIPTEN_KEEPALIVE int poc_disk_activity(void) {
+    if (!g_pcw.fdc.motor_on) return 0;
+    return 1 << g_pcw.fdc.cur_unit;
+}
 EMSCRIPTEN_KEEPALIVE int poc_width(void)  { return DISPLAY_W; }
 EMSCRIPTEN_KEEPALIVE int poc_height(void) { return DISPLAY_H; }

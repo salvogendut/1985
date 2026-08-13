@@ -239,55 +239,88 @@ html[data-theme="pcw8256"] .pcw-monitor-label span {
 html[data-theme="pcw8256"] .pcw-drive-fascia {
   position: absolute;
   top: 54px;
-  right: 36px;
+  right: 28px;
   bottom: 108px;
-  display: flex;
-  width: 72px;
-  min-height: 220px;
-  padding: 13px 9px 11px;
-  flex-direction: column;
-  justify-content: flex-end;
-  border: 3px solid #9d998f;
-  color: #d7d9d2;
-  background: #171a17;
-  box-shadow: inset 0 0 0 2px #050605, 0 1px #e7e4da;
+  display: grid;
+  width: 94px;
+  min-height: 320px;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+html[data-theme="pcw8256"] .pcw-floppy-drive {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  border: 3px solid #aaa69b;
+  background: linear-gradient(90deg, #111411, #1d211d 58%, #111411);
+  box-shadow:
+    inset 0 0 0 2px #050605,
+    inset 0 0 16px rgba(0,0,0,.82),
+    0 1px #e4e1d7;
 }
 
 html[data-theme="pcw8256"] .pcw-drive-slot {
   position: absolute;
-  top: 15px;
-  right: 12px;
-  left: 12px;
-  height: 102px;
-  border: 2px solid #050605;
-  background:
-    linear-gradient(90deg, transparent 10%, #050605 11% 15%, transparent 16% 84%, #050605 85% 89%, transparent 90%),
-    linear-gradient(#292c29, #0b0d0b);
-  box-shadow: inset 0 0 10px #000, 0 1px #4d514b;
+  top: 23%;
+  bottom: 13%;
+  left: 25%;
+  width: 5px;
+  border-left: 2px solid #030403;
+  border-right: 1px solid #383c36;
+  background: #080a08;
+  box-shadow: inset 1px 0 2px #000;
 }
 
 html[data-theme="pcw8256"] .pcw-drive-slot::after {
   position: absolute;
-  right: 3px;
-  bottom: 7px;
-  width: 5px;
+  bottom: 0;
+  left: -2px;
+  width: 34px;
   height: 5px;
   content: "";
-  background: #bf4038;
-  box-shadow: 0 0 4px rgba(191,64,56,.8);
+  border-top: 2px solid #030403;
+  border-bottom: 1px solid #383c36;
+  background: #080a08;
+  box-shadow: inset 0 1px 2px #000;
 }
 
-html[data-theme="pcw8256"] .pcw-drive-fascia b {
-  color: #73da89;
-  font: 800 10px/1.05 Arial, Helvetica, sans-serif;
+html[data-theme="pcw8256"] .pcw-drive-eject {
+  position: absolute;
+  top: 10%;
+  right: 12%;
+  width: 13px;
+  height: 21%;
+  border: 2px solid #060706;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #181b18, #292d28 48%, #101210);
+  box-shadow: inset 0 1px #3d413b, 1px 1px 2px #000;
 }
 
-html[data-theme="pcw8256"] .pcw-drive-fascia small {
-  margin-top: 11px;
-  padding-top: 9px;
-  border-top: 2px solid #5aca71;
-  color: #c3c7be;
-  font: 700 7px/1.15 Arial, Helvetica, sans-serif;
+html[data-theme="pcw8256"] .pcw-drive-letter {
+  position: absolute;
+  bottom: 8%;
+  left: 9%;
+  color: #676d65;
+  font: 800 8px/1 Arial, Helvetica, sans-serif;
+}
+
+html[data-theme="pcw8256"] .pcw-drive-led {
+  position: absolute;
+  right: 10%;
+  bottom: 8%;
+  width: 7px;
+  height: 7px;
+  border: 1px solid #050605;
+  border-radius: 1px;
+  background: #17341c;
+  box-shadow: inset 0 1px 2px #030503;
+  transition: background .08s, box-shadow .08s;
+}
+
+html[data-theme="pcw8256"] .pcw-drive-led.on {
+  background: #6ee188;
+  box-shadow: 0 0 7px rgba(89,222,116,.9), inset 0 0 2px #e8ffed;
 }
 
 html[data-theme="pcw8256"] .screen-brand {
@@ -749,9 +782,10 @@ html[data-theme="pcw8256"] .toast {
   }
 
   html[data-theme="pcw8256"] .pcw-drive-fascia {
-    right: 27px;
+    right: 22px;
     bottom: 98px;
-    width: 62px;
+    width: 78px;
+    gap: 8px;
   }
 
   html[data-theme="pcw8256"] .screen-brand {
@@ -784,25 +818,29 @@ html[data-theme="pcw8256"] .toast {
 
   html[data-theme="pcw8256"] .pcw-drive-fascia {
     top: 48px;
-    right: 17px;
+    right: 14px;
     bottom: 88px;
-    width: 54px;
+    width: 62px;
     min-height: 150px;
-    padding-inline: 6px;
+    gap: 6px;
   }
 
-  html[data-theme="pcw8256"] .pcw-drive-slot {
-    right: 8px;
-    left: 8px;
-    height: 72px;
+  html[data-theme="pcw8256"] .pcw-drive-eject {
+    width: 9px;
+    border-width: 1px;
   }
 
-  html[data-theme="pcw8256"] .pcw-drive-fascia b {
-    font-size: 8px;
+  html[data-theme="pcw8256"] .pcw-drive-slot::after {
+    width: 23px;
   }
 
-  html[data-theme="pcw8256"] .pcw-drive-fascia small {
+  html[data-theme="pcw8256"] .pcw-drive-letter {
     font-size: 6px;
+  }
+
+  html[data-theme="pcw8256"] .pcw-drive-led {
+    width: 5px;
+    height: 5px;
   }
 
   html[data-theme="pcw8256"] .screen-frame {
