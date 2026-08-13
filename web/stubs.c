@@ -1,7 +1,7 @@
 /* Stubs for host-dependent modules excluded from the WASM POC build.
  *
  * Replaces SDL-dependent display, LEDs, overlay, monitor, printer,
- * serial, CPS, PerryFi, pilot, web GUI, video capture, Multilink,
+ * serial, pilot, web GUI, video capture, Multilink,
  * and PCW mouse with no-op implementations that satisfy the linker.
  *
  * Only symbols actually called from the compiled core modules
@@ -14,8 +14,6 @@
 #include "leds.h"
 #include "printer.h"
 #include "serial.h"
-#include "cps.h"
-#include "perryfi.h"
 #include "multilink.h"
 #include "pcwmouse.h"
 
@@ -26,8 +24,6 @@ int cpc_frame_count  = 0;
 #include "leds.h"
 #include "printer.h"
 #include "serial.h"
-#include "cps.h"
-#include "perryfi.h"
 #include "multilink.h"
 #include "pcwmouse.h"
 
@@ -105,26 +101,6 @@ void serial_poll(Serial *s) { (void)s; }
 bool serial_rx_pop(Serial *s, u8 *out) { (void)s; (void)out; return false; }
 bool serial_tx_push(Serial *s, u8 b) { (void)s; (void)b; return false; }
 bool serial_rx_has(const Serial *s) { (void)s; return false; }
-
-/* ---- cps (pcw_init calls cps_init; pcw_reset calls cps_reset) ---- */
-void cps_init(Cps *c, bool present, struct Serial *serial,
-              struct Perryfi *perryfi, struct Printer *printer) {
-    (void)c; (void)present; (void)serial; (void)perryfi; (void)printer;
-}
-void cps_reset(Cps *c) { (void)c; }
-void cps_set_present(Cps *c, bool present) { (void)c; (void)present; }
-u8 cps_read(Cps *c, u8 lo) { (void)c; (void)lo; return 0xFF; }
-void cps_write(Cps *c, u8 lo, u8 val) { (void)c; (void)lo; (void)val; }
-
-/* ---- perryfi (pcw_init calls perryfi_init) ---- */
-void perryfi_init(Perryfi *p, bool enable, PerryfiMode mode) {
-    (void)p; (void)enable; (void)mode;
-}
-void perryfi_shutdown(Perryfi *p) { (void)p; }
-void perryfi_poll(Perryfi *p) { (void)p; }
-bool perryfi_rx_pop(Perryfi *p, u8 *out) { (void)p; (void)out; return false; }
-bool perryfi_tx_push(Perryfi *p, u8 b) { (void)p; (void)b; return false; }
-bool perryfi_rx_has(const Perryfi *p) { (void)p; return false; }
 
 /* ---- multilink (pcw_init calls multilink_init; pcw_reset calls multilink_reset) ---- */
 void multilink_init(Multilink *m) { (void)m; }

@@ -25,6 +25,46 @@
   </header>
 
   <div class="expansion-device-list">
+    <section class="expansion-device perryfi-device" aria-labelledby="perryfiTitle">
+      <div class="expansion-device-heading">
+        <span class="expansion-device-mark" aria-hidden="true">NET</span>
+        <div>
+          <h3 id="perryfiTitle">PerryFi</h3>
+          <span>CPS8256 WiFi modem</span>
+        </div>
+      </div>
+      <div class="expansion-device-controls">
+        <label class="toggle-control expansion-device-toggle">
+          <input type="checkbox" id="perryfiToggle">
+          <span class="toggle-track"><i></i></span>
+          <span><strong>Board power</strong><small id="perryfiState" aria-live="polite">Disabled</small></span>
+        </label>
+        <fieldset class="expansion-mode-field">
+          <legend>Device model</legend>
+          <div class="segmented-control">
+            <label>
+              <input type="radio" name="perryfiMode" value="0" checked>
+              <span>AT Hayes</span>
+            </label>
+            <label>
+              <input type="radio" name="perryfiMode" value="1">
+              <span>TCP/IP</span>
+            </label>
+          </div>
+        </fieldset>
+        <label class="expansion-text-field" for="perryfiEndpoint">
+          <span>Relay endpoint</span>
+          <input id="perryfiEndpoint" type="url" inputmode="url"
+                 autocomplete="off" spellcheck="false"
+                 placeholder="wss://host/perryfi">
+        </label>
+        <div class="relay-state" aria-live="polite">
+          <i id="perryfiRelayLamp" aria-hidden="true"></i>
+          <span id="perryfiRelayState">Relay disabled</span>
+        </div>
+      </div>
+    </section>
+
     <section class="expansion-device" aria-labelledby="dksoundTitle">
       <div class="expansion-device-heading">
         <span class="expansion-device-mark" aria-hidden="true">AY</span>
@@ -347,6 +387,8 @@
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script src="gamepad.js"></script>
 <script src="media-url.js"></script>
+<script src="perryfi-relay-protocol.js"></script>
+<script src="perryfi-bridge.js"></script>
 <script src="1985.js"></script>
 <script src="app.js"></script>
 </body>

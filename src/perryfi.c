@@ -21,7 +21,8 @@
 #include <string.h>
 #include <time.h>
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__EMSCRIPTEN__)
+#define PERRYFI_POSIX 1
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -38,6 +39,10 @@
 #ifndef MSG_NOSIGNAL
 #define MSG_NOSIGNAL 0
 #endif
+#endif
+
+#ifdef __EMSCRIPTEN__
+#include "perryfi_web.h"
 #endif
 
 #define MASK (PERRYFI_RING - 1)
@@ -82,6 +87,7 @@ enum {
     PN_STATUS_CONNECT_FAILED = 0x07,
     PN_STATUS_IO_ERROR       = 0x08,
     PN_STATUS_UNSUPPORTED    = 0x09,
+    PN_STATUS_BUSY           = 0x0A,
     PN_STATUS_BAD_ARGUMENT   = 0x0B,
 };
 
@@ -150,14 +156,19 @@ static void send_result(Perryfi *p, Result r) {
 /* TCP client                                                       */
 
 static void tcp_close(Perryfi *p) {
-#ifndef _WIN32
+#ifdef PERRYFI_POSIX
     if (p->tcp_fd >= 0) { close(p->tcp_fd); p->tcp_fd = -1; }
+#elif defined(__EMSCRIPTEN__)
+    if (p->tcp_fd >= 0 || p->web_hayes_connecting)
+        perryfi_web_tcp_close(0);
+    p->tcp_fd = -1;
+    p->web_hayes_connecting = false;
 #endif
     p->remote_host[0] = 0;
     p->remote_port    = 0;
 }
 
-#ifndef _WIN32
+#ifdef PERRYFI_POSIX
 static int tcp_dial(Perryfi *p, const char *host, int port) {
     char portstr[16]; snprintf(portstr, sizeof(portstr), "%d", port);
     struct addrinfo hints, *res = NULL;
@@ -245,13 +256,24 @@ static void exec_at(Perryfi *p, char *cmd) {
                 snprintf(host, sizeof(host), "%s", s);
             }
             if (!host[0] || port <= 0) { send_result(p, RC_ERROR); return; }
-#ifndef _WIN32
+#ifdef PERRYFI_POSIX
             if (tcp_dial(p, host, port) < 0) {
                 send_result(p, RC_NO_CARRIER); return;
             }
             p->state = PERRYFI_STATE_ONLINE;
             p->esc_count = 0;
             send_result(p, RC_CONNECT);
+#elif defined(__EMSCRIPTEN__)
+            tcp_close(p);
+            snprintf(p->remote_host, sizeof(p->remote_host), "%s", host);
+            p->remote_port = port;
+            perryfi_web_connect();
+            if (!perryfi_web_tcp_open(0, host, (u16)port, 0x01)) {
+                tcp_close(p);
+                send_result(p, RC_NO_CARRIER);
+                return;
+            }
+            p->web_hayes_connecting = true;
 #else
             send_result(p, RC_NO_CARRIER);
 #endif
@@ -423,11 +445,15 @@ static size_t pn_wifi_status_payload(const Perryfi *p, u8 *buf) {
 
 static void pn_tcp_close(Perryfi *p, int idx) {
     if (idx < 0 || idx >= PERRYNET_MAX_TCP) return;
-#ifndef _WIN32
+#ifdef PERRYFI_POSIX
     if (p->pn_tcp[idx].open && p->pn_tcp[idx].fd >= 0)
         close(p->pn_tcp[idx].fd);
+#elif defined(__EMSCRIPTEN__)
+    if (p->pn_tcp[idx].open || p->pn_tcp[idx].pending)
+        perryfi_web_tcp_close(idx);
 #endif
     p->pn_tcp[idx].open = false;
+    p->pn_tcp[idx].pending = false;
     p->pn_tcp[idx].pull_rx = false;
     p->pn_tcp[idx].fd = -1;
 }
@@ -439,11 +465,15 @@ static void pn_tcp_close_all(Perryfi *p) {
 
 static void pn_udp_close(Perryfi *p, int idx) {
     if (idx < 0 || idx >= PERRYNET_MAX_UDP) return;
-#ifndef _WIN32
+#ifdef PERRYFI_POSIX
     if (p->pn_udp[idx].open && p->pn_udp[idx].fd >= 0)
         close(p->pn_udp[idx].fd);
+#elif defined(__EMSCRIPTEN__)
+    if (p->pn_udp[idx].open || p->pn_udp[idx].pending)
+        perryfi_web_udp_close(idx);
 #endif
     p->pn_udp[idx].open = false;
+    p->pn_udp[idx].pending = false;
     p->pn_udp[idx].fd = -1;
     p->pn_udp[idx].local_port = 0;
 }
@@ -467,17 +497,19 @@ static int pn_udp_slot(const Perryfi *p, u8 channel) {
 
 static int pn_tcp_free_slot(const Perryfi *p) {
     for (int i = 0; i < PERRYNET_MAX_TCP; i++)
-        if (!p->pn_tcp[i].open && !p->pn_udp[i].open) return i;
+        if (!p->pn_tcp[i].open && !p->pn_tcp[i].pending &&
+            !p->pn_udp[i].open && !p->pn_udp[i].pending) return i;
     return -1;
 }
 
 static int pn_udp_free_slot(const Perryfi *p) {
     for (int i = 0; i < PERRYNET_MAX_UDP; i++)
-        if (!p->pn_tcp[i].open && !p->pn_udp[i].open) return i;
+        if (!p->pn_tcp[i].open && !p->pn_tcp[i].pending &&
+            !p->pn_udp[i].open && !p->pn_udp[i].pending) return i;
     return -1;
 }
 
-#ifndef _WIN32
+#ifdef PERRYFI_POSIX
 static int pn_tcp_open(Perryfi *p, int idx, const char *host, u16 port,
                        u8 flags, u8 *local_ip, u16 *local_port) {
     char portstr[8];
@@ -578,10 +610,18 @@ static int pn_udp_open(Perryfi *p, int idx, u16 local_port, u16 *actual_port) {
 static void pn_reset(Perryfi *p, bool ready_event) {
     pn_tcp_close_all(p);
     pn_udp_close_all(p);
+#ifdef __EMSCRIPTEN__
+    perryfi_web_reset_channels();
+    p->web_dns_pending = false;
+#endif
     p->pn_len = 0;
     p->pn_escaped = false;
     p->pn_drop = false;
+#ifdef __EMSCRIPTEN__
+    p->pn_wifi_connected = perryfi_web_connected() != 0;
+#else
     p->pn_wifi_connected = true;
+#endif
     p->pn_pass_set = false;
     snprintf(p->pn_ssid, sizeof(p->pn_ssid), "1985");
     if (ready_event)
@@ -670,14 +710,23 @@ static void pn_handle_frame(Perryfi *p, const u8 *body, size_t body_len) {
             return;
         }
         case PN_OP_WIFI_CONNECT:
+#ifdef __EMSCRIPTEN__
+            perryfi_web_connect();
+            p->pn_wifi_connected = perryfi_web_connected() != 0;
+#else
             p->pn_wifi_connected = true;
+#endif
             pn_send_ack(p, seq, channel, PN_STATUS_OK, NULL, 0);
-            pn_ack_wifi_up(p);
+            if (p->pn_wifi_connected)
+                pn_ack_wifi_up(p);
             return;
         case PN_OP_WIFI_DISCONNECT:
             p->pn_wifi_connected = false;
             pn_tcp_close_all(p);
             pn_udp_close_all(p);
+#ifdef __EMSCRIPTEN__
+            perryfi_web_wifi_disconnect();
+#endif
             pn_send_ack(p, seq, channel, PN_STATUS_OK, NULL, 0);
             pn_send_event(p, 0, PN_EVT_WIFI_DOWN, NULL, 0);
             return;
@@ -697,7 +746,7 @@ static void pn_handle_frame(Perryfi *p, const u8 *body, size_t body_len) {
                 pn_send_ack(p, seq, channel, PN_STATUS_WIFI_DOWN, NULL, 0);
                 return;
             }
-#ifndef _WIN32
+#ifdef PERRYFI_POSIX
             char host[128];
             memcpy(host, payload, payload_len);
             host[payload_len] = '\0';
@@ -714,6 +763,21 @@ static void pn_handle_frame(Perryfi *p, const u8 *body, size_t body_len) {
             memcpy(response, &sa->sin_addr.s_addr, 4);
             freeaddrinfo(res);
             pn_send_ack(p, seq, channel, PN_STATUS_OK, response, 4);
+#elif defined(__EMSCRIPTEN__)
+            if (p->web_dns_pending) {
+                pn_send_ack(p, seq, channel, PN_STATUS_BUSY, NULL, 0);
+                return;
+            }
+            char host[128];
+            memcpy(host, payload, payload_len);
+            host[payload_len] = '\0';
+            p->web_dns_pending = true;
+            p->web_dns_seq = seq;
+            p->web_dns_channel = channel;
+            if (!perryfi_web_dns(host)) {
+                p->web_dns_pending = false;
+                pn_send_ack(p, seq, channel, PN_STATUS_CONNECT_FAILED, NULL, 0);
+            }
 #else
             pn_send_ack(p, seq, channel, PN_STATUS_UNSUPPORTED, NULL, 0);
 #endif
@@ -748,7 +812,7 @@ static void pn_handle_frame(Perryfi *p, const u8 *body, size_t body_len) {
                 pn_send_ack(p, seq, channel, PN_STATUS_BAD_ARGUMENT, NULL, 0);
                 return;
             }
-#ifndef _WIN32
+#ifdef PERRYFI_POSIX
             u8 local_ip[4] = { 192, 168, 198, 5 };
             u16 local_port = 0;
             if (pn_tcp_open(p, slot, host, port, flags, local_ip, &local_port) < 0) {
@@ -760,6 +824,16 @@ static void pn_handle_frame(Perryfi *p, const u8 *body, size_t body_len) {
             response_len += 4;
             pn_append_u16(response, &response_len, local_port);
             pn_send_ack(p, seq, channel, PN_STATUS_OK, response, response_len);
+#elif defined(__EMSCRIPTEN__)
+            p->pn_tcp[slot].pending = true;
+            p->pn_tcp[slot].pull_rx = (flags & 0x02) != 0;
+            p->web_tcp_seq[slot] = seq;
+            p->web_tcp_channel[slot] = channel;
+            if (!perryfi_web_tcp_open(slot, host, port, flags)) {
+                p->pn_tcp[slot].pending = false;
+                p->pn_tcp[slot].pull_rx = false;
+                pn_send_ack(p, seq, channel, PN_STATUS_CONNECT_FAILED, NULL, 0);
+            }
 #else
             pn_send_ack(p, seq, channel, PN_STATUS_UNSUPPORTED, NULL, 0);
 #endif
@@ -781,7 +855,7 @@ static void pn_handle_frame(Perryfi *p, const u8 *body, size_t body_len) {
                 pn_send_ack(p, seq, channel, PN_STATUS_BAD_CHANNEL, NULL, 0);
                 return;
             }
-#ifndef _WIN32
+#ifdef PERRYFI_POSIX
             if (payload_len > 0) {
                 ssize_t n = send(p->pn_tcp[slot].fd, payload, payload_len,
                                  MSG_NOSIGNAL);
@@ -792,6 +866,16 @@ static void pn_handle_frame(Perryfi *p, const u8 *body, size_t body_len) {
                                   (const u8[]){ PN_STATUS_IO_ERROR }, 1);
                     return;
                 }
+            }
+            pn_send_ack(p, seq, channel, PN_STATUS_OK, NULL, 0);
+#elif defined(__EMSCRIPTEN__)
+            if (payload_len > 0 &&
+                !perryfi_web_tcp_send(slot, payload, payload_len)) {
+                pn_tcp_close(p, slot);
+                pn_send_ack(p, seq, channel, PN_STATUS_IO_ERROR, NULL, 0);
+                pn_send_event(p, channel, PN_EVT_TCP_ERROR,
+                              (const u8[]){ PN_STATUS_IO_ERROR }, 1);
+                return;
             }
             pn_send_ack(p, seq, channel, PN_STATUS_OK, NULL, 0);
 #else
@@ -809,7 +893,7 @@ static void pn_handle_frame(Perryfi *p, const u8 *body, size_t body_len) {
                 pn_send_ack(p, seq, channel, PN_STATUS_BAD_LENGTH, NULL, 0);
                 return;
             }
-#ifndef _WIN32
+#ifdef PERRYFI_POSIX
             size_t max_len = PN_TCP_READ_MAX;
             if (payload_len == 2)
                 max_len = pn_read_u16(payload);
@@ -836,6 +920,29 @@ static void pn_handle_frame(Perryfi *p, const u8 *body, size_t body_len) {
             pn_tcp_close(p, slot);
             pn_send_event(p, channel, PN_EVT_TCP_ERROR,
                           (const u8[]){ PN_STATUS_IO_ERROR }, 1);
+#elif defined(__EMSCRIPTEN__)
+            size_t max_len = PN_TCP_READ_MAX;
+            if (payload_len == 2)
+                max_len = pn_read_u16(payload);
+            if (max_len > PERRYNET_MAX_PAYLOAD - 1)
+                max_len = PERRYNET_MAX_PAYLOAD - 1;
+            int n = max_len > 0
+                ? perryfi_web_tcp_read(slot, response, max_len) : 0;
+            if (n >= 0) {
+                pn_send_ack(p, seq, channel, PN_STATUS_OK,
+                            response, (size_t)n);
+                return;
+            }
+            if (n == -1) {
+                pn_send_ack(p, seq, channel, PN_STATUS_OK, NULL, 0);
+                pn_tcp_close(p, slot);
+                pn_send_event(p, channel, PN_EVT_TCP_CLOSED, NULL, 0);
+                return;
+            }
+            pn_send_ack(p, seq, channel, PN_STATUS_IO_ERROR, NULL, 0);
+            pn_tcp_close(p, slot);
+            pn_send_event(p, channel, PN_EVT_TCP_ERROR,
+                          (const u8[]){ PN_STATUS_IO_ERROR }, 1);
 #else
             pn_send_ack(p, seq, channel, PN_STATUS_UNSUPPORTED, NULL, 0);
 #endif
@@ -855,7 +962,7 @@ static void pn_handle_frame(Perryfi *p, const u8 *body, size_t body_len) {
                 pn_send_ack(p, seq, channel, PN_STATUS_NO_SLOT, NULL, 0);
                 return;
             }
-#ifndef _WIN32
+#ifdef PERRYFI_POSIX
             u16 local_port = pn_read_u16(payload);
             u16 actual_port = 0;
             if (pn_udp_open(p, slot, local_port, &actual_port) < 0) {
@@ -865,6 +972,15 @@ static void pn_handle_frame(Perryfi *p, const u8 *body, size_t body_len) {
             response[response_len++] = (u8)(slot + 1);
             pn_append_u16(response, &response_len, actual_port);
             pn_send_ack(p, seq, channel, PN_STATUS_OK, response, response_len);
+#elif defined(__EMSCRIPTEN__)
+            u16 local_port = pn_read_u16(payload);
+            p->pn_udp[slot].pending = true;
+            p->web_udp_seq[slot] = seq;
+            p->web_udp_channel[slot] = channel;
+            if (!perryfi_web_udp_open(slot, local_port)) {
+                p->pn_udp[slot].pending = false;
+                pn_send_ack(p, seq, channel, PN_STATUS_IO_ERROR, NULL, 0);
+            }
 #else
             pn_send_ack(p, seq, channel, PN_STATUS_UNSUPPORTED, NULL, 0);
 #endif
@@ -895,7 +1011,7 @@ static void pn_handle_frame(Perryfi *p, const u8 *body, size_t body_len) {
                 pn_send_ack(p, seq, channel, PN_STATUS_BAD_ARGUMENT, NULL, 0);
                 return;
             }
-#ifndef _WIN32
+#ifdef PERRYFI_POSIX
             struct sockaddr_in remote;
             memset(&remote, 0, sizeof(remote));
             remote.sin_family = AF_INET;
@@ -905,6 +1021,15 @@ static void pn_handle_frame(Perryfi *p, const u8 *body, size_t body_len) {
                                (size_t)(payload_len - 6), 0,
                                (struct sockaddr *)&remote, sizeof(remote));
             if (n < 0 || (size_t)n != (size_t)(payload_len - 6)) {
+                pn_send_ack(p, seq, channel, PN_STATUS_IO_ERROR, NULL, 0);
+                pn_send_event(p, channel, PN_EVT_UDP_ERROR,
+                              (const u8[]){ PN_STATUS_IO_ERROR }, 1);
+                return;
+            }
+            pn_send_ack(p, seq, channel, PN_STATUS_OK, NULL, 0);
+#elif defined(__EMSCRIPTEN__)
+            if (!perryfi_web_udp_send(slot, payload, port,
+                                      payload + 6, payload_len - 6)) {
                 pn_send_ack(p, seq, channel, PN_STATUS_IO_ERROR, NULL, 0);
                 pn_send_event(p, channel, PN_EVT_UDP_ERROR,
                               (const u8[]){ PN_STATUS_IO_ERROR }, 1);
@@ -988,7 +1113,7 @@ static bool perrynet_tx_push(Perryfi *p, u8 b) {
 }
 
 static void perrynet_poll(Perryfi *p) {
-#ifndef _WIN32
+#ifdef PERRYFI_POSIX
     for (int i = 0; i < PERRYNET_MAX_TCP; i++) {
         if (!p->pn_tcp[i].open || p->pn_tcp[i].fd < 0) continue;
         if (p->pn_tcp[i].pull_rx) continue;
@@ -1042,10 +1167,142 @@ static void perrynet_poll(Perryfi *p) {
             break;
         }
     }
+#elif defined(__EMSCRIPTEN__)
+    bool connected = perryfi_web_connected() != 0;
+    if (connected != p->pn_wifi_connected) {
+        p->pn_wifi_connected = connected;
+        if (connected) {
+            pn_ack_wifi_up(p);
+        } else {
+            pn_tcp_close_all(p);
+            pn_udp_close_all(p);
+            pn_send_event(p, 0, PN_EVT_WIFI_DOWN, NULL, 0);
+        }
+    }
+
+    for (int i = 0; i < PERRYNET_MAX_TCP; i++) {
+        if (!p->pn_tcp[i].open || p->pn_tcp[i].pull_rx) continue;
+        if (rb_space(p->rx_head, p->rx_tail) < (PN_TCP_READ_MAX * 2 + 16))
+            break;
+
+        u8 payload[PN_TCP_READ_MAX];
+        int n = perryfi_web_tcp_read(i, payload, sizeof(payload));
+        if (n > 0) {
+            pn_send_frame(p, PN_OP_TCP_DATA, 0, (u8)(i + 1),
+                          payload, (size_t)n);
+        } else if (n == -1) {
+            pn_tcp_close(p, i);
+            pn_send_event(p, (u8)(i + 1), PN_EVT_TCP_CLOSED, NULL, 0);
+        } else if (n < -1) {
+            pn_tcp_close(p, i);
+            pn_send_event(p, (u8)(i + 1), PN_EVT_TCP_ERROR,
+                          (const u8[]){ PN_STATUS_IO_ERROR }, 1);
+        }
+    }
+
+    for (int i = 0; i < PERRYNET_MAX_UDP; i++) {
+        if (!p->pn_udp[i].open) continue;
+
+        for (int packet = 0; packet < 4; packet++) {
+            if (rb_space(p->rx_head, p->rx_tail) < (PN_UDP_READ_MAX * 2 + 32))
+                return;
+            u8 payload[6 + PN_UDP_READ_MAX];
+            u16 remote_port = 0;
+            int n = perryfi_web_udp_read(i, payload, &remote_port,
+                                         payload + 6, PN_UDP_READ_MAX);
+            if (n > 0) {
+                payload[4] = (u8)(remote_port & 0xFF);
+                payload[5] = (u8)(remote_port >> 8);
+                pn_send_frame(p, PN_OP_UDP_DATA, 0, (u8)(i + 1),
+                              payload, (size_t)n + 6);
+                continue;
+            }
+            if (n < 0) {
+                pn_udp_close(p, i);
+                pn_send_event(p, (u8)(i + 1), PN_EVT_UDP_ERROR,
+                              (const u8[]){ PN_STATUS_IO_ERROR }, 1);
+            }
+            break;
+        }
+    }
 #else
     (void)p;
 #endif
 }
+
+#ifdef __EMSCRIPTEN__
+void perryfi_web_dns_result(Perryfi *p, u8 status, const u8 address[4]) {
+    if (!p->present || p->mode != PERRYFI_MODE_PERRYNET ||
+        !p->web_dns_pending) return;
+    p->web_dns_pending = false;
+    pn_send_ack(p, p->web_dns_seq, p->web_dns_channel, status,
+                status == PN_STATUS_OK ? address : NULL,
+                status == PN_STATUS_OK ? 4 : 0);
+}
+
+void perryfi_web_tcp_open_result(Perryfi *p, int slot, u8 status,
+                                 const u8 address[4], u16 port) {
+    if (!p->present || slot < 0 || slot >= PERRYNET_MAX_TCP) return;
+
+    if (p->mode == PERRYFI_MODE_HAYES) {
+        if (slot != 0 || !p->web_hayes_connecting) return;
+        p->web_hayes_connecting = false;
+        if (status == PN_STATUS_OK) {
+            p->tcp_fd = 0; /* Browser channel 0 is live. */
+            p->state = PERRYFI_STATE_ONLINE;
+            p->esc_count = 0;
+            send_result(p, RC_CONNECT);
+        } else {
+            tcp_close(p);
+            p->state = PERRYFI_STATE_CMD;
+            send_result(p, RC_NO_CARRIER);
+        }
+        return;
+    }
+
+    if (!p->pn_tcp[slot].pending) return;
+    p->pn_tcp[slot].pending = false;
+    if (status != PN_STATUS_OK) {
+        p->pn_tcp[slot].pull_rx = false;
+        pn_send_ack(p, p->web_tcp_seq[slot], p->web_tcp_channel[slot],
+                    status, NULL, 0);
+        return;
+    }
+
+    p->pn_tcp[slot].open = true;
+    p->pn_tcp[slot].fd = slot;
+    u8 response[7];
+    size_t response_len = 0;
+    response[response_len++] = (u8)(slot + 1);
+    memcpy(response + response_len, address, 4);
+    response_len += 4;
+    pn_append_u16(response, &response_len, port);
+    pn_send_ack(p, p->web_tcp_seq[slot], p->web_tcp_channel[slot],
+                PN_STATUS_OK, response, response_len);
+}
+
+void perryfi_web_udp_open_result(Perryfi *p, int slot, u8 status, u16 port) {
+    if (!p->present || p->mode != PERRYFI_MODE_PERRYNET ||
+        slot < 0 || slot >= PERRYNET_MAX_UDP ||
+        !p->pn_udp[slot].pending) return;
+    p->pn_udp[slot].pending = false;
+    if (status != PN_STATUS_OK) {
+        pn_send_ack(p, p->web_udp_seq[slot], p->web_udp_channel[slot],
+                    status, NULL, 0);
+        return;
+    }
+
+    p->pn_udp[slot].open = true;
+    p->pn_udp[slot].fd = slot;
+    p->pn_udp[slot].local_port = port;
+    u8 response[3];
+    size_t response_len = 0;
+    response[response_len++] = (u8)(slot + 1);
+    pn_append_u16(response, &response_len, port);
+    pn_send_ack(p, p->web_udp_seq[slot], p->web_udp_channel[slot],
+                PN_STATUS_OK, response, response_len);
+}
+#endif
 
 /* Guest pushed one byte into the modem. */
 static bool hayes_tx_push(Perryfi *p, u8 b) {
@@ -1069,7 +1326,7 @@ static bool hayes_tx_push(Perryfi *p, u8 b) {
         } else {
             p->esc_count = 0;
         }
-#ifndef _WIN32
+#ifdef PERRYFI_POSIX
         if (p->tcp_fd >= 0) {
             ssize_t n = send(p->tcp_fd, &b, 1, MSG_NOSIGNAL);
             if (n < 0) {
@@ -1077,6 +1334,12 @@ static bool hayes_tx_push(Perryfi *p, u8 b) {
                 p->state = PERRYFI_STATE_CMD;
                 send_result(p, RC_NO_CARRIER);
             }
+        }
+#elif defined(__EMSCRIPTEN__)
+        if (p->tcp_fd >= 0 && !perryfi_web_tcp_send(0, &b, 1)) {
+            tcp_close(p);
+            p->state = PERRYFI_STATE_CMD;
+            send_result(p, RC_NO_CARRIER);
         }
 #endif
         return true;
@@ -1126,6 +1389,9 @@ void perryfi_init(Perryfi *p, bool enable, PerryfiMode mode) {
         p->pn_tcp[i].fd = -1;
     for (int i = 0; i < PERRYNET_MAX_UDP; i++)
         p->pn_udp[i].fd = -1;
+#ifdef __EMSCRIPTEN__
+    perryfi_web_set_device(enable ? 1 : 0, (int)mode);
+#endif
     if (enable && mode == PERRYFI_MODE_PERRYNET)
         pn_reset(p, true);
 }
@@ -1135,10 +1401,13 @@ void perryfi_shutdown(Perryfi *p) {
     pn_tcp_close_all(p);
     pn_udp_close_all(p);
     p->present = false;
+#ifdef __EMSCRIPTEN__
+    perryfi_web_set_device(0, (int)p->mode);
+#endif
 }
 
 static void hayes_poll(Perryfi *p) {
-#ifndef _WIN32
+#ifdef PERRYFI_POSIX
     if (p->state == PERRYFI_STATE_ONLINE && p->tcp_fd >= 0) {
         /* Drain socket into the modem→guest queue (capped per tick). */
         for (int i = 0; i < 256; i++) {
@@ -1159,6 +1428,20 @@ static void hayes_poll(Perryfi *p) {
                 break;
             }
             rx_push(p, b);
+        }
+    }
+#elif defined(__EMSCRIPTEN__)
+    if (p->state == PERRYFI_STATE_ONLINE && p->tcp_fd >= 0) {
+        u8 bytes[256];
+        size_t space = rb_space(p->rx_head, p->rx_tail);
+        if (space > sizeof(bytes)) space = sizeof(bytes);
+        int n = space > 0 ? perryfi_web_tcp_read(0, bytes, space) : 0;
+        if (n > 0) {
+            for (int i = 0; i < n; i++) rx_push(p, bytes[i]);
+        } else if (n < 0) {
+            tcp_close(p);
+            p->state = PERRYFI_STATE_CMD;
+            send_result(p, RC_NO_CARRIER);
         }
     }
 #endif

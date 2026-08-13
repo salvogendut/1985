@@ -167,3 +167,4 @@ int SDL_GetAudioStreamQueued(SDL_AudioStream *stream);
 void SDL_DestroyAudioStream(SDL_AudioStream *stream);
 const char *SDL_GetError(void);
 const char *SDL_GetBasePath(void);
+Uint64 SDL_GetTicks(void);

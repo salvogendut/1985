@@ -11,6 +11,8 @@ const create1985 = require('./dist/1985.js');
 
   assert.strictEqual(module._poc_init(), 0);
   assert.strictEqual(module._poc_dksound_enabled(), 0);
+  assert.strictEqual(module._poc_perryfi_enabled(), 0);
+  assert.strictEqual(module._poc_perryfi_mode(), 0);
 
   assert.strictEqual(module._poc_set_dksound(1), 1);
   assert.strictEqual(module._poc_dksound_enabled(), 1);
@@ -19,6 +21,20 @@ const create1985 = require('./dist/1985.js');
 
   assert.strictEqual(module._poc_init_model(1), 0);
   assert.strictEqual(module._poc_dksound_enabled(), 1);
+
+  assert.strictEqual(module._poc_set_perryfi(1, 1), 1);
+  assert.strictEqual(module._poc_perryfi_enabled(), 1);
+  assert.strictEqual(module._poc_perryfi_mode(), 1);
+  module._poc_reset();
+  assert.strictEqual(module._poc_perryfi_enabled(), 1);
+
+  assert.strictEqual(module._poc_init_model(2), 0);
+  assert.strictEqual(module._poc_perryfi_enabled(), 1);
+  assert.strictEqual(module._poc_perryfi_mode(), 1);
+
+  assert.strictEqual(module._poc_set_perryfi(0, 0), 0);
+  assert.strictEqual(module._poc_perryfi_enabled(), 0);
+  assert.strictEqual(module._poc_perryfi_mode(), 0);
 
   assert.strictEqual(module._poc_set_dksound(0), 0);
   assert.strictEqual(module._poc_dksound_enabled(), 0);
