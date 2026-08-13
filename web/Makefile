@@ -49,10 +49,13 @@ test-gamepad:
 test-media-url:
 	node test_media_url.js
 
+test-wasm-expansions: all
+	node test_wasm_expansions.js
+
 $(WASM_ASSETS) &: $(OBJS) | $(DIST_DIR)
 	$(EMCC) $(CFLAGS) $(OBJS) -o $(DIST_DIR)/1985.js \
 	    -sMODULARIZE -sEXPORT_NAME=create1985 \
-	    -sEXPORTED_FUNCTIONS='_poc_init,_poc_init_model,_poc_reset,_poc_step,_poc_pixels,_poc_key,_poc_joy,_poc_disk_motor,_poc_disk_activity,_poc_load_disk,_poc_load_disk_b,_poc_eject_disk,_poc_eject_disk_b,_poc_autorun,_poc_audio_reset,_poc_audio_avail,_poc_audio_read_pos,_poc_audio_buffer,_poc_audio_advance,_poc_width,_poc_height,_malloc,_free' \
+	    -sEXPORTED_FUNCTIONS='_poc_init,_poc_init_model,_poc_reset,_poc_step,_poc_pixels,_poc_key,_poc_joy,_poc_set_dksound,_poc_dksound_enabled,_poc_disk_motor,_poc_disk_activity,_poc_load_disk,_poc_load_disk_b,_poc_eject_disk,_poc_eject_disk_b,_poc_autorun,_poc_audio_reset,_poc_audio_avail,_poc_audio_read_pos,_poc_audio_buffer,_poc_audio_advance,_poc_width,_poc_height,_malloc,_free' \
 	    -sEXPORTED_RUNTIME_METHODS='HEAPU8,HEAPU32,wasmMemory,getValue,setValue,ccall,cwrap,FS' \
 	    -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=67108864 \
 	    --embed-file ../roms/pcw_boot.rom@roms/pcw_boot.rom
@@ -94,4 +97,4 @@ clean:
 	rm -rf $(BUILD_DIR) $(DIST_DIR)
 	rm -f *.o *.ppm poc.js poc.wasm 1985.js 1985.wasm
 
-.PHONY: all clean serve test test-gamepad test-media-url
+.PHONY: all clean serve test test-gamepad test-media-url test-wasm-expansions

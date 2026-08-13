@@ -30,6 +30,12 @@ const pcwDriveLedAEl = $("pcwDriveLedA");
 const pcwDriveLedBEl = $("pcwDriveLedB");
 const ledInputEl = $("ledInput");
 const ledAudioEl = $("ledAudio");
+const expansionButtonEl = $("expansion");
+const expansionPanelEl = $("expansionPanel");
+const expansionBackdropEl = $("expansionBackdrop");
+const expansionCloseEl = $("expansionClose");
+const dksoundToggleEl = $("dksoundToggle");
+const dksoundStateEl = $("dksoundState");
 const ctx = canvas.getContext("2d");
 const W = 720;
 const H = 256;
@@ -55,6 +61,89 @@ function showToast(message) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toastEl.classList.remove("show"), 3200);
 }
+
+const DKSOUND_STORAGE_KEY = "javascript1985.expansion.dksound";
+let dksoundEnabled = false;
+let applyDksoundHardware = () => {};
+
+try {
+  dksoundEnabled = localStorage.getItem(DKSOUND_STORAGE_KEY) === "true";
+} catch (_) {
+  // Keep optional hardware disconnected when storage is unavailable.
+}
+
+function updateDksoundUi() {
+  dksoundToggleEl.checked = dksoundEnabled;
+  dksoundStateEl.textContent = dksoundEnabled ? "Enabled" : "Disabled";
+  expansionButtonEl.classList.toggle("has-expansion", dksoundEnabled);
+}
+
+function setDksoundEnabled(enabled, persist = true, announce = false) {
+  dksoundEnabled = Boolean(enabled);
+  updateDksoundUi();
+  applyDksoundHardware(dksoundEnabled);
+  if (persist) {
+    try {
+      localStorage.setItem(DKSOUND_STORAGE_KEY, String(dksoundEnabled));
+    } catch (_) {}
+  }
+  if (announce)
+    showToast("DK'sound " + (dksoundEnabled ? "enabled" : "disabled"));
+}
+
+function expansionFocusableElements() {
+  return [...expansionPanelEl.querySelectorAll(
+    'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )];
+}
+
+function setExpansionPanelOpen(open, restoreFocus = true) {
+  const isOpen = Boolean(open);
+  document.body.classList.toggle("expansion-open", isOpen);
+  expansionButtonEl.setAttribute("aria-expanded", String(isOpen));
+  expansionPanelEl.setAttribute("aria-hidden", String(!isOpen));
+  expansionPanelEl.inert = !isOpen;
+  if (isOpen) {
+    setThemeMenu(false);
+    requestAnimationFrame(() => expansionCloseEl.focus());
+  } else if (restoreFocus) {
+    expansionButtonEl.focus();
+  }
+}
+
+expansionButtonEl.addEventListener("click", () => {
+  setExpansionPanelOpen(
+    expansionButtonEl.getAttribute("aria-expanded") !== "true"
+  );
+});
+expansionCloseEl.addEventListener("click", () => setExpansionPanelOpen(false));
+expansionBackdropEl.addEventListener("click", () => setExpansionPanelOpen(false));
+expansionPanelEl.addEventListener("keydown", event => {
+  if (event.key !== "Tab") return;
+  const focusable = expansionFocusableElements();
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" &&
+      expansionButtonEl.getAttribute("aria-expanded") === "true") {
+    event.preventDefault();
+    setExpansionPanelOpen(false);
+  }
+});
+dksoundToggleEl.addEventListener("change", () => {
+  setDksoundEnabled(dksoundToggleEl.checked, true, true);
+});
+setExpansionPanelOpen(false, false);
+updateDksoundUi();
 
 const THEMES = {
   "pcw8256": "PCW8256",
@@ -185,9 +274,6 @@ $("fullscreen").addEventListener("click", async () => {
     setStatus("Fullscreen unavailable: " + error.message);
   }
 });
-$("expansion").addEventListener("click", () => {
-  showToast("Expansion bay reserved for future browser devices");
-});
 setScreenScale(100);
 updatePixelMode();
 
@@ -222,6 +308,17 @@ create1985().then(m => {
   const heldKeys = new Set();
   const virtualKeys = new Set();
   const latchedVirtualModifiers = new Set();
+
+  applyDksoundHardware = enabled => {
+    const actual = Boolean(m._poc_set_dksound(enabled ? 1 : 0));
+    if (actual !== dksoundEnabled) {
+      dksoundEnabled = actual;
+      updateDksoundUi();
+    }
+    m._poc_audio_reset();
+    if (audioCtx) nextAudioStart = audioCtx.currentTime + 0.3;
+  };
+  applyDksoundHardware(dksoundEnabled);
 
   function pressVirtualKey(scancode) {
     if (virtualKeys.has(scancode)) return;
@@ -353,8 +450,7 @@ create1985().then(m => {
     }
     currentModel = model;
     modelEl.value = String(model);
-    m._poc_audio_reset();
-    if (audioCtx) nextAudioStart = audioCtx.currentTime + 0.3;
+    applyDksoundHardware(dksoundEnabled);
     releaseAllJoy();
     clearDiskAUi();
     clearDiskBUi();
