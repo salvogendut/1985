@@ -21,15 +21,17 @@ monitor fascia.
 
 ## Server-hosted media
 
-Media URLs are resolved relative to the page URL. A disk can be mounted in
-drive A at startup:
+Media URLs are resolved relative to the page URL. `disk` mounts Drive A and
+`diskb` mounts Drive B. Both can be supplied together:
 
-    http://localhost:8080/?disk=media/thisdisk.dsk
+    http://localhost:8080/?disk=media/system.dsk&diskb=media/data.dsk
 
-Add `autorun` to reset the PCW after mounting and inject a command after the
-same boot delay used by native 1985:
+When Drive A is supplied, both images are mounted before the PCW resets and
+boots automatically from Drive A. Drive B is secondary media and is never used
+as the boot disk. An optional `autorun` command can be injected after the same
+boot delay used by native 1985:
 
-    http://localhost:8080/?disk=media/thisdisk.dsk&autorun=cpm
+    http://localhost:8080/?disk=media/system.dsk&diskb=media/data.dsk&autorun=GB
 
 Parameter values containing spaces or other reserved characters must be URL
 encoded. Media must be available over HTTP or HTTPS. Cross-origin servers must

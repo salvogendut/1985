@@ -29,7 +29,7 @@
     const params = new URLSearchParams(search || '');
     const media = {
       disk: resolveHttpUrl(params.get('disk'), baseUrl, 'disk'),
-      cartridge: resolveHttpUrl(params.get('cartridge'), baseUrl, 'cartridge'),
+      diskB: resolveHttpUrl(params.get('diskb'), baseUrl, 'diskb'),
       autorun: validateAutorun(params.get('autorun')),
     };
     if (media.autorun && !media.disk)

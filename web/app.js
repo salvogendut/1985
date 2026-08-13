@@ -445,18 +445,34 @@ create1985().then(m => {
       showToast("Invalid server media URL");
       return;
     }
-    if (!media.disk) return;
+    if (!media.disk && !media.diskB) return;
 
     try {
-      const disk = await fetchServerMedia(media.disk, "disk");
-      mountDisk(disk.data, disk.name, "/server-disk.dsk", "a");
-      disknameAEl.textContent = disk.name;
-      diskEjectAEl.disabled = false;
-      if (media.autorun) {
+      const [diskA, diskB] = await Promise.all([
+        media.disk ? fetchServerMedia(media.disk, "Drive A disk") : null,
+        media.diskB ? fetchServerMedia(media.diskB, "Drive B disk") : null,
+      ]);
+
+      if (diskB) {
+        mountDisk(diskB.data, diskB.name, "/server-disk-b.dsk", "b");
+        disknameBEl.textContent = diskB.name;
+        diskEjectBEl.disabled = false;
+      }
+      if (diskA) {
+        mountDisk(diskA.data, diskA.name, "/server-disk-a.dsk", "a");
+        disknameAEl.textContent = diskA.name;
+        diskEjectAEl.disabled = false;
+
         m._poc_reset();
         m._poc_audio_reset();
         if (audioCtx) nextAudioStart = audioCtx.currentTime + 0.3;
         releaseAllJoy();
+
+        if (!media.autorun) {
+          setStatus("Drive A: " + diskA.name + " - booting");
+          showToast("Booting " + diskA.name + " from Drive A");
+          return;
+        }
         const rc = m.ccall(
           "poc_autorun",
           "number",
@@ -465,9 +481,12 @@ create1985().then(m => {
         );
         if (rc !== 0) throw new Error("invalid autorun command");
         setStatus(
-          "Drive A: " + disk.name + " - autorun " + media.autorun + " armed"
+          "Drive A: " + diskA.name + " - autorun " + media.autorun + " armed"
         );
         showToast("Autorun " + media.autorun + " armed");
+      } else {
+        setStatus("Drive B: " + diskB.name);
+        showToast("Disk loaded into Drive B");
       }
     } catch (error) {
       setStatus("Server media failed: " + error.message);
