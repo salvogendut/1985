@@ -30,6 +30,8 @@ warm resets and machine changes.
 Browsers cannot open arbitrary TCP or UDP sockets. The WASM PerryFi therefore
 uses the restricted WebSocket relay in `web/relay`; the emulated CPS8256,
 Hayes parser, and PerryNet SLIP/CRC firmware model still run inside WASM.
+The design and its asynchronous shim are described in
+[`PERRYFI-WASM.md`](PERRYFI-WASM.md).
 
 For local use, install and start the relay:
 
