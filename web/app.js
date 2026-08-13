@@ -41,7 +41,7 @@ offscreen.width = W;
 offscreen.height = H;
 const offctx = offscreen.getContext("2d");
 const image = offctx.createImageData(W, H);
-let pixelSharp = true;
+let pixelSharp = false;
 let toastTimer = 0;
 let inputLedTimer = 0;
 
