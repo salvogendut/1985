@@ -255,6 +255,7 @@ void config_defaults(Config *c) {
     c->input_device         = INPUT_DEVICE_JOYSTICK;
     c->mouse_type           = MOUSE_TYPE_AMX;
     c->joystick_type        = JOYSTICK_TYPE_DKSOUND;
+    c->joystick_hidapi      = false;
     c->turbo                = false;
     c->tinker               = false;
     c->gif_width            = GIF_CAPTURE_WIDTH_DEFAULT;
@@ -404,6 +405,7 @@ void config_load(Config *c, const char *path) {
         else if (strcmp(k, "trace_input")          == 0) c->trace_input = parse_bool(v, c->trace_input);
         else if (strcmp(k, "mouse_type")           == 0) c->mouse_type = parse_mouse_type(v, c->mouse_type);
         else if (strcmp(k, "joystick_type")        == 0) c->joystick_type = parse_joystick_type(v, c->joystick_type);
+        else if (strcmp(k, "joystick_hidapi")      == 0) c->joystick_hidapi = parse_bool(v, c->joystick_hidapi);
         /* Compatibility with the short-lived development key. */
         else if (strcmp(k, "dksound_input")        == 0) {
             c->input_device = (strcasecmp(v, "amx_mouse") == 0
@@ -509,6 +511,7 @@ int config_save(const Config *c) {
     fprintf(f, "trace_input = %s\n", bool_to_str(c->trace_input));
     fprintf(f, "mouse_type = %s\n", mouse_type_to_str(c->mouse_type));
     fprintf(f, "joystick_type = %s\n", joystick_type_to_str(c->joystick_type));
+    fprintf(f, "joystick_hidapi = %s\n", bool_to_str(c->joystick_hidapi));
 
     fclose(f);
     return 0;

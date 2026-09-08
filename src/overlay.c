@@ -107,6 +107,7 @@ typedef enum {
     TINK_LOAD_SNAPSHOT,
     TINK_BOOT_ROM,
     TINK_WEBGUI,
+    TINK_JOYSTICK_HIDAPI,
     TINK_VERSION,
     TINK_ROW_COUNT,
 } TinkerRow;
@@ -149,6 +150,7 @@ static TinkerRow tinker_row_at(const Overlay *ov, int row) {
     if (row == r++) return TINK_LOAD_SNAPSHOT;
     if (row == r++) return TINK_BOOT_ROM;
     if (row == r++) return TINK_WEBGUI;
+    if (row == r++) return TINK_JOYSTICK_HIDAPI;
     if (row == r++) return TINK_VERSION;
     return TINK_ROW_COUNT;
 }
@@ -206,6 +208,7 @@ static bool reset_tinker_item(Overlay *ov) {
     int old_gif_width = ov->cfg->gif_width;
     int old_gif_fps = ov->cfg->gif_fps;
     bool old_gif_ffmpeg = ov->cfg->gif_ffmpeg;
+    bool old_joystick_hidapi = ov->cfg->joystick_hidapi;
 
     switch (tinker_row_at(ov, ov->row)) {
         case TINK_GIF_RESOLUTION:
@@ -244,6 +247,9 @@ static bool reset_tinker_item(Overlay *ov) {
         case TINK_CRT_BLUE:
             ov->cfg->crt_blue = DISPLAY_CRT_RGB_DEFAULT;
             break;
+        case TINK_JOYSTICK_HIDAPI:
+            ov->cfg->joystick_hidapi = false;
+            break;
         default:
             return false;
     }
@@ -257,7 +263,8 @@ static bool reset_tinker_item(Overlay *ov) {
                        old_blue != ov->cfg->crt_blue;
     bool changed = crt_changed || old_gif_width != ov->cfg->gif_width ||
                    old_gif_fps != ov->cfg->gif_fps ||
-                   old_gif_ffmpeg != ov->cfg->gif_ffmpeg;
+                   old_gif_ffmpeg != ov->cfg->gif_ffmpeg ||
+                   old_joystick_hidapi != ov->cfg->joystick_hidapi;
     if (changed) {
         if (crt_changed)
             overlay_apply_crt(ov);
@@ -595,6 +602,11 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                         snprintf(val, vsz, "on - 0.0.0.0:%d", webgui_port());
                     else
                         snprintf(val, vsz, "off (port %d)", ov->cfg->web_port);
+                    break;
+                case TINK_JOYSTICK_HIDAPI:
+                    snprintf(label, lsz, "Joystick HIDAPI");
+                    snprintf(val, vsz, "%s [restart to apply]",
+                             cfg->joystick_hidapi ? "enabled" : "disabled");
                     break;
                 case TINK_VERSION:
                     snprintf(label, lsz, "Version");
@@ -1390,6 +1402,13 @@ static void activate(Overlay *ov, SDL_Keymod mods) {
                         ov->cfg->web_gui = true;
                     }
                     ov->dirty = true;
+                    break;
+                case TINK_JOYSTICK_HIDAPI:
+                    c->joystick_hidapi = !c->joystick_hidapi;
+                    ov->dirty = true;
+                    notify_post("Joystick HIDAPI %s after restart",
+                                c->joystick_hidapi
+                                ? "enabled" : "disabled");
                     break;
                 case TINK_VERSION:
                 case TINK_ROW_COUNT:
