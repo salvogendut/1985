@@ -150,6 +150,7 @@ typedef struct {
     InputDevice input_device;
     MouseType mouse_type;
     JoystickType joystick_type;
+    bool     joystick_hidapi; /* SDL direct HID backend; applied at startup */
     bool     web_gui;        /* embedded HTTP server serving the emulator to
                               * a browser. Binds 0.0.0.0 — LAN-visible, no
                               * auth. */

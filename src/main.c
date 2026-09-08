@@ -696,6 +696,13 @@ int main(int argc, char **argv) {
     if (cli.memory_kb)   cfg.memory_kb = cli.memory_kb;
     if (cli.disk_a)      snprintf(cfg.drive_a, sizeof(cfg.drive_a), "%s", cli.disk_a);
     if (cli.disk_b)      snprintf(cfg.drive_b, sizeof(cfg.drive_b), "%s", cli.disk_b);
+
+    /* Basic controls remain available through the native OS joystick driver.
+     * Apply this before SDL_Init so SDL does not probe HID devices at startup
+     * unless the user explicitly enables that backend. */
+    SDL_SetHintWithPriority(SDL_HINT_JOYSTICK_HIDAPI,
+                            cfg.joystick_hidapi ? "1" : "0",
+                            SDL_HINT_NORMAL);
     /* cli.web already returned above via websvc_run(); reaching this
      * point means the classic single-PCW path — either fully
      * interactive, or headless-via-web_gui=true in the config file /
