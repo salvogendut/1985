@@ -1,5 +1,5 @@
 Name:           1985
-Version:        0.4.9
+Version:        0.4.10
 Release:        1%{?dist}
 Summary:        Amstrad PCW 8256 / 8512 / 9512 emulator
 
@@ -97,6 +97,13 @@ appstream-util validate-relax --nonet %{buildroot}%{_datadir}/metainfo/io.github
 %{_datadir}/icons/hicolor/*/apps/io.github.salvogendut.Emulator1985.png
 
 %changelog
+* Mon Sep 14 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.10-1
+- Add the Javascript 1985 WASM edition with a PCW8256-inspired interface,
+  dual-drive media startup, smooth display scaling and an AUX expansion bay.
+- Bring both PerryFi models to WASM through a restricted DNS/TCP/UDP
+  WebSocket relay while preserving the emulated CPS8256 serial interface.
+- Add the General-menu About entry and configurable SDL HIDAPI backend.
+
 * Thu Jul 30 2026 Salvatore Bognanni <salvogendut@gmail.com> - 0.4.9-1
 - Add self-contained macOS application bundles for Apple Silicon and Intel.
 - Run the test suite on Linux, Windows and both macOS architectures in CI.
