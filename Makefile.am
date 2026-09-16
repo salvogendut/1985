@@ -85,7 +85,7 @@ test_gifcap_SOURCES = tests/test_gifcap.c src/gifcap.c
 test_gifcap_CPPFLAGS = -I$(top_srcdir)/src
 test_gifcap_CFLAGS = $(AM_CFLAGS) -Wall -Wextra
 test_config_SOURCES = tests/test_config.c src/config.c
-test_config_CPPFLAGS = -I$(top_srcdir)/src
+test_config_CPPFLAGS = -I$(top_srcdir)/src $(SDL3_CFLAGS)
 test_config_CFLAGS = $(AM_CFLAGS) -Wall -Wextra
 
 if WITH_CAIRO
