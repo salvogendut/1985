@@ -76,4 +76,4 @@ mouse_type = amx
 # keyboard (kbd-MCU chord bytes on 3FFC-3FFF, e.g. Opera Soft games)
 joystick_type = dksound
 # SDL direct HID backend; false uses the native OS joystick driver.
-joystick_hidapi = false
+joystick_hidapi = true

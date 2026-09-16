@@ -697,9 +697,9 @@ int main(int argc, char **argv) {
     if (cli.disk_a)      snprintf(cfg.drive_a, sizeof(cfg.drive_a), "%s", cli.disk_a);
     if (cli.disk_b)      snprintf(cfg.drive_b, sizeof(cfg.drive_b), "%s", cli.disk_b);
 
-    /* Basic controls remain available through the native OS joystick driver.
-     * Apply this before SDL_Init so SDL does not probe HID devices at startup
-     * unless the user explicitly enables that backend. */
+    /* Apply the selected joystick backend before SDL_Init. HIDAPI is enabled
+     * by default, but can be disabled for devices better served by the native
+     * OS joystick driver. */
     SDL_SetHintWithPriority(SDL_HINT_JOYSTICK_HIDAPI,
                             cfg.joystick_hidapi ? "1" : "0",
                             SDL_HINT_NORMAL);
