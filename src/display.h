@@ -93,6 +93,8 @@ void display_set_crt(Display *d, bool enabled, int scanlines, int brightness,
  * image area shrinks when NTSC is selected. */
 void display_set_region(Display *d, Region region);
 void display_set_status_line(Display *d, bool shown);
+void display_set_scale(Display *d, int scale);
+void display_set_fullscreen(Display *d, bool fullscreen);
 
 /* Plot a colour-indexed pixel (CGA/EGA modes). Index is masked to the
  * palette size in the active video mode (4 in CGA, 16 in EGA). */

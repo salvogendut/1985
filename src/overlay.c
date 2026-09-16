@@ -108,6 +108,7 @@ typedef enum {
     TINK_BOOT_ROM,
     TINK_WEBGUI,
     TINK_JOYSTICK_HIDAPI,
+    TINK_RESET_DEFAULTS,
     TINK_VERSION,
     TINK_ROW_COUNT,
 } TinkerRow;
@@ -151,6 +152,7 @@ static TinkerRow tinker_row_at(const Overlay *ov, int row) {
     if (row == r++) return TINK_BOOT_ROM;
     if (row == r++) return TINK_WEBGUI;
     if (row == r++) return TINK_JOYSTICK_HIDAPI;
+    if (row == r++) return TINK_RESET_DEFAULTS;
     if (row == r++) return TINK_VERSION;
     return TINK_ROW_COUNT;
 }
@@ -248,7 +250,7 @@ static bool reset_tinker_item(Overlay *ov) {
             ov->cfg->crt_blue = DISPLAY_CRT_RGB_DEFAULT;
             break;
         case TINK_JOYSTICK_HIDAPI:
-            ov->cfg->joystick_hidapi = false;
+            ov->cfg->joystick_hidapi = true;
             break;
         default:
             return false;
@@ -607,6 +609,10 @@ static void item_text(const Overlay *ov, int row, char *label, size_t lsz, char 
                     snprintf(label, lsz, "Joystick HIDAPI");
                     snprintf(val, vsz, "%s [restart to apply]",
                              cfg->joystick_hidapi ? "enabled" : "disabled");
+                    break;
+                case TINK_RESET_DEFAULTS:
+                    snprintf(label, lsz, "Reset to defaults");
+                    snprintf(val, vsz, "...");
                     break;
                 case TINK_VERSION:
                     snprintf(label, lsz, "Version");
@@ -1410,6 +1416,9 @@ static void activate(Overlay *ov, SDL_Keymod mods) {
                                 c->joystick_hidapi
                                 ? "enabled" : "disabled");
                     break;
+                case TINK_RESET_DEFAULTS:
+                    ov->state = OV_STATE_RESET_CONFIRM;
+                    break;
                 case TINK_VERSION:
                 case TINK_ROW_COUNT:
                     break;
@@ -1417,6 +1426,61 @@ static void activate(Overlay *ov, SDL_Keymod mods) {
             break;
         default: break;
     }
+}
+
+static void reset_to_defaults(Overlay *ov) {
+    Config previous = *ov->cfg;
+    if (ov->pcw) {
+        for (int drive = 0; drive < 2; drive++) {
+            Disk *disk = &ov->pcw->fdc.drive[drive];
+            const char *path = drive == 0 ? previous.drive_a : previous.drive_b;
+            if (!disk->dirty) continue;
+            if (!path[0] || disk_save(disk, path) < 0) {
+                ov->state = OV_STATE_MENU;
+                notify_post("Could not save Drive %c; reset cancelled",
+                            'A' + drive);
+                return;
+            }
+        }
+    }
+
+    if (config_reset_defaults(ov->cfg) < 0) {
+        ov->state = OV_STATE_MENU;
+        notify_post("Could not reset configuration");
+        return;
+    }
+
+    if (webgui_active()) webgui_stop();
+    if (ov->pcw) {
+        perryfi_shutdown(&ov->pcw->perryfi);
+        serial_shutdown(&ov->pcw->serial);
+        printer_shutdown(&ov->pcw->printer);
+        pcw_cold_boot(ov->pcw, ov->cfg->model, ov->cfg->memory_kb);
+        bootstrap_set_override_dir(&ov->pcw->boot, ov->cfg->boot_rom_dir);
+        bootstrap_reset(&ov->pcw->boot);
+        apply_runtime_config(ov->pcw, ov->cfg);
+    }
+
+    if (ov->disp) {
+        display_set_fullscreen(ov->disp, ov->cfg->fullscreen);
+        display_set_scale(ov->disp, ov->cfg->scale);
+        display_set_region(ov->disp, ov->cfg->region);
+        display_set_smoothing(ov->disp, ov->cfg->fullscreen_smoothing);
+        overlay_apply_crt(ov);
+        display_set_monochrome(ov->disp, ov->cfg->monochrome);
+        display_set_tint_glow(ov->disp, ov->cfg->tint_glow);
+        display_set_video_mode(ov->disp, ov->cfg->video_mode);
+        display_set_status_line(ov->disp, ov->cfg->show_status_line);
+    }
+
+    notify_set_mode(ov->cfg->notifications);
+    notify_post("Defaults restored; restart to apply HIDAPI");
+    ov->saved = *ov->cfg;
+    ov->dirty = false;
+    ov->needs_cold_boot = false;
+    browser_clear_entries(ov);
+    ov->visible = false;
+    ov->state = OV_STATE_MENU;
 }
 
 void overlay_init(Overlay *ov, Config *cfg, struct PCW *pcw,
@@ -1695,6 +1759,16 @@ bool overlay_handle_event(Overlay *ov, SDL_Event *ev) {
             close_overlay(ov, true);
         } else if (ev->key.key == SDLK_ESCAPE || ev->key.key == SDLK_N) {
             close_overlay(ov, false);
+        }
+        return true;
+    }
+
+    if (ov->state == OV_STATE_RESET_CONFIRM) {
+        if (ev->key.key == SDLK_RETURN || ev->key.key == SDLK_KP_ENTER
+            || ev->key.key == SDLK_Y) {
+            reset_to_defaults(ov);
+        } else if (ev->key.key == SDLK_ESCAPE || ev->key.key == SDLK_N) {
+            ov->state = OV_STATE_MENU;
         }
         return true;
     }
@@ -2062,6 +2136,35 @@ void overlay_render(Overlay *ov, SDL_Renderer *r) {
                   line1, 255, 255, 255);
         draw_text(r, (int)(bx + (box_w - l2w) / 2.0f), (int)(by + 6 + FONT_H + 8),
                   line2, 200, 200, 100);
+    }
+
+    if (ov->state == OV_STATE_RESET_CONFIRM) {
+        int ww = DISPLAY_LOGICAL_W;
+        int wh = ov->disp ? ov->disp->logical_h : DISPLAY_LOGICAL_H;
+        const int FONT_W = 8, FONT_H = 8;
+        const char *line1 = "Reset all settings to factory defaults?";
+        const char *line2 = "Mounted disks will be safely ejected.";
+        const char *line3 = "Enter/Y = Reset    Esc/N = Cancel";
+        int l1w = (int)strlen(line1) * FONT_W;
+        int l2w = (int)strlen(line2) * FONT_W;
+        int l3w = (int)strlen(line3) * FONT_W;
+        int text_w = l1w > l2w ? l1w : l2w;
+        if (l3w > text_w) text_w = l3w;
+        int box_w = text_w + 24;
+        int box_h = FONT_H * 3 + 32;
+        float bx = (ww - box_w) / 2.0f;
+        float by = (wh - box_h) / 2.0f;
+
+        fill_rect(r, 0, 0, (float)ww, (float)wh, 0, 0, 0, 140);
+        fill_rect(r, bx, by, (float)box_w, (float)box_h, 25, 25, 60, 255);
+        draw_rect_outline(r, bx, by, (float)box_w, (float)box_h, 70, 90, 200);
+        draw_text(r, (int)(bx + (box_w - l1w) / 2.0f), (int)(by + 6),
+                  line1, 255, 255, 255);
+        draw_text(r, (int)(bx + (box_w - l2w) / 2.0f),
+                  (int)(by + 6 + FONT_H + 8), line2, 200, 200, 100);
+        draw_text(r, (int)(bx + (box_w - l3w) / 2.0f),
+                  (int)(by + 6 + (FONT_H + 8) * 2), line3, 200, 200, 100);
+        return;
     }
 
     /* ---- About dialog ---- */

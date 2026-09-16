@@ -31,6 +31,9 @@ roms/*
 /test-gifcap
 /test-gifcap.log
 /test-gifcap.trs
+/test-config
+/test-config.log
+/test-config.trs
 /test-suite.log
 /1985
 /autom4te.cache/

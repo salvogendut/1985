@@ -255,7 +255,7 @@ void config_defaults(Config *c) {
     c->input_device         = INPUT_DEVICE_JOYSTICK;
     c->mouse_type           = MOUSE_TYPE_AMX;
     c->joystick_type        = JOYSTICK_TYPE_DKSOUND;
-    c->joystick_hidapi      = false;
+    c->joystick_hidapi      = true;
     c->turbo                = false;
     c->tinker               = false;
     c->gif_width            = GIF_CAPTURE_WIDTH_DEFAULT;
@@ -513,6 +513,29 @@ int config_save(const Config *c) {
     fprintf(f, "joystick_type = %s\n", joystick_type_to_str(c->joystick_type));
     fprintf(f, "joystick_hidapi = %s\n", bool_to_str(c->joystick_hidapi));
 
-    fclose(f);
+    int failed = ferror(f);
+    if (fclose(f) != 0) failed = 1;
+    if (failed) {
+        perror("config_save");
+        return -1;
+    }
+    return 0;
+}
+
+int config_reset_defaults(Config *c) {
+    if (!c) return -1;
+
+    char path[PATH_MAX];
+    if (c->path[0]) snprintf(path, sizeof(path), "%s", c->path);
+    else            default_path(path, sizeof(path));
+
+    Config reset;
+    config_defaults(&reset);
+    snprintf(reset.path, sizeof(reset.path), "%s", path);
+
+    /* Commit to the caller only after persistence succeeds. This keeps the
+     * running configuration usable if the destination is read-only. */
+    if (config_save(&reset) < 0) return -1;
+    *c = reset;
     return 0;
 }

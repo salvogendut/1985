@@ -20,6 +20,7 @@ typedef enum {
     OV_STATE_EDIT_CONFIRM = 4,
     OV_STATE_FILE_BROWSER = 5,
     OV_STATE_ABOUT        = 6,   /* About dialog with an OK button */
+    OV_STATE_RESET_CONFIRM = 7,  /* Confirm destructive config reset */
 } OvState;
 
 typedef enum {

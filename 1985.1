@@ -205,10 +205,13 @@ appears only when the PCW Backplane is plugged in),
 (smoothing, GIF resolution/frame-rate/encoder, tint, tint mode, video mode,
 AMX/Kempston mouse type,
 DKsound/Atari joystick type, printer mode/model, debug toggles,
-serial mode, snapshot save/load).
+serial mode, snapshot save/load, Joystick HIDAPI, and Reset to defaults).
 The Advanced tab is hidden unless
 .B tinker=true
-is set in the config (toggle it from General).
+is set in the config (toggle it from General). Reset to defaults asks for
+confirmation, rewrites whichever configuration file is active with factory
+settings, and resets the running PCW. Joystick HIDAPI is enabled by default and
+requires a restart when changed independently.
 .SH FILES
 .TP
 .I ~/.config/1985/1985.conf

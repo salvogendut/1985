@@ -251,7 +251,10 @@ layout**.
 Settings are stored in `~/.config/1985/1985.conf`. The file is created when
 settings are first saved. Most settings can be changed from F9; enable
 **Tinker** in General to expose Advanced. `--config PATH` loads an alternative
-configuration for that run.
+configuration for that run. Advanced > **Reset to defaults** rewrites whichever
+configuration file is active, including one selected with `--config`, and
+resets the running PCW after confirmation. Joystick HIDAPI is enabled by default
+and can be disabled from Advanced when the native OS driver is needed.
 
 Additional project documentation is available in [INSTALL.md](INSTALL.md),
 [Development.md](Development.md), and [FLATPAK.md](FLATPAK.md).

@@ -162,6 +162,11 @@ typedef struct {
 
 void config_defaults(Config *c);
 
+/* Replace c with factory defaults and persist them immediately, while
+ * preserving the active config path (including one supplied by --config).
+ * The caller's Config is left unchanged if the file cannot be written. */
+int config_reset_defaults(Config *c);
+
 /* Re-apply every config-driven setting pcw_init/pcw_cold_boot doesn't
  * cover by itself (printer, disks, serial/PerryFi/CPS, AY-sound, LEDs).
  * Defined in main.c; shared by the classic single-instance path and each

@@ -324,13 +324,26 @@ void display_set_status_line(Display *d, bool shown) {
     d->show_status_line = shown;
 }
 
+void display_set_scale(Display *d, int scale) {
+    d->scale = clamp_int(scale, 1, 4);
+    if (d->win && !d->fullscreen)
+        SDL_SetWindowSize(d->win,
+                          DISPLAY_LOGICAL_W * d->scale,
+                          d->logical_h * d->scale);
+}
+
+void display_set_fullscreen(Display *d, bool fullscreen) {
+    if (d->fullscreen == fullscreen) return;
+    d->fullscreen = fullscreen;
+    if (d->win) SDL_SetWindowFullscreen(d->win, fullscreen);
+}
+
 void display_present(Display *d) {
     SDL_RenderPresent(d->renderer);
 }
 
 void display_toggle_fullscreen(Display *d) {
-    d->fullscreen = !d->fullscreen;
-    SDL_SetWindowFullscreen(d->win, d->fullscreen);
+    display_set_fullscreen(d, !d->fullscreen);
 }
 
 int display_save_ppm(Display *d, const char *path) {
